@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db, googleProvider, firebaseEnabled } from "./firebase";
 import cocktailData from './cocktails.json';
 
 const { top50, master150 } = cocktailData;
@@ -74,6 +77,20 @@ function saveLocal(s) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
 }
 
+// Merge two progress states (e.g. local device + cloud account) without losing progress either side made.
+function mergeStates(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const scores = { ...a.scores };
+  for (const k in b.scores) scores[k] = Math.max(scores[k] || 0, b.scores[k] || 0);
+  const learned = Array.from(new Set([...(a.learned||[]), ...(b.learned||[])]));
+  const masterMode = a.masterMode || b.masterMode;
+  const pool = masterMode ? ALL_200 : top50;
+  const lSet = new Set(learned);
+  const active = Array.from(new Set([...(a.active||[]), ...(b.active||[])])).filter(n => !lSet.has(n));
+  return refillDeck({ scores, learned, active, masterMode }, pool);
+}
+
 export default function App() {
   const [st, setSt] = useState(() => loadLocal() || initState(false));
   const [mode, setMode] = useState("menu");
@@ -84,6 +101,8 @@ export default function App() {
   const [qr, setQr] = useState(false);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(!firebaseEnabled);
 
   const pool = st.masterMode ? ALL_200 : top50;
   const learned = st.learned?.length || 0;
@@ -93,6 +112,44 @@ export default function App() {
     saveLocal(st);
     setSaved("✓"); setTimeout(() => setSaved(""), 1200);
   }, [st]);
+
+  // Watch Google sign-in state; on login, merge cloud progress with local progress.
+  useEffect(() => {
+    if (!firebaseEnabled) return;
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      if (u) {
+        try {
+          const snap = await getDoc(doc(db, "users", u.uid));
+          const cloud = snap.exists() ? snap.data().progress : null;
+          const merged = mergeStates(st, cloud);
+          setSt(merged);
+          await setDoc(doc(db, "users", u.uid), { progress: merged, updatedAt: Date.now() });
+        } catch (e) { console.error("Cloud sync failed", e); }
+      }
+      setAuthReady(true);
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Push progress to the cloud whenever it changes and a user is signed in.
+  useEffect(() => {
+    if (!firebaseEnabled || !user) return;
+    const t = setTimeout(() => {
+      setDoc(doc(db, "users", user.uid), { progress: st, updatedAt: Date.now() }).catch(e => console.error("Cloud save failed", e));
+    }, 800);
+    return () => clearTimeout(t);
+  }, [st, user]);
+
+  function signIn() {
+    if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
+    signInWithPopup(auth, googleProvider).catch(e => console.error("Sign-in failed", e));
+  }
+  function signOutUser() {
+    if (!firebaseEnabled) return;
+    signOut(auth).catch(e => console.error("Sign-out failed", e));
+  }
 
   const col = s => s >= MASTERY_SCORE ? "#22c55e" : s >= 4 ? "#f59e0b" : s >= 2 ? "#3b82f6" : "#6b7280";
 
@@ -160,7 +217,26 @@ export default function App() {
         <h1 style={{fontSize:"1.8rem",fontWeight:800,margin:0,color:"#f8fafc"}}>🍹 Cocktail Flashcards</h1>
         <span style={{fontSize:"0.7rem",color:"#22c55e"}}>{saved}</span>
       </div>
-      <p style={{color:"#64748b",fontSize:"0.72rem",marginBottom:"1.5rem"}}>Drinks International Bestselling Classics 2024</p>
+      <p style={{color:"#64748b",fontSize:"0.72rem",marginBottom:"0.75rem"}}>Drinks International Bestselling Classics 2024</p>
+
+      {authReady && (
+        <div style={{background:"#1e293b",borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem"}}>
+          {user ? (
+            <>
+              <div style={{display:"flex",alignItems:"center",gap:"0.6rem",minWidth:0}}>
+                {user.photoURL && <img src={user.photoURL} alt="" style={{width:28,height:28,borderRadius:"50%"}} />}
+                <div style={{fontSize:"0.8rem",color:"#cbd5e1",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.displayName || user.email}</div>
+              </div>
+              <button onClick={signOutUser} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.75rem",cursor:"pointer"}}>Sign out</button>
+            </>
+          ) : (
+            <>
+              <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>{firebaseEnabled ? "Sign in to sync progress" : "Cloud sync not configured"}</div>
+              <button onClick={signIn} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
+            </>
+          )}
+        </div>
+      )}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
         {[["Learned",learned,"#22c55e"],["Active",st.active.length,"#3b82f6"],["Total",total,"#f59e0b"]].map(([l,v,c])=>(
