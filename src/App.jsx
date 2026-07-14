@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db, googleProvider, firebaseEnabled } from "./firebase";
 import cocktailData from './cocktails.json';
@@ -113,6 +113,12 @@ export default function App() {
     setSaved("✓"); setTimeout(() => setSaved(""), 1200);
   }, [st]);
 
+  // Complete a redirect-based sign-in if one is in progress (fallback for when the popup gets closed early).
+  useEffect(() => {
+    if (!firebaseEnabled) return;
+    getRedirectResult(auth).catch(e => console.error("Redirect sign-in failed", e));
+  }, []);
+
   // Watch Google sign-in state; on login, merge cloud progress with local progress.
   useEffect(() => {
     if (!firebaseEnabled) return;
@@ -122,15 +128,14 @@ export default function App() {
         try {
           const snap = await getDoc(doc(db, "users", u.uid));
           const cloud = snap.exists() ? snap.data().progress : null;
-          const merged = mergeStates(st, cloud);
-          setSt(merged);
+          let merged;
+          setSt(prev => { merged = mergeStates(prev, cloud); return merged; });
           await setDoc(doc(db, "users", u.uid), { progress: merged, updatedAt: Date.now() });
         } catch (e) { console.error("Cloud sync failed", e); }
       }
       setAuthReady(true);
     });
     return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Push progress to the cloud whenever it changes and a user is signed in.
@@ -144,7 +149,11 @@ export default function App() {
 
   function signIn() {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
-    signInWithPopup(auth, googleProvider).catch(e => console.error("Sign-in failed", e));
+    signInWithPopup(auth, googleProvider).catch(e => {
+      console.error("Popup sign-in failed, falling back to redirect", e);
+      // Popups can be closed prematurely by browser privacy settings or extensions — fall back to a full-page redirect.
+      signInWithRedirect(auth, googleProvider).catch(e2 => console.error("Redirect sign-in failed", e2));
+    });
   }
   function signOutUser() {
     if (!firebaseEnabled) return;
