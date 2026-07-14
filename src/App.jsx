@@ -1,0 +1,363 @@
+import { useState, useEffect } from "react";
+import cocktailData from './cocktails.json';
+
+const { top50, master150 } = cocktailData;
+const ALL_200 = [...top50, ...master150];
+
+const DECK_SIZE = 20;
+const MASTERY_SCORE = 6;
+const STORAGE_KEY = "cocktail_state_v4";
+
+const GLASS_ICONS = [
+  ["champagne", "🥂"],
+  ["martini", "🍸"],
+  ["nick & nora", "🍸"],
+  ["coupe", "🍸"],
+  ["wine", "🍷"],
+  ["tiki", "🍹"],
+  ["hurricane", "🍹"],
+  ["poco grande", "🍹"],
+  ["copper mug", "🍺"],
+  ["pint", "🍺"],
+  ["irish coffee", "☕"],
+  ["heatproof", "☕"],
+  ["shot", "🥃"],
+  ["rocks", "🥃"],
+  ["julep", "🥤"],
+  ["highball", "🥛"],
+  ["collins", "🥤"],
+  ["sling", "🥤"],
+  ["zombie", "🥤"],
+];
+
+const BUILT_GLASSES = /highball|collins|copper mug|pint|wine|sling|zombie/;
+const BUILT_MIXERS = /soda water|tonic|ginger beer|coca-cola|\bcola\b|tomato juice|clamato|beer|champagne|prosecco|tequila blanco|grapefruit soda|lemonade/;
+
+function getMethod(c) {
+  const name = c.name.toLowerCase();
+  const ing = c.ingredients.toLowerCase();
+  const glass = (c.glass || "").toLowerCase();
+
+  if (/blend|frozen/.test(name) || /blend/.test(ing)) return "Blended";
+  if (/layered/.test(ing)) return "Layered";
+  if (BUILT_GLASSES.test(glass) && BUILT_MIXERS.test(ing)) return "Built";
+  if (/egg white|egg\b|heavy cream|cream of coconut|coconut cream|purée|puree|half-and-half/.test(ing)) return "Shaken";
+  if (/fresh (lime|lemon|grapefruit|orange) juice|simple syrup|honey syrup|grenadine|orgeat|agave nectar|\bsyrup\b/.test(ing)) return "Shaken";
+  return "Stirred";
+}
+
+function initState(masterMode) {
+  const pool = masterMode ? ALL_200 : top50;
+  const scores = {};
+  pool.forEach(c => { scores[c.name] = 0; });
+  return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [] };
+}
+
+function refillDeck(st, pool) {
+  const lSet = new Set(st.learned), aSet = new Set(st.active);
+  const avail = pool.map(c => c.name).filter(n => !lSet.has(n) && !aSet.has(n));
+  const na = [...st.active];
+  while (na.length < DECK_SIZE && avail.length > 0) na.push(avail.shift());
+  return { ...st, active: na };
+}
+
+function loadLocal() {
+  try {
+    const r = localStorage.getItem(STORAGE_KEY);
+    if (!r) return null;
+    const s = JSON.parse(r);
+    if (s?.active?.length && typeof s.active[0] === "number") return null;
+    return s;
+  } catch { return null; }
+}
+function saveLocal(s) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+}
+
+export default function App() {
+  const [st, setSt] = useState(() => loadLocal() || initState(false));
+  const [mode, setMode] = useState("menu");
+  const [di, setDi] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const [qa, setQa] = useState([]);
+  const [qi, setQi] = useState(0);
+  const [qr, setQr] = useState(false);
+  const [saved, setSaved] = useState("");
+  const [search, setSearch] = useState("");
+
+  const pool = st.masterMode ? ALL_200 : top50;
+  const learned = st.learned?.length || 0;
+  const total = pool.length;
+
+  useEffect(() => {
+    saveLocal(st);
+    setSaved("✓"); setTimeout(() => setSaved(""), 1200);
+  }, [st]);
+
+  const col = s => s >= MASTERY_SCORE ? "#22c55e" : s >= 4 ? "#f59e0b" : s >= 2 ? "#3b82f6" : "#6b7280";
+
+  function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
+
+  function glassIcon(glass) {
+    if (!glass) return "🥃";
+    const g = glass.toLowerCase();
+    let best = null, bestIdx = Infinity;
+    for (const [kw, icon] of GLASS_ICONS) {
+      const idx = g.indexOf(kw);
+      if (idx !== -1 && idx < bestIdx) { bestIdx = idx; best = icon; }
+    }
+    return best || "🥃";
+  }
+
+  function grade(correct) {
+    const cur = di;
+    upd(p => {
+      const ci = p.active[cur];
+      const ns = Math.max(0, (p.scores[ci] || 0) + (correct ? 1 : -1));
+      const scores = { ...p.scores, [ci]: ns };
+      let active = [...p.active], learned = [...(p.learned||[])];
+      const mastered = ns >= MASTERY_SCORE;
+      if (mastered) { learned.push(ci); active.splice(cur, 1); }
+      const u = refillDeck({ ...p, scores, active, learned }, pool);
+      const next = mastered ? Math.min(cur, u.active.length-1) : u.active.length > 0 ? (cur+1) % u.active.length : 0;
+      setDi(Math.max(0, next)); setRevealed(false);
+      return u;
+    });
+  }
+
+  function next() { setDi(i => (i+1) % st.active.length); setRevealed(false); }
+  function prev() { setDi(i => (i-1+st.active.length) % st.active.length); setRevealed(false); }
+  function startQuiz() { setQa([]); setQi(0); setQr(false); setMode("quiz"); }
+  function qGrade(k) {
+    const ans = [...qa, k];
+    setQa(ans);
+    if (qi+1 >= pool.length) setMode("results");
+    else { setQi(i=>i+1); setQr(false); }
+  }
+  function toggleMaster() {
+    upd(p => {
+      const m = !p.masterMode, np = m ? ALL_200 : top50;
+      const validNames = new Set(np.map(c => c.name));
+      const scores = {...p.scores};
+      np.forEach(c => { if (scores[c.name] === undefined) scores[c.name] = 0; });
+      const lrn = (p.learned||[]).filter(n => validNames.has(n));
+      const act = p.active.filter(n => validNames.has(n));
+      return refillDeck({...p, scores, learned:lrn, active:act, masterMode:m}, np);
+    });
+  }
+  function reset() {
+    if (!confirm("Reset all progress?")) return;
+    setSt(initState(st.masterMode)); setDi(0); setRevealed(false);
+  }
+
+  const wrap = { maxWidth:480, width:"100%" };
+  const page = { minHeight:"100dvh", background:"#0f172a", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
+  const btn = (bg, x={}) => ({ padding:"1rem", borderRadius:12, background:bg, color:"#fff", fontWeight:700, fontSize:"1rem", border:"none", cursor:"pointer", ...x });
+
+  if (mode === "menu") return (
+    <div style={page}><div style={wrap}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.15rem"}}>
+        <h1 style={{fontSize:"1.8rem",fontWeight:800,margin:0,color:"#f8fafc"}}>🍹 Cocktail Flashcards</h1>
+        <span style={{fontSize:"0.7rem",color:"#22c55e"}}>{saved}</span>
+      </div>
+      <p style={{color:"#64748b",fontSize:"0.72rem",marginBottom:"1.5rem"}}>Drinks International Bestselling Classics 2024</p>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
+        {[["Learned",learned,"#22c55e"],["Active",st.active.length,"#3b82f6"],["Total",total,"#f59e0b"]].map(([l,v,c])=>(
+          <div key={l} style={{background:"#1e293b",borderRadius:12,padding:"0.9rem",textAlign:"center"}}>
+            <div style={{fontSize:"1.75rem",fontWeight:800,color:c}}>{v}</div>
+            <div style={{fontSize:"0.75rem",color:"#94a3b8",marginTop:2}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{background:"#1e293b",borderRadius:99,height:8,marginBottom:"1.75rem",overflow:"hidden"}}>
+        <div style={{background:"#22c55e",height:"100%",width:`${(learned/total)*100}%`,transition:"width 0.5s"}} />
+      </div>
+
+      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn("#3b82f6"),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
+      <button onClick={startQuiz} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — All {total} Cocktails</button>
+      <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
+
+      <div style={{background:"#1e293b",borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"}}>
+        <div>
+          <div style={{fontWeight:700,color:"#f8fafc"}}>Master Mode</div>
+          <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>Expand pool to 200 cocktails</div>
+        </div>
+        <button onClick={toggleMaster} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:st.masterMode?"#f59e0b":"#334155",transition:"background 0.3s"}}>
+          <div style={{position:"absolute",top:3,left:st.masterMode?27:3,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left 0.3s"}} />
+        </button>
+      </div>
+      <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#ef4444",fontWeight:600,fontSize:"0.85rem",border:"1px solid #ef444440",cursor:"pointer"}}>Reset Progress</button>
+    </div></div>
+  );
+
+  if (mode === "index") {
+    const q = search.trim().toLowerCase();
+    const results = q ? ALL_200.filter(c => c.name.toLowerCase().includes(q)) : ALL_200;
+    return (
+      <div style={page}><div style={wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_200.length}</span>
+        </div>
+        <input
+          autoFocus
+          value={search}
+          onChange={e=>setSearch(e.target.value)}
+          placeholder="Search cocktail name…"
+          style={{width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,background:"#1e293b",border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"1.25rem",outline:"none"}}
+        />
+        <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
+          {results.length === 0 && (
+            <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>No cocktails found.</div>
+          )}
+          {results.map(c=>(
+            <div key={c.name} style={{background:"#1e293b",borderRadius:14,padding:"1rem 1.25rem"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.4rem"}}>
+                <h3 style={{fontSize:"1.1rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h3>
+                {c.rank && <span style={{fontSize:"0.7rem",color:"#f59e0b",fontWeight:600,whiteSpace:"nowrap",marginLeft:"0.5rem"}}>#{c.rank}</span>}
+              </div>
+              <div style={{color:"#cbd5e1",lineHeight:1.7,fontSize:"0.85rem"}}>
+                {c.glass && <div style={{padding:"0.05rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}</div>}
+                {c.ingredients.split(", ").map((g,i,a)=>(
+                  <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div></div>
+    );
+  }
+
+  if (mode === "study") {
+    if (st.active.length === 0) return (
+      <div style={{...page,justifyContent:"center"}}>
+        <div style={{fontSize:"3rem",marginBottom:"1rem"}}>🏆</div>
+        <h2 style={{fontWeight:800,marginBottom:"0.5rem"}}>All Mastered!</h2>
+        <p style={{color:"#94a3b8",marginBottom:"2rem"}}>You've learned all {total} cocktails.</p>
+        <button onClick={()=>setMode("menu")} style={btn("#3b82f6",{padding:"0.75rem 2rem"})}>Back to Menu</button>
+      </div>
+    );
+    const ci = st.active[di], c = pool.find(x => x.name === ci), score = st.scores[ci]||0;
+    return (
+      <div style={page}><div style={wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{learned}/{total} learned</span>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {di+1}/{st.active.length}</span>
+        </div>
+
+        <div style={{background:"#1e293b",borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div>
+              <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0,lineHeight:1.2}}>{c.name}</h2>
+              {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2024</div>}
+            </div>
+            <div style={{background:col(score),color:"#fff",borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap",marginLeft:"0.75rem"}}>{score}/{MASTERY_SCORE}</div>
+          </div>
+          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem 0"}}>
+            {!revealed
+              ? <button onClick={()=>setRevealed(true)} style={btn("#334155",{color:"#cbd5e1",fontSize:"0.95rem"})}>Reveal Ingredients</button>
+              : <div style={{color:"#cbd5e1",lineHeight:1.85,fontSize:"0.9rem"}}>
+                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}</div>}
+                  {c.ingredients.split(", ").map((g,i,a)=>(
+                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
+                  ))}
+                </div>
+            }
+          </div>
+        </div>
+
+        {revealed
+          ? <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"1rem"}}>
+              <button onClick={()=>grade(true)} style={btn("#16a34a")}>✓ Got It</button>
+              <button onClick={()=>grade(false)} style={btn("#dc2626")}>✗ Missed It</button>
+            </div>
+          : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
+              <button onClick={prev} style={btn("#1e293b",{color:"#94a3b8"})}>← Prev</button>
+              <button onClick={next} style={btn("#1e293b",{color:"#94a3b8"})}>Next →</button>
+            </div>
+        }
+
+        <div style={{display:"flex",gap:4,marginTop:"1.25rem",flexWrap:"wrap",justifyContent:"center"}}>
+          {st.active.map((ci,i)=>(
+            <div key={i} onClick={()=>{setDi(i);setRevealed(false);}}
+              style={{width:28,height:28,borderRadius:6,background:i===di?"#3b82f6":"#1e293b",border:`2px solid ${col(st.scores[ci]||0)}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.65rem",color:"#94a3b8",fontWeight:700}}>
+              {st.scores[ci]||0}
+            </div>
+          ))}
+        </div>
+      </div></div>
+    );
+  }
+
+  if (mode === "quiz") {
+    const c = pool[qi];
+    return (
+      <div style={page}><div style={wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {pool.length}</span>
+          <span style={{color:"#22c55e",fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
+        </div>
+        <div style={{background:"#1e293b",borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"}}>
+          <div style={{background:"#7c3aed",height:"100%",width:`${(qi/pool.length)*100}%`,transition:"width 0.3s"}} />
+        </div>
+        <div style={{background:"#1e293b",borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div>
+            <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h2>
+            {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2024</div>}
+          </div>
+          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem 0"}}>
+            {!qr
+              ? <button onClick={()=>setQr(true)} style={btn("#334155",{color:"#cbd5e1",fontSize:"0.95rem"})}>Reveal Ingredients</button>
+              : <div style={{color:"#cbd5e1",lineHeight:1.85,fontSize:"0.9rem"}}>
+                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}</div>}
+                  {c.ingredients.split(", ").map((g,i,a)=>(
+                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
+                  ))}
+                </div>
+            }
+          </div>
+        </div>
+        {qr && (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
+            <button onClick={()=>qGrade(true)} style={btn("#16a34a")}>✓ Knew It</button>
+            <button onClick={()=>qGrade(false)} style={btn("#dc2626")}>✗ Didn't Know</button>
+          </div>
+        )}
+      </div></div>
+    );
+  }
+
+  if (mode === "results") {
+    const knew = qa.filter(Boolean).length;
+    const pct = Math.round((knew/pool.length)*100);
+    const missed = pool.filter((_,i)=>qa[i]===false);
+    return (
+      <div style={page}><div style={wrap}>
+        <div style={{textAlign:"center",marginBottom:"2rem"}}>
+          <div style={{fontSize:"3rem",marginBottom:"0.5rem"}}>{pct>=80?"🏆":pct>=50?"📚":"💪"}</div>
+          <h2 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem"}}>{pct}%</h2>
+          <p style={{color:"#94a3b8"}}>You knew {knew} out of {pool.length} cocktails</p>
+        </div>
+        {missed.length > 0 && (
+          <div style={{background:"#1e293b",borderRadius:16,padding:"1.25rem",marginBottom:"1.5rem",maxHeight:280,overflowY:"auto"}}>
+            <h3 style={{fontWeight:700,marginTop:0,color:"#f87171",fontSize:"0.9rem",textTransform:"uppercase",letterSpacing:"0.05em"}}>Needs Work ({missed.length})</h3>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"0.4rem"}}>
+              {missed.map(c=>(
+                <span key={c.name} style={{background:"#dc262620",border:"1px solid #dc262660",color:"#fca5a5",borderRadius:6,padding:"0.2rem 0.5rem",fontSize:"0.8rem"}}>{c.name}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
+          <button onClick={startQuiz} style={btn("#7c3aed")}>Retry Quiz</button>
+          <button onClick={()=>setMode("menu")} style={btn("#1e293b")}>Menu</button>
+        </div>
+      </div></div>
+    );
+  }
+}
