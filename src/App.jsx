@@ -273,7 +273,9 @@ export default function App() {
       window.location.href = data.url;
     } catch (e) {
       console.error("Failed to start checkout", e);
-      setPurchaseMsg("Couldn't start checkout — please try again.");
+      // Surface the server's specific reason (e.g. "Payments aren't configured yet")
+      // so the failure is diagnosable instead of always showing a generic message.
+      setPurchaseMsg(e?.message ? `Couldn't start checkout — ${e.message}` : "Couldn't start checkout — please try again.");
       setPurchasing(false);
     }
   }
