@@ -363,6 +363,30 @@ export default function App() {
     if (!confirm("Reset all progress?")) return;
     setSt(initState(st.masterMode)); setDi(0); setRevealed(false);
   }
+  // Add or remove a cocktail from the study deck (st.active) by name. Adding a
+  // cocktail also gives it a starting score and pulls it out of `learned` so it
+  // reappears in study; removing just drops it from the deck.
+  function toggleStudy(name) {
+    upd(p => {
+      if (p.active.includes(name)) return { ...p, active: p.active.filter(n => n !== name) };
+      const scores = { ...p.scores };
+      if (scores[name] === undefined) scores[name] = 0;
+      const learned = (p.learned || []).filter(n => n !== name);
+      return { ...p, scores, learned, active: [...p.active, name] };
+    });
+  }
+  // Randomize the order of the study deck (Fisher–Yates) and jump to the first card.
+  function shuffleActive() {
+    upd(p => {
+      const a = [...p.active];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return { ...p, active: a };
+    });
+    setDi(0); setRevealed(false);
+  }
 
   const wrap = { maxWidth:480, width:"100%" };
   const page = { minHeight:"100dvh", background:"rgba(15, 23, 42, 0.2)", backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
@@ -498,9 +522,14 @@ export default function App() {
           )}
           {results.map(c=>(
             <div key={c.name} style={frame({borderRadius:14,padding:"1rem 1.25rem"})}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.4rem"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.4rem",gap:"0.5rem"}}>
                 <h3 style={{fontSize:"1.1rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h3>
-                {c.rank && <span style={{fontSize:"0.7rem",color:"#f59e0b",fontWeight:600,whiteSpace:"nowrap",marginLeft:"0.5rem"}}>#{c.rank}</span>}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"0.35rem"}}>
+                  {c.rank && <span style={{fontSize:"0.7rem",color:"#f59e0b",fontWeight:600,whiteSpace:"nowrap"}}>#{c.rank}</span>}
+                  <button onClick={()=>toggleStudy(c.name)} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:st.active.includes(c.name)?"none":"1px solid #3b82f680",background:st.active.includes(c.name)?"#16a34a":"transparent",color:st.active.includes(c.name)?"#fff":"#60a5fa"}}>
+                    {st.active.includes(c.name) ? "✓ In Study" : "＋ Study"}
+                  </button>
+                </div>
               </div>
               <div style={{color:"#cbd5e1",lineHeight:1.7,fontSize:"0.85rem"}}>
                 {c.glass && <div style={{padding:"0.05rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}</div>}
@@ -516,21 +545,34 @@ export default function App() {
   }
 
   if (mode === "study") {
-    if (st.active.length === 0) return (
-      <div style={{...page,justifyContent:"center"}}>
-        <div style={{fontSize:"3rem",marginBottom:"1rem"}}>🏆</div>
-        <h2 style={{fontWeight:800,marginBottom:"0.5rem"}}>All Mastered!</h2>
-        <p style={{color:"#94a3b8",marginBottom:"2rem"}}>You've learned all {total} cocktails.</p>
-        <button onClick={()=>setMode("menu")} style={btn("#3b82f6",{padding:"0.75rem 2rem"})}>Back to Menu</button>
-      </div>
-    );
-    const ci = st.active[di], c = pool.find(x => x.name === ci), score = st.scores[ci]||0;
+    if (st.active.length === 0) {
+      const allMastered = learned >= total;
+      return (
+        <div style={{...page,justifyContent:"center"}}>
+          <div style={{fontSize:"3rem",marginBottom:"1rem"}}>{allMastered ? "🏆" : "🃏"}</div>
+          <h2 style={{fontWeight:800,marginBottom:"0.5rem"}}>{allMastered ? "All Mastered!" : "Your deck is empty"}</h2>
+          <p style={{color:"#94a3b8",marginBottom:"2rem",textAlign:"center"}}>
+            {allMastered ? `You've learned all ${total} cocktails.` : "Add some cocktails from the Index to start studying."}
+          </p>
+          <div style={{display:"flex",gap:"0.75rem"}}>
+            {!allMastered && <button onClick={()=>{setSearch("");setMode("index");}} style={btn("#0891b2",{padding:"0.75rem 1.5rem"})}>🔍 Index</button>}
+            <button onClick={()=>setMode("menu")} style={btn("#3b82f6",{padding:"0.75rem 1.5rem"})}>Back to Menu</button>
+          </div>
+        </div>
+      );
+    }
+    // Fall back to ALL_200 so cocktails added to the deck from the Index (which
+    // may be outside the current mode's pool) still render.
+    const ci = st.active[di], c = pool.find(x => x.name === ci) || ALL_200.find(x => x.name === ci), score = st.scores[ci]||0;
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
           <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{learned}/{total} learned</span>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {di+1}/{st.active.length}</span>
+          <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
+            <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {di+1}/{st.active.length}</span>
+            <button onClick={shuffleActive} title="Shuffle deck" style={{background:"transparent",border:"1px solid #33415560",borderRadius:8,padding:"0.2rem 0.45rem",fontSize:"0.85rem",cursor:"pointer"}}>🔀</button>
+          </div>
         </div>
 
         <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
