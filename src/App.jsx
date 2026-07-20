@@ -355,8 +355,10 @@ export default function App() {
   }
 
   const wrap = { maxWidth:480, width:"100%" };
-  const page = { minHeight:"100dvh", background:"rgba(15, 23, 42, 0.6)", backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
+  const page = { minHeight:"100dvh", background:"rgba(15, 23, 42, 0.2)", backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
   const btn = (bg, x={}) => ({ padding:"1rem", borderRadius:12, background:bg, color:"#fff", fontWeight:700, fontSize:"1rem", border:"none", cursor:"pointer", ...x });
+  const FRAME_BG = "rgba(15, 23, 42, 0.55)";
+  const frame = (x={}) => ({ background:FRAME_BG, backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", ...x });
 
   if (mode === "menu") return (
     <div style={page}><div style={wrap}>
@@ -367,7 +369,7 @@ export default function App() {
       <p style={{color:"#64748b",fontSize:"0.72rem",marginBottom:"0.75rem"}}>Drinks International Bestselling Classics 2024</p>
 
       {authReady && (
-        <div style={{background:"#1e293b",borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem"}}>
+        <div style={frame({borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem"})}>
           {user ? (
             <>
               <div style={{display:"flex",alignItems:"center",gap:"0.6rem",minWidth:0}}>
@@ -389,7 +391,7 @@ export default function App() {
       )}
 
       {firebaseEnabled && authReady && !adFree && (
-        <div style={{background:"#1e293b",borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"}}>
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
             {purchasing ? "Redirecting…" : "🚫 Remove Ads — $12.99"}
@@ -401,7 +403,7 @@ export default function App() {
       )}
 
       {isAdmin && (
-        <div style={{background:"#1e293b",borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"}}>
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
           <button onClick={()=>setShowAdAdmin(s=>!s)} style={{background:"transparent",border:"none",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
             🛡️ Ad Whitelist (admin) {showAdAdmin ? "▲" : "▼"}
           </button>
@@ -433,14 +435,14 @@ export default function App() {
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
         {[["Learned",learned,"#22c55e"],["Active",st.active.length,"#3b82f6"],["Total",total,"#f59e0b"]].map(([l,v,c])=>(
-          <div key={l} style={{background:"#1e293b",borderRadius:12,padding:"0.9rem",textAlign:"center"}}>
+          <div key={l} style={frame({borderRadius:12,padding:"0.9rem",textAlign:"center"})}>
             <div style={{fontSize:"1.75rem",fontWeight:800,color:c}}>{v}</div>
             <div style={{fontSize:"0.75rem",color:"#94a3b8",marginTop:2}}>{l}</div>
           </div>
         ))}
       </div>
 
-      <div style={{background:"#1e293b",borderRadius:99,height:8,marginBottom:"1.75rem",overflow:"hidden"}}>
+      <div style={frame({borderRadius:99,height:8,marginBottom:"1.75rem",overflow:"hidden"})}>
         <div style={{background:"#22c55e",height:"100%",width:`${(learned/total)*100}%`,transition:"width 0.5s"}} />
       </div>
 
@@ -448,7 +450,7 @@ export default function App() {
       <button onClick={startQuiz} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — All {total} Cocktails</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
 
-      <div style={{background:"#1e293b",borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"}}>
+      <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"})}>
         <div>
           <div style={{fontWeight:700,color:"#f8fafc"}}>Master Mode</div>
           <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>Expand pool to 200 cocktails</div>
@@ -475,14 +477,14 @@ export default function App() {
           value={search}
           onChange={e=>setSearch(e.target.value)}
           placeholder="Search cocktail name…"
-          style={{width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,background:"#1e293b",border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"1.25rem",outline:"none"}}
+          style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"1.25rem",outline:"none"})}
         />
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
           {results.length === 0 && (
             <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>No cocktails found.</div>
           )}
           {results.map(c=>(
-            <div key={c.name} style={{background:"#1e293b",borderRadius:14,padding:"1rem 1.25rem"}}>
+            <div key={c.name} style={frame({borderRadius:14,padding:"1rem 1.25rem"})}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.4rem"}}>
                 <h3 style={{fontSize:"1.1rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h3>
                 {c.rank && <span style={{fontSize:"0.7rem",color:"#f59e0b",fontWeight:600,whiteSpace:"nowrap",marginLeft:"0.5rem"}}>#{c.rank}</span>}
@@ -518,7 +520,7 @@ export default function App() {
           <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {di+1}/{st.active.length}</span>
         </div>
 
-        <div style={{background:"#1e293b",borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+        <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div>
               <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0,lineHeight:1.2}}>{c.name}</h2>
@@ -571,10 +573,10 @@ export default function App() {
           <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {pool.length}</span>
           <span style={{color:"#22c55e",fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
         </div>
-        <div style={{background:"#1e293b",borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"}}>
+        <div style={frame({borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"})}>
           <div style={{background:"#7c3aed",height:"100%",width:`${(qi/pool.length)*100}%`,transition:"width 0.3s"}} />
         </div>
-        <div style={{background:"#1e293b",borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+        <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
           <div>
             <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h2>
             {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2024</div>}
@@ -613,7 +615,7 @@ export default function App() {
           <p style={{color:"#94a3b8"}}>You knew {knew} out of {pool.length} cocktails</p>
         </div>
         {missed.length > 0 && (
-          <div style={{background:"#1e293b",borderRadius:16,padding:"1.25rem",marginBottom:"1.5rem",maxHeight:280,overflowY:"auto"}}>
+          <div style={frame({borderRadius:16,padding:"1.25rem",marginBottom:"1.5rem",maxHeight:280,overflowY:"auto"})}>
             <h3 style={{fontWeight:700,marginTop:0,color:"#f87171",fontSize:"0.9rem",textTransform:"uppercase",letterSpacing:"0.05em"}}>Needs Work ({missed.length})</h3>
             <div style={{display:"flex",flexWrap:"wrap",gap:"0.4rem"}}>
               {missed.map(c=>(
