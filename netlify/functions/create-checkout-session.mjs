@@ -59,6 +59,8 @@ export async function handler(event) {
     return { statusCode: 200, body: JSON.stringify({ url: session.url }) };
   } catch (e) {
     console.error("Failed to create checkout session", e);
-    return { statusCode: 500, body: JSON.stringify({ error: "Failed to start checkout" }) };
+    // TEMP DEBUG: surface Stripe's real error to the client Network tab.
+    // Revert to the generic message once checkout works.
+    return { statusCode: 500, body: JSON.stringify({ error: "Failed to start checkout", detail: String(e && e.message || e) }) };
   }
 }
