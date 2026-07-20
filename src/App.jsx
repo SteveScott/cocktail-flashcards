@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db, googleProvider, firebaseEnabled } from "./firebase";
+import { auth, db, googleProvider, facebookProvider, firebaseEnabled } from "./firebase";
 import cocktailData from './cocktails.json';
 
 const { top50, master150 } = cocktailData;
@@ -10,6 +10,9 @@ const ALL_200 = [...top50, ...master150];
 const DECK_SIZE = 20;
 const MASTERY_SCORE = 6;
 const STORAGE_KEY = "cocktail_state_v4";
+// Facebook Login is fully implemented (src/firebase.js + signInFacebook) but temporarily
+// hidden from the UI until the Facebook app is configured. Flip to true to re-enable.
+const FACEBOOK_LOGIN_ENABLED = false;
 
 const GLASS_ICONS = [
   ["champagne", "🥂"],
@@ -147,14 +150,15 @@ export default function App() {
     return () => clearTimeout(t);
   }, [st, user]);
 
-  function signIn() {
+  function signIn(provider = googleProvider) {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
-    signInWithPopup(auth, googleProvider).catch(e => {
+    signInWithPopup(auth, provider).catch(e => {
       console.error("Popup sign-in failed, falling back to redirect", e);
       // Popups can be closed prematurely by browser privacy settings or extensions — fall back to a full-page redirect.
-      signInWithRedirect(auth, googleProvider).catch(e2 => console.error("Redirect sign-in failed", e2));
+      signInWithRedirect(auth, provider).catch(e2 => console.error("Redirect sign-in failed", e2));
     });
   }
+  function signInFacebook() { signIn(facebookProvider); }
   function signOutUser() {
     if (!firebaseEnabled) return;
     signOut(auth).catch(e => console.error("Sign-out failed", e));
@@ -241,7 +245,10 @@ export default function App() {
           ) : (
             <>
               <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>{firebaseEnabled ? "Sign in to sync progress" : "Cloud sync not configured"}</div>
-              <button onClick={signIn} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
+              <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
+                <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
+                {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":"#334155",color:firebaseEnabled?"#ffffff":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
+              </div>
             </>
           )}
         </div>
