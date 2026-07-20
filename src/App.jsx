@@ -165,9 +165,15 @@ export default function App() {
           const data = snap.exists() ? snap.data() : null;
           const cloud = data?.progress || null;
           setAdsRemoved(Boolean(data?.adsRemoved));
-          let merged;
-          setSt(prev => { merged = mergeStates(prev, cloud); return merged; });
-          await setDoc(doc(db, "users", u.uid), { progress: merged, updatedAt: Date.now() }, { merge: true });
+          // Persist the merged progress from inside the updater: the merged value
+          // isn't available synchronously outside it (React runs the updater during
+          // render, not at call time), which previously wrote `progress: undefined`.
+          setSt(prev => {
+            const merged = mergeStates(prev, cloud);
+            setDoc(doc(db, "users", u.uid), { progress: merged, updatedAt: Date.now() }, { merge: true })
+              .catch(e => console.error("Cloud sync failed", e));
+            return merged;
+          });
         } catch (e) { console.error("Cloud sync failed", e); }
       } else {
         setAdsRemoved(false);
