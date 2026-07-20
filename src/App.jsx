@@ -464,6 +464,9 @@ export default function App() {
         </button>
       </div>
       <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#ef4444",fontWeight:600,fontSize:"0.85rem",border:"1px solid #ef444440",cursor:"pointer"}}>Reset Progress</button>
+      <div style={{textAlign:"center",marginTop:"1rem",fontSize:"0.75rem",color:"#64748b"}}>
+        Questions or feedback? <a href="mailto:steve@baroqueplusplus.com" style={{color:"#94a3b8"}}>steve@baroqueplusplus.com</a>
+      </div>
     </div></div>
   );
 
