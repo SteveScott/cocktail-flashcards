@@ -26,9 +26,7 @@ export async function handler(event) {
     email = decoded.email;
   } catch (e) {
     console.error("Token verification failed", e);
-    // TEMP DEBUG: surface the real Admin-SDK failure reason to the client so it
-    // shows in the browser Network tab. Revert to the generic message once fixed.
-    return { statusCode: 401, body: JSON.stringify({ error: "Invalid or expired sign-in token", detail: String(e && e.message || e) }) };
+    return { statusCode: 401, body: JSON.stringify({ error: "Invalid or expired sign-in token" }) };
   }
 
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -59,8 +57,6 @@ export async function handler(event) {
     return { statusCode: 200, body: JSON.stringify({ url: session.url }) };
   } catch (e) {
     console.error("Failed to create checkout session", e);
-    // TEMP DEBUG: surface Stripe's real error to the client Network tab.
-    // Revert to the generic message once checkout works.
-    return { statusCode: 500, body: JSON.stringify({ error: "Failed to start checkout", detail: String(e && e.message || e) }) };
+    return { statusCode: 500, body: JSON.stringify({ error: "Failed to start checkout" }) };
   }
 }
