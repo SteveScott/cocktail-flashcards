@@ -215,7 +215,9 @@ export default function App() {
   useEffect(() => {
     if (!firebaseEnabled || !user) return;
     const t = setTimeout(() => {
-      setDoc(doc(db, "users", user.uid), { progress: st, updatedAt: Date.now() }).catch(e => console.error("Cloud save failed", e));
+      // merge:true so autosaving progress never clobbers server-owned fields
+      // like `adsRemoved` (set by the Stripe webhook via the Admin SDK).
+      setDoc(doc(db, "users", user.uid), { progress: st, updatedAt: Date.now() }, { merge: true }).catch(e => console.error("Cloud save failed", e));
     }, 800);
     return () => clearTimeout(t);
   }, [st, user]);
