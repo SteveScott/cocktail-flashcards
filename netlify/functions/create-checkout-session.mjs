@@ -26,7 +26,9 @@ export async function handler(event) {
     email = decoded.email;
   } catch (e) {
     console.error("Token verification failed", e);
-    return { statusCode: 401, body: JSON.stringify({ error: "Invalid or expired sign-in token" }) };
+    // TEMP DEBUG: surface the real Admin-SDK failure reason to the client so it
+    // shows in the browser Network tab. Revert to the generic message once fixed.
+    return { statusCode: 401, body: JSON.stringify({ error: "Invalid or expired sign-in token", detail: String(e && e.message || e) }) };
   }
 
   if (!process.env.STRIPE_SECRET_KEY) {
