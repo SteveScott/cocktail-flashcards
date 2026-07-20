@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db, googleProvider, facebookProvider, firebaseEnabled } from "./firebase";
+import {
+  auth, db, googleProvider, facebookProvider, firebaseEnabled,
+  isEmailAdWhitelisted, addEmailToAdWhitelist, removeEmailFromAdWhitelist, listAdWhitelist,
+} from "./firebase";
 import cocktailData from './cocktails.json';
 
 const { top50, master150 } = cocktailData;
@@ -13,6 +16,23 @@ const STORAGE_KEY = "cocktail_state_v4";
 // Facebook Login is fully implemented (src/firebase.js + signInFacebook) but temporarily
 // hidden from the UI until the Facebook app is configured. Flip to true to re-enable.
 const FACEBOOK_LOGIN_ENABLED = false;
+
+// Emails allowed to manage the ad whitelist from the in-app admin panel. Set via
+// VITE_ADMIN_EMAILS (comma-separated) in .env. This is a UI-only gate — the real
+// access control must come from Firestore security rules (see README).
+const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || "")
+  .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+
+const ADSENSE_SCRIPT_ID = "adsbygoogle-script";
+function loadAdsenseScript() {
+  if (document.getElementById(ADSENSE_SCRIPT_ID)) return;
+  const script = document.createElement("script");
+  script.id = ADSENSE_SCRIPT_ID;
+  script.async = true;
+  script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3044363631644079";
+  script.crossOrigin = "anonymous";
+  document.head.appendChild(script);
+}
 
 const GLASS_ICONS = [
   ["champagne", "🥂"],
@@ -106,6 +126,14 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(!firebaseEnabled);
+  const [adWhitelisted, setAdWhitelisted] = useState(false);
+  const [adCheckDone, setAdCheckDone] = useState(!firebaseEnabled);
+  const [showAdAdmin, setShowAdAdmin] = useState(false);
+  const [whitelist, setWhitelist] = useState([]);
+  const [whitelistInput, setWhitelistInput] = useState("");
+  const [whitelistMsg, setWhitelistMsg] = useState("");
+
+  const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
   const pool = st.masterMode ? ALL_200 : top50;
   const learned = st.learned?.length || 0;
@@ -150,6 +178,30 @@ export default function App() {
     return () => clearTimeout(t);
   }, [st, user]);
 
+  // Check whether the signed-in user's email is on the ad whitelist.
+  useEffect(() => {
+    if (!firebaseEnabled || !authReady) return;
+    if (!user?.email) { setAdWhitelisted(false); setAdCheckDone(true); return; }
+    let cancelled = false;
+    setAdCheckDone(false);
+    isEmailAdWhitelisted(user.email)
+      .then(w => { if (!cancelled) { setAdWhitelisted(w); setAdCheckDone(true); } })
+      .catch(e => { console.error("Ad whitelist check failed", e); if (!cancelled) { setAdWhitelisted(false); setAdCheckDone(true); } });
+    return () => { cancelled = true; };
+  }, [authReady, user]);
+
+  // Only load the AdSense script once we know the current user isn't ad-whitelisted.
+  useEffect(() => {
+    if (!adCheckDone || adWhitelisted) return;
+    loadAdsenseScript();
+  }, [adCheckDone, adWhitelisted]);
+
+  // Load the whitelist list when an admin opens the admin panel.
+  useEffect(() => {
+    if (!isAdmin || !showAdAdmin) return;
+    listAdWhitelist().then(setWhitelist).catch(e => console.error("Failed to load ad whitelist", e));
+  }, [isAdmin, showAdAdmin]);
+
   function signIn(provider = googleProvider) {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
     signInWithPopup(auth, provider).catch(e => {
@@ -162,6 +214,26 @@ export default function App() {
   function signOutUser() {
     if (!firebaseEnabled) return;
     signOut(auth).catch(e => console.error("Sign-out failed", e));
+  }
+
+  async function addToWhitelist() {
+    const email = whitelistInput.trim().toLowerCase();
+    if (!email) return;
+    try {
+      await addEmailToAdWhitelist(email, user?.email);
+      setWhitelistInput("");
+      setWhitelistMsg(`Added ${email}`);
+      setWhitelist(await listAdWhitelist());
+    } catch (e) {
+      console.error("Failed to add to ad whitelist", e);
+      setWhitelistMsg("Failed to add — check console.");
+    }
+  }
+  async function removeFromWhitelist(email) {
+    try {
+      await removeEmailFromAdWhitelist(email);
+      setWhitelist(w => w.filter(x => x.email !== email));
+    } catch (e) { console.error("Failed to remove from ad whitelist", e); }
   }
 
   const col = s => s >= MASTERY_SCORE ? "#22c55e" : s >= 4 ? "#f59e0b" : s >= 2 ? "#3b82f6" : "#6b7280";
@@ -250,6 +322,37 @@ export default function App() {
                 {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":"#334155",color:firebaseEnabled?"#ffffff":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {isAdmin && (
+        <div style={{background:"#1e293b",borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"}}>
+          <button onClick={()=>setShowAdAdmin(s=>!s)} style={{background:"transparent",border:"none",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
+            🛡️ Ad Whitelist (admin) {showAdAdmin ? "▲" : "▼"}
+          </button>
+          {showAdAdmin && (
+            <div style={{marginTop:"0.75rem"}}>
+              <div style={{display:"flex",gap:"0.5rem",marginBottom:"0.5rem"}}>
+                <input
+                  value={whitelistInput}
+                  onChange={e=>setWhitelistInput(e.target.value)}
+                  placeholder="user@gmail.com"
+                  style={{flex:1,padding:"0.5rem 0.75rem",borderRadius:8,background:"#0f172a",border:"1px solid #334155",color:"#f1f5f9",fontSize:"0.85rem",outline:"none"}}
+                />
+                <button onClick={addToWhitelist} style={{...btn("#f59e0b"),padding:"0.5rem 0.9rem",fontSize:"0.8rem"}}>Add</button>
+              </div>
+              {whitelistMsg && <div style={{fontSize:"0.75rem",color:"#94a3b8",marginBottom:"0.5rem"}}>{whitelistMsg}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:160,overflowY:"auto"}}>
+                {whitelist.length === 0 && <div style={{color:"#64748b",fontSize:"0.8rem"}}>No whitelisted users yet.</div>}
+                {whitelist.map(w => (
+                  <div key={w.email} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0f172a",borderRadius:8,padding:"0.4rem 0.6rem"}}>
+                    <span style={{fontSize:"0.8rem",color:"#cbd5e1"}}>{w.email}</span>
+                    <button onClick={()=>removeFromWhitelist(w.email)} style={{background:"transparent",border:"none",color:"#ef4444",cursor:"pointer",fontSize:"0.75rem"}}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
