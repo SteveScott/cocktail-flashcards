@@ -76,14 +76,15 @@ function initState(masterMode) {
   const pool = masterMode ? ALL_200 : top50;
   const scores = {};
   pool.forEach(c => { scores[c.name] = 0; });
-  return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [] };
+  return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], deckSize: DECK_SIZE };
 }
 
 function refillDeck(st, pool) {
+  const target = st.deckSize || DECK_SIZE;
   const lSet = new Set(st.learned), aSet = new Set(st.active);
   const avail = pool.map(c => c.name).filter(n => !lSet.has(n) && !aSet.has(n));
   const na = [...st.active];
-  while (na.length < DECK_SIZE && avail.length > 0) na.push(avail.shift());
+  while (na.length < target && avail.length > 0) na.push(avail.shift());
   return { ...st, active: na };
 }
 
@@ -111,7 +112,8 @@ function mergeStates(a, b) {
   const pool = masterMode ? ALL_200 : top50;
   const lSet = new Set(learned);
   const active = Array.from(new Set([...(a.active||[]), ...(b.active||[])])).filter(n => !lSet.has(n));
-  return refillDeck({ scores, learned, active, masterMode }, pool);
+  const deckSize = a.deckSize || b.deckSize || DECK_SIZE;
+  return refillDeck({ scores, learned, active, masterMode, deckSize }, pool);
 }
 
 export default function App() {
@@ -142,6 +144,7 @@ export default function App() {
   const pool = st.masterMode ? ALL_200 : top50;
   const learned = st.learned?.length || 0;
   const total = pool.length;
+  const deckSize = st.deckSize || DECK_SIZE;
 
   useEffect(() => {
     saveLocal(st);
@@ -387,6 +390,16 @@ export default function App() {
     });
     setDi(0); setRevealed(false);
   }
+  // Change how many cards the study deck holds. Shrinking trims the extra cards
+  // immediately (from the end; their scores are kept); growing refills from the pool.
+  function setDeckSizeTo(n) {
+    upd(p => {
+      const np = p.masterMode ? ALL_200 : top50;
+      const active = p.active.length > n ? p.active.slice(0, n) : p.active;
+      return refillDeck({ ...p, deckSize: n, active }, np);
+    });
+    setDi(0); setRevealed(false);
+  }
 
   const wrap = { maxWidth:480, width:"100%" };
   const page = { minHeight:"100dvh", background:"rgba(15, 23, 42, 0.2)", backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
@@ -483,6 +496,23 @@ export default function App() {
       <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn("#3b82f6"),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
       <button onClick={startQuiz} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — All {total} Cocktails</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
+
+      <div style={frame({borderRadius:12,padding:"1rem 1.25rem",marginBottom:"0.75rem"})}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.6rem"}}>
+          <div>
+            <div style={{fontWeight:700,color:"#f8fafc"}}>Deck Size</div>
+            <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>Cards active in Study Mode</div>
+          </div>
+          <div style={{fontSize:"1.1rem",fontWeight:800,color:"#3b82f6"}}>{deckSize >= total ? "All" : deckSize}</div>
+        </div>
+        <div style={{display:"flex",gap:"0.4rem"}}>
+          {[10,20,30,50].map(n=>{
+            const on = deckSize === n && deckSize < total;
+            return <button key={n} onClick={()=>setDeckSizeTo(n)} style={{flex:1,padding:"0.5rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.85rem",background:on?"#3b82f6":"#1e293b",color:on?"#fff":"#94a3b8"}}>{n}</button>;
+          })}
+          <button onClick={()=>setDeckSizeTo(total)} style={{flex:1,padding:"0.5rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.85rem",background:deckSize>=total?"#3b82f6":"#1e293b",color:deckSize>=total?"#fff":"#94a3b8"}}>All</button>
+        </div>
+      </div>
 
       <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"})}>
         <div>
