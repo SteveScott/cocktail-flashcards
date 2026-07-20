@@ -1,9 +1,9 @@
 import Stripe from "stripe";
 import { getAdmin } from "./_firebaseAdmin.mjs";
 
-// One-time "remove ads" purchase price.
-const PRICE_CENTS = 1299; // $12.99
-const CURRENCY = "usd";
+// Managed Payments requires this (or a later) API version, passed per-request
+// below rather than pinned on the Stripe client.
+const MANAGED_PAYMENTS_API_VERSION = "2026-02-25.preview";
 
 export async function handler(event) {
   if (event.httpMethod !== "POST") {
@@ -33,29 +33,27 @@ export async function handler(event) {
     console.error("STRIPE_SECRET_KEY is not configured");
     return { statusCode: 500, body: JSON.stringify({ error: "Payments aren't configured yet" }) };
   }
+  if (!process.env.STRIPE_PRICE_ID) {
+    console.error("STRIPE_PRICE_ID is not configured (run scripts/create-remove-ads-product.mjs)");
+    return { statusCode: 500, body: JSON.stringify({ error: "Payments aren't configured yet" }) };
+  }
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   const origin = event.headers.origin || `https://${event.headers.host}`;
 
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      client_reference_id: uid,
-      customer_email: email || undefined,
-      line_items: [
-        {
-          price_data: {
-            currency: CURRENCY,
-            unit_amount: PRICE_CENTS,
-            product_data: { name: "Cocktail Flashcards — Remove Ads (one-time)" },
-          },
-          quantity: 1,
-        },
-      ],
-      metadata: { uid },
-      success_url: `${origin}/?purchase=success`,
-      cancel_url: `${origin}/?purchase=cancelled`,
-    });
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: "payment",
+        client_reference_id: uid,
+        customer_email: email || undefined,
+        line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+        managed_payments: { enabled: true },
+        metadata: { uid },
+        success_url: `${origin}/?purchase=success`,
+        cancel_url: `${origin}/?purchase=cancelled`,
+      },
+      { apiVersion: MANAGED_PAYMENTS_API_VERSION }
+    );
     return { statusCode: 200, body: JSON.stringify({ url: session.url }) };
   } catch (e) {
     console.error("Failed to create checkout session", e);

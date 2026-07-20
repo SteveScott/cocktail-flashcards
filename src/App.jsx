@@ -132,6 +132,10 @@ export default function App() {
   const [whitelist, setWhitelist] = useState([]);
   const [whitelistInput, setWhitelistInput] = useState("");
   const [whitelistMsg, setWhitelistMsg] = useState("");
+  const [adsRemoved, setAdsRemoved] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseMsg, setPurchaseMsg] = useState("");
+  const adFree = adWhitelisted || adsRemoved;
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
@@ -158,15 +162,53 @@ export default function App() {
       if (u) {
         try {
           const snap = await getDoc(doc(db, "users", u.uid));
-          const cloud = snap.exists() ? snap.data().progress : null;
+          const data = snap.exists() ? snap.data() : null;
+          const cloud = data?.progress || null;
+          setAdsRemoved(Boolean(data?.adsRemoved));
           let merged;
           setSt(prev => { merged = mergeStates(prev, cloud); return merged; });
-          await setDoc(doc(db, "users", u.uid), { progress: merged, updatedAt: Date.now() });
+          await setDoc(doc(db, "users", u.uid), { progress: merged, updatedAt: Date.now() }, { merge: true });
         } catch (e) { console.error("Cloud sync failed", e); }
+      } else {
+        setAdsRemoved(false);
       }
       setAuthReady(true);
     });
     return unsub;
+  }, []);
+
+  // After returning from Stripe Checkout, re-check the ads-removed flag a few
+  // times since the webhook that sets it runs asynchronously and may lag
+  // slightly behind the redirect back to the app.
+  useEffect(() => {
+    if (!firebaseEnabled) return;
+    const params = new URLSearchParams(window.location.search);
+    const purchase = params.get("purchase");
+    if (!purchase) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    if (purchase === "success") {
+      setPurchaseMsg("Thanks for your purchase! Finishing up…");
+      let attempts = 0;
+      const check = async () => {
+        attempts += 1;
+        const u = auth.currentUser;
+        if (u) {
+          try {
+            const snap = await getDoc(doc(db, "users", u.uid));
+            if (snap.exists() && snap.data().adsRemoved) {
+              setAdsRemoved(true);
+              setPurchaseMsg("Ads removed. Thanks for your support!");
+              return;
+            }
+          } catch (e) { console.error("Failed to confirm purchase", e); }
+        }
+        if (attempts < 6) setTimeout(check, 1500);
+        else setPurchaseMsg("Purchase received — it may take a minute to apply.");
+      };
+      check();
+    } else if (purchase === "cancelled") {
+      setPurchaseMsg("Checkout cancelled.");
+    }
   }, []);
 
   // Push progress to the cloud whenever it changes and a user is signed in.
@@ -190,11 +232,11 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authReady, user]);
 
-  // Only load the AdSense script once we know the current user isn't ad-whitelisted.
+  // Only load the AdSense script once we know the current user isn't ad-free.
   useEffect(() => {
-    if (!adCheckDone || adWhitelisted) return;
+    if (!adCheckDone || adFree) return;
     loadAdsenseScript();
-  }, [adCheckDone, adWhitelisted]);
+  }, [adCheckDone, adFree]);
 
   // Load the whitelist list when an admin opens the admin panel.
   useEffect(() => {
@@ -214,6 +256,26 @@ export default function App() {
   function signOutUser() {
     if (!firebaseEnabled) return;
     signOut(auth).catch(e => console.error("Sign-out failed", e));
+  }
+
+  async function startCheckout() {
+    if (!user) { alert("Sign in first to remove ads."); return; }
+    setPurchasing(true);
+    setPurchaseMsg("");
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/.netlify/functions/create-checkout-session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || "Failed to start checkout");
+      window.location.href = data.url;
+    } catch (e) {
+      console.error("Failed to start checkout", e);
+      setPurchaseMsg("Couldn't start checkout — please try again.");
+      setPurchasing(false);
+    }
   }
 
   async function addToWhitelist() {
@@ -324,6 +386,18 @@ export default function App() {
             </>
           )}
         </div>
+      )}
+
+      {firebaseEnabled && authReady && !adFree && (
+        <div style={{background:"#1e293b",borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"}}>
+          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
+          <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
+            {purchasing ? "Redirecting…" : "🚫 Remove Ads — $12.99"}
+          </button>
+        </div>
+      )}
+      {purchaseMsg && (
+        <div style={{fontSize:"0.75rem",color:"#94a3b8",marginBottom:"1rem",marginTop:"-0.75rem"}}>{purchaseMsg}</div>
       )}
 
       {isAdmin && (

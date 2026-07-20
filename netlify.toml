@@ -1,6 +1,10 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
 
 # Firebase's client-side config values (below) are not secrets — security is enforced by
 # Firestore security rules, not by hiding these. Skip Netlify's secret scanner for them so
