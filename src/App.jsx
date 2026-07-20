@@ -497,23 +497,6 @@ export default function App() {
       <button onClick={startQuiz} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — All {total} Cocktails</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
 
-      <div style={frame({borderRadius:12,padding:"1rem 1.25rem",marginBottom:"0.75rem"})}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.6rem"}}>
-          <div>
-            <div style={{fontWeight:700,color:"#f8fafc"}}>Deck Size</div>
-            <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>Cards active in Study Mode</div>
-          </div>
-          <div style={{fontSize:"1.1rem",fontWeight:800,color:"#3b82f6"}}>{deckSize >= total ? "All" : deckSize}</div>
-        </div>
-        <div style={{display:"flex",gap:"0.4rem"}}>
-          {[10,20,30,50].map(n=>{
-            const on = deckSize === n && deckSize < total;
-            return <button key={n} onClick={()=>setDeckSizeTo(n)} style={{flex:1,padding:"0.5rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.85rem",background:on?"#3b82f6":"#1e293b",color:on?"#fff":"#94a3b8"}}>{n}</button>;
-          })}
-          <button onClick={()=>setDeckSizeTo(total)} style={{flex:1,padding:"0.5rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.85rem",background:deckSize>=total?"#3b82f6":"#1e293b",color:deckSize>=total?"#fff":"#94a3b8"}}>All</button>
-        </div>
-      </div>
-
       <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"})}>
         <div>
           <div style={{fontWeight:700,color:"#f8fafc"}}>Master Mode</div>
@@ -644,6 +627,20 @@ export default function App() {
               {st.scores[ci]||0}
             </div>
           ))}
+        </div>
+
+        <div style={frame({borderRadius:12,padding:"0.85rem 1rem",marginTop:"1.25rem"})}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.5rem"}}>
+            <div style={{fontSize:"0.8rem",fontWeight:700,color:"#cbd5e1"}}>Deck Size</div>
+            <div style={{fontSize:"0.9rem",fontWeight:800,color:"#3b82f6"}}>{deckSize >= total ? "All" : deckSize}</div>
+          </div>
+          <div style={{display:"flex",gap:"0.4rem"}}>
+            {[10,20,30,50].map(n=>{
+              const on = deckSize === n && deckSize < total;
+              return <button key={n} onClick={()=>setDeckSizeTo(n)} style={{flex:1,padding:"0.45rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.8rem",background:on?"#3b82f6":"#1e293b",color:on?"#fff":"#94a3b8"}}>{n}</button>;
+            })}
+            <button onClick={()=>setDeckSizeTo(total)} style={{flex:1,padding:"0.45rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.8rem",background:deckSize>=total?"#3b82f6":"#1e293b",color:deckSize>=total?"#fff":"#94a3b8"}}>All</button>
+          </div>
         </div>
       </div></div>
     );
