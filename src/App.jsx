@@ -355,7 +355,7 @@ export default function App() {
   }
 
   const wrap = { maxWidth:480, width:"100%" };
-  const page = { minHeight:"100dvh", background:"#0f172a", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
+  const page = { minHeight:"100dvh", background:"rgba(15, 23, 42, 0.6)", backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
   const btn = (bg, x={}) => ({ padding:"1rem", borderRadius:12, background:bg, color:"#fff", fontWeight:700, fontSize:"1rem", border:"none", cursor:"pointer", ...x });
 
   if (mode === "menu") return (
