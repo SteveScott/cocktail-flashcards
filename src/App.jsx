@@ -124,6 +124,7 @@ export default function App() {
   const [qa, setQa] = useState([]);
   const [qi, setQi] = useState(0);
   const [qr, setQr] = useState(false);
+  const [quizPool, setQuizPool] = useState([]);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
   const [user, setUser] = useState(null);
@@ -344,11 +345,20 @@ export default function App() {
 
   function next() { setDi(i => (i+1) % st.active.length); setRevealed(false); }
   function prev() { setDi(i => (i-1+st.active.length) % st.active.length); setRevealed(false); }
-  function startQuiz() { setQa([]); setQi(0); setQr(false); setMode("quiz"); }
+  // Build a fresh, fully-shuffled quiz order every time — quizzing always draws
+  // the whole pool in random sequence (Fisher–Yates), never the fixed pool order.
+  function startQuiz() {
+    const q = [...pool];
+    for (let i = q.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [q[i], q[j]] = [q[j], q[i]];
+    }
+    setQuizPool(q); setQa([]); setQi(0); setQr(false); setMode("quiz");
+  }
   function qGrade(k) {
     const ans = [...qa, k];
     setQa(ans);
-    if (qi+1 >= pool.length) setMode("results");
+    if (qi+1 >= quizPool.length) setMode("results");
     else { setQi(i=>i+1); setQr(false); }
   }
   function toggleMaster() {
@@ -582,10 +592,7 @@ export default function App() {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
           <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{learned}/{total} learned</span>
-          <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
-            <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {di+1}/{st.active.length}</span>
-            <button onClick={shuffleActive} title="Shuffle deck" style={{background:"transparent",border:"1px solid #33415560",borderRadius:8,padding:"0.2rem 0.45rem",fontSize:"0.85rem",cursor:"pointer"}}>🔀</button>
-          </div>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {di+1}/{st.active.length}</span>
         </div>
 
         <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
@@ -614,8 +621,9 @@ export default function App() {
               <button onClick={()=>grade(true)} style={btn("#16a34a")}>✓ Got It</button>
               <button onClick={()=>grade(false)} style={btn("#dc2626")}>✗ Missed It</button>
             </div>
-          : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
+          : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem"}}>
               <button onClick={prev} style={btn("#1e293b",{color:"#94a3b8"})}>← Prev</button>
+              <button onClick={shuffleActive} style={btn("#1e293b",{color:"#94a3b8"})}>🔀 Shuffle</button>
               <button onClick={next} style={btn("#1e293b",{color:"#94a3b8"})}>Next →</button>
             </div>
         }
@@ -647,16 +655,16 @@ export default function App() {
   }
 
   if (mode === "quiz") {
-    const c = pool[qi];
+    const c = quizPool[qi];
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {pool.length}</span>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {quizPool.length}</span>
           <span style={{color:"#22c55e",fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
         </div>
         <div style={frame({borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"})}>
-          <div style={{background:"#7c3aed",height:"100%",width:`${(qi/pool.length)*100}%`,transition:"width 0.3s"}} />
+          <div style={{background:"#7c3aed",height:"100%",width:`${(qi/quizPool.length)*100}%`,transition:"width 0.3s"}} />
         </div>
         <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
           <div>
@@ -687,14 +695,14 @@ export default function App() {
 
   if (mode === "results") {
     const knew = qa.filter(Boolean).length;
-    const pct = Math.round((knew/pool.length)*100);
-    const missed = pool.filter((_,i)=>qa[i]===false);
+    const pct = Math.round((knew/quizPool.length)*100);
+    const missed = quizPool.filter((_,i)=>qa[i]===false);
     return (
       <div style={page}><div style={wrap}>
         <div style={{textAlign:"center",marginBottom:"2rem"}}>
           <div style={{fontSize:"3rem",marginBottom:"0.5rem"}}>{pct>=80?"🏆":pct>=50?"📚":"💪"}</div>
           <h2 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem"}}>{pct}%</h2>
-          <p style={{color:"#94a3b8"}}>You knew {knew} out of {pool.length} cocktails</p>
+          <p style={{color:"#94a3b8"}}>You knew {knew} out of {quizPool.length} cocktails</p>
         </div>
         {missed.length > 0 && (
           <div style={frame({borderRadius:16,padding:"1.25rem",marginBottom:"1.5rem",maxHeight:280,overflowY:"auto"})}>
