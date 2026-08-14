@@ -59,6 +59,12 @@ const GLASS_ICONS = [
 const BUILT_GLASSES = /highball|collins|copper mug|pint|wine|sling|zombie/;
 const BUILT_MIXERS = /soda water|tonic|ginger beer|coca-cola|\bcola\b|tomato juice|clamato|beer|champagne|prosecco|tequila blanco|grapefruit soda|lemonade/;
 
+// Fold text to lowercase ASCII so accented characters match their plain form
+// (e.g. "piña" and "pina", "crème" and "creme") in search.
+function norm(s) {
+  return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
 function getMethod(c) {
   const name = c.name.toLowerCase();
   const ing = c.ingredients.toLowerCase();
@@ -524,8 +530,10 @@ export default function App() {
   );
 
   if (mode === "index") {
-    const q = search.trim().toLowerCase();
-    const results = q ? ALL_200.filter(c => c.name.toLowerCase().includes(q)) : ALL_200;
+    const q = norm(search.trim());
+    // Match on both the cocktail name and its ingredient list, accent-insensitively,
+    // so "pina" finds "Piña Colada" and "rum" finds every drink containing rum.
+    const results = q ? ALL_200.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_200;
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
@@ -536,7 +544,7 @@ export default function App() {
           autoFocus
           value={search}
           onChange={e=>setSearch(e.target.value)}
-          placeholder="Search cocktail name…"
+          placeholder="Search name or ingredient…"
           style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"1.25rem",outline:"none"})}
         />
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
