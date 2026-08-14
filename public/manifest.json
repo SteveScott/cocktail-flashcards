@@ -1,17 +1,20 @@
 {
+  "id": "/",
   "name": "Cocktail Flashcards",
   "short_name": "Cocktails",
   "description": "Learn 200 classic cocktail recipes with spaced-repetition flashcards",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
+  "lang": "en",
+  "categories": ["education", "food", "lifestyle"],
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "icons": [
-    {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
