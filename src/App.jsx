@@ -6,6 +6,7 @@ import {
   isEmailAdWhitelisted, addEmailToAdWhitelist, removeEmailFromAdWhitelist, listAdWhitelist,
 } from "./firebase";
 import cocktailData from './cocktails.json';
+import { FEATURES } from './platform';
 
 const { top50, master150 } = cocktailData;
 const ALL_200 = [...top50, ...master150];
@@ -271,8 +272,9 @@ export default function App() {
   }, [authReady, user]);
 
   // Only load the AdSense script once we know the current user isn't ad-free.
+  // Never load it in the Play Store build — AdSense-in-app breaks program policy.
   useEffect(() => {
-    if (!adCheckDone || adFree) return;
+    if (!FEATURES.ads || !adCheckDone || adFree) return;
     loadAdsenseScript();
   }, [adCheckDone, adFree]);
 
@@ -473,7 +475,7 @@ export default function App() {
         </div>
       )}
 
-      {firebaseEnabled && authReady && !adFree && (
+      {FEATURES.stripePurchase && firebaseEnabled && authReady && !adFree && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
