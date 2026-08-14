@@ -207,6 +207,7 @@
     { "name": "Tom Collins", "glass": "Highball (Collins)", "ingredients": "2 oz Gin, 1 oz Fresh Lemon Juice, ¾ oz Simple Syrup, 2 oz Soda Water" },
     { "name": "Hanky Panky", "glass": "Coupe", "ingredients": "1½ oz Gin, 1½ oz Sweet Vermouth, ¼ oz Fernet-Branca, Orange peel (garnish)" },
     { "name": "Jungle Bird", "glass": "Rocks or Tiki", "ingredients": "1½ oz Dark Rum, ¾ oz Campari, 1½ oz Pineapple Juice, ½ oz Fresh Lime Juice, ½ oz Simple Syrup" },
-    { "name": "Gin-Gin Mule", "glass": "Highball or Copper Mug", "ingredients": "2 oz Gin, ¾ oz Fresh Lime Juice, ¾ oz Simple Syrup, 6 Fresh Mint Leaves, 2 oz Ginger Beer" }
+    { "name": "Gin-Gin Mule", "glass": "Highball or Copper Mug", "ingredients": "2 oz Gin, ¾ oz Fresh Lime Juice, ¾ oz Simple Syrup, 6 Fresh Mint Leaves, 2 oz Ginger Beer" },
+    { "name": "True Blood", "glass": "Highball", "ingredients": "2 oz Vodka, 1 oz Raspberry Liqueur, 4 oz Red Wine, 1 oz Cranberry Juice" }
   ]
 }
