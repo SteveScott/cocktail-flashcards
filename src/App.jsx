@@ -164,7 +164,7 @@ export default function App() {
     getRedirectResult(auth).catch(e => console.error("Redirect sign-in failed", e));
   }, []);
 
-  // Watch Google sign-in state; on login, merge cloud progress with local progress.
+  // Watch Google sign-in state and load the right progress for whoever is signed in.
   useEffect(() => {
     if (!firebaseEnabled) return;
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -175,18 +175,38 @@ export default function App() {
           const data = snap.exists() ? snap.data() : null;
           const cloud = data?.progress || null;
           setAdsRemoved(Boolean(data?.adsRemoved));
-          // Persist the merged progress from inside the updater: the merged value
+          // Persist the resolved progress from inside the updater: the value
           // isn't available synchronously outside it (React runs the updater during
           // render, not at call time), which previously wrote `progress: undefined`.
           setSt(prev => {
-            const merged = mergeStates(prev, cloud);
-            setDoc(doc(db, "users", u.uid), { progress: merged, updatedAt: Date.now() }, { merge: true })
+            // Fold local progress into the account only when it's worth keeping and
+            // safe to keep: either it already belongs to THIS user (preserve offline
+            // changes), or it's anonymous local progress the person actually built up
+            // before signing in. Otherwise — a different account was loaded, or it's
+            // just the default starter deck — load this user's own cloud progress so
+            // one account never bleeds into another.
+            const sameUser = prev.uid && prev.uid === u.uid;
+            const hasLocalProgress =
+              (prev.learned && prev.learned.length > 0) ||
+              Object.values(prev.scores || {}).some(v => v > 0);
+            const anonymousWithProgress = !prev.uid && hasLocalProgress;
+            const resolved = (sameUser || anonymousWithProgress)
+              ? mergeStates(prev, cloud)
+              : (cloud ? refillDeck(cloud, cloud.masterMode ? ALL_200 : top50) : initState(false));
+            const stamped = { ...resolved, uid: u.uid };
+            setDoc(doc(db, "users", u.uid), { progress: stamped, updatedAt: Date.now() }, { merge: true })
               .catch(e => console.error("Cloud sync failed", e));
-            return merged;
+            return stamped;
           });
+          setDi(0); setRevealed(false);
         } catch (e) { console.error("Cloud sync failed", e); }
       } else {
         setAdsRemoved(false);
+        // Clear progress on sign-out so the next user starts fresh — but only if
+        // it belonged to a signed-in account. Don't wipe a purely anonymous
+        // device's local progress on the initial "no user" callback at startup.
+        setSt(prev => (prev.uid ? initState(false) : prev));
+        setDi(0); setRevealed(false);
       }
       setAuthReady(true);
     });
