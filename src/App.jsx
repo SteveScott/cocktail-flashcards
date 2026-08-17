@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import {
   auth, db, googleProvider, facebookProvider, firebaseEnabled,
@@ -188,6 +188,15 @@ export default function App() {
   const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
+  // Email/password sign-in exists mainly so Play Console's App access reviewers
+  // have credentials that work — OAuth accounts trip Google's own security
+  // challenges from a reviewer's device. Kept collapsed behind a text link so
+  // Google stays the obvious choice for everyone else.
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [emailErr, setEmailErr] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
   const adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative;
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
@@ -417,6 +426,34 @@ export default function App() {
     });
   }
   function signInFacebook() { signIn(facebookProvider); }
+
+  // No popup or redirect here, so none of the OAuth failure modes apply — which
+  // is the whole point of offering it to reviewers.
+  async function signInEmail(e) {
+    e.preventDefault();
+    if (!firebaseEnabled || emailBusy) return;
+    setEmailBusy(true);
+    setEmailErr("");
+    try {
+      await signInWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+      // onAuthStateChanged drives the rest; just clear the form.
+      setPasswordInput("");
+      setShowEmailForm(false);
+    } catch (err) {
+      console.error("Email sign-in failed:", err.code, err.message, err);
+      // Firebase returns invalid-credential for wrong password AND unknown
+      // account, so don't claim to know which — saying "no such account" would
+      // also confirm to a stranger which addresses are registered.
+      setEmailErr(
+        err.code === "auth/invalid-email" ? "That doesn't look like an email address."
+        : err.code === "auth/too-many-requests" ? "Too many attempts. Try again shortly."
+        : err.code === "auth/network-request-failed" ? "Network error. Check your connection."
+        : "Email or password is incorrect."
+      );
+    } finally {
+      setEmailBusy(false);
+    }
+  }
   function signOutUser() {
     if (!firebaseEnabled) return;
     signOut(auth).catch(e => console.error("Sign-out failed", e));
@@ -660,6 +697,9 @@ export default function App() {
   const btn = (bg, x={}) => ({ padding:"1rem", borderRadius:12, background:bg, color:"#fff", fontWeight:700, fontSize:"1rem", border:"none", cursor:"pointer", ...x });
   const FRAME_BG = "rgba(15, 23, 42, 0.55)";
   const frame = (x={}) => ({ background:FRAME_BG, backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", ...x });
+  // flex-basis 8rem with minWidth 0 lets the two fields sit side by side on a
+  // wide frame and stack on a phone without overflowing it.
+  const emailField = { flex:"1 1 8rem", minWidth:0, background:"#0f172a", border:"1px solid #33415560", borderRadius:8, padding:"0.4rem 0.6rem", fontSize:"0.8rem", color:"#e2e8f0" };
 
   if (mode === "menu") return (
     <div style={page}><div style={wrap}>
@@ -670,7 +710,7 @@ export default function App() {
       <p style={{color:"#64748b",fontSize:"0.72rem",marginBottom:"0.75rem"}}>Drinks International Bestselling Classics 2026</p>
 
       {authReady && (
-        <div style={frame({borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem"})}>
+        <div style={frame({borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",flexWrap:"wrap",rowGap:"0.6rem"})}>
           {user ? (
             <>
               <div style={{display:"flex",alignItems:"center",gap:"0.6rem",minWidth:0}}>
@@ -685,7 +725,22 @@ export default function App() {
               <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
                 <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
                 {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":"#334155",color:firebaseEnabled?"#ffffff":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
+                {firebaseEnabled && (
+                  <button onClick={() => { setShowEmailForm(v => !v); setEmailErr(""); }} aria-expanded={showEmailForm} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.68rem",cursor:"pointer",padding:"0.1rem 0",textDecoration:"underline",alignSelf:"center"}}>
+                    {showEmailForm ? "Cancel" : "Use email instead"}
+                  </button>
+                )}
               </div>
+              {showEmailForm && firebaseEnabled && (
+                <form onSubmit={signInEmail} style={{flexBasis:"100%",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center",borderTop:"1px solid #33415560",paddingTop:"0.6rem"}}>
+                  <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} placeholder="Email" required autoComplete="username" style={emailField} />
+                  <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} placeholder="Password" required autoComplete="current-password" style={emailField} />
+                  <button type="submit" disabled={emailBusy} style={{background:emailBusy?"#334155":"#475569",color:emailBusy?"#64748b":"#e2e8f0",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:emailBusy?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+                    {emailBusy ? "Signing in…" : "Sign in"}
+                  </button>
+                  {emailErr && <div role="alert" style={{flexBasis:"100%",color:"#f87171",fontSize:"0.7rem"}}>{emailErr}</div>}
+                </form>
+              )}
             </>
           )}
         </div>
