@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import {
   auth, db, googleProvider, facebookProvider, firebaseEnabled,
   isEmailAdWhitelisted, addEmailToAdWhitelist, removeEmailFromAdWhitelist, listAdWhitelist,
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
-import { initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases } from './monetization';
+import {
+  initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
+  linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
+  presentPaywall, presentCustomerCenter, isBillingAvailable, isUserCancelled,
+} from './monetization';
 
 const { top50, master150 } = cocktailData;
 const ALL_200 = [...top50, ...master150];
@@ -124,6 +128,24 @@ function mergeStates(a, b) {
   return refillDeck({ scores, learned, active, masterMode, deckSize }, pool);
 }
 
+// True when two progress states carry the same progress (identity aside).
+// Live cloud sync needs this: folding a remote update into local state produces
+// a NEW object every time, which would re-trigger the autosave effect, which
+// would echo back as another snapshot — an endless write loop. Because
+// mergeStates is idempotent, comparing by value lets us keep `prev` when the
+// merge changed nothing and break the cycle.
+function progressEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (Boolean(a.masterMode) !== Boolean(b.masterMode)) return false;
+  if ((a.deckSize || DECK_SIZE) !== (b.deckSize || DECK_SIZE)) return false;
+  const sameList = (x = [], y = []) => x.length === y.length && x.every((n, i) => n === y[i]);
+  if (!sameList(a.learned, b.learned) || !sameList(a.active, b.active)) return false;
+  const keys = new Set([...Object.keys(a.scores || {}), ...Object.keys(b.scores || {})]);
+  for (const k of keys) if ((a.scores?.[k] || 0) !== (b.scores?.[k] || 0)) return false;
+  return true;
+}
+
 export default function App() {
   const [st, setSt] = useState(() => loadLocal() || initState(false));
   const [mode, setMode] = useState("menu");
@@ -143,10 +165,18 @@ export default function App() {
   const [whitelist, setWhitelist] = useState([]);
   const [whitelistInput, setWhitelistInput] = useState("");
   const [whitelistMsg, setWhitelistMsg] = useState("");
-  const [adsRemoved, setAdsRemoved] = useState(false);
+  // Ad removal has two independent sources and they must never overwrite each
+  // other: `adsRemovedCloud` is the account-wide flag in Firestore (written
+  // server-side by the Stripe and RevenueCat webhooks — the cross-platform
+  // source of truth), while `adsRemovedNative` is what the Play Billing SDK
+  // reports on THIS device. Keeping them apart means a slow Firestore read can't
+  // revoke a native purchase, and a "no purchase found" restore can't revoke a
+  // web one. Ad-free is the union.
+  const [adsRemovedCloud, setAdsRemovedCloud] = useState(false);
+  const [adsRemovedNative, setAdsRemovedNative] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
-  const adFree = adWhitelisted || adsRemoved;
+  const adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative;
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
@@ -166,44 +196,76 @@ export default function App() {
     getRedirectResult(auth).catch(e => console.error("Redirect sign-in failed", e));
   }, []);
 
-  // Watch Google sign-in state and load the right progress for whoever is signed in.
+  // Watch Google sign-in state and keep a LIVE subscription to the signed-in
+  // user's cloud doc. Subscribing (rather than reading once at sign-in) is what
+  // makes web and mobile converge: progress mastered in the Play app and an
+  // ad-removal purchase made on either platform both land on this same doc, and
+  // every other signed-in device picks them up while it's open.
   useEffect(() => {
     if (!firebaseEnabled) return;
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    let unsubDoc = null;
+    const stopDoc = () => { if (unsubDoc) { unsubDoc(); unsubDoc = null; } };
+    const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      stopDoc();
       if (u) {
-        try {
-          const snap = await getDoc(doc(db, "users", u.uid));
+        // The first snapshot is the sign-in handshake (reconcile whatever is on
+        // this device with the account); later ones are updates from elsewhere.
+        let firstSnapshot = true;
+        unsubDoc = onSnapshot(doc(db, "users", u.uid), (snap) => {
+          // Our own un-acked writes echo back locally first — ignore them so a
+          // half-applied local state never round-trips as if it were remote.
+          if (snap.metadata.hasPendingWrites) return;
           const data = snap.exists() ? snap.data() : null;
           const cloud = data?.progress || null;
-          setAdsRemoved(Boolean(data?.adsRemoved));
-          // Persist the resolved progress from inside the updater: the value
-          // isn't available synchronously outside it (React runs the updater during
-          // render, not at call time), which previously wrote `progress: undefined`.
+          setAdsRemovedCloud(Boolean(data?.adsRemoved));
+
+          if (firstSnapshot) {
+            firstSnapshot = false;
+            // Persist the resolved progress from inside the updater: the value
+            // isn't available synchronously outside it (React runs the updater during
+            // render, not at call time), which previously wrote `progress: undefined`.
+            setSt(prev => {
+              // Fold local progress into the account only when it's worth keeping and
+              // safe to keep: either it already belongs to THIS user (preserve offline
+              // changes), or it's anonymous local progress the person actually built up
+              // before signing in. Otherwise — a different account was loaded, or it's
+              // just the default starter deck — load this user's own cloud progress so
+              // one account never bleeds into another.
+              const sameUser = prev.uid && prev.uid === u.uid;
+              const hasLocalProgress =
+                (prev.learned && prev.learned.length > 0) ||
+                Object.values(prev.scores || {}).some(v => v > 0);
+              const anonymousWithProgress = !prev.uid && hasLocalProgress;
+              const resolved = (sameUser || anonymousWithProgress)
+                ? mergeStates(prev, cloud)
+                : (cloud ? refillDeck(cloud, cloud.masterMode ? ALL_200 : top50) : initState(false));
+              const stamped = { ...resolved, uid: u.uid };
+              setDoc(doc(db, "users", u.uid), { progress: stamped, updatedAt: Date.now() }, { merge: true })
+                .catch(e => console.error("Cloud sync failed", e));
+              return stamped;
+            });
+            setDi(0); setRevealed(false);
+            return;
+          }
+
+          // A later update — another device (or the other platform) changed this
+          // account. Merge rather than replace so progress made here in the
+          // meantime survives, and bail out when the merge is a no-op so we don't
+          // bounce a fresh object back into the autosave effect forever.
+          if (!cloud) return;
           setSt(prev => {
-            // Fold local progress into the account only when it's worth keeping and
-            // safe to keep: either it already belongs to THIS user (preserve offline
-            // changes), or it's anonymous local progress the person actually built up
-            // before signing in. Otherwise — a different account was loaded, or it's
-            // just the default starter deck — load this user's own cloud progress so
-            // one account never bleeds into another.
-            const sameUser = prev.uid && prev.uid === u.uid;
-            const hasLocalProgress =
-              (prev.learned && prev.learned.length > 0) ||
-              Object.values(prev.scores || {}).some(v => v > 0);
-            const anonymousWithProgress = !prev.uid && hasLocalProgress;
-            const resolved = (sameUser || anonymousWithProgress)
-              ? mergeStates(prev, cloud)
-              : (cloud ? refillDeck(cloud, cloud.masterMode ? ALL_200 : top50) : initState(false));
-            const stamped = { ...resolved, uid: u.uid };
-            setDoc(doc(db, "users", u.uid), { progress: stamped, updatedAt: Date.now() }, { merge: true })
-              .catch(e => console.error("Cloud sync failed", e));
-            return stamped;
+            if (prev.uid !== u.uid) return prev;
+            const merged = { ...mergeStates(prev, cloud), uid: u.uid };
+            if (progressEqual(prev, merged)) return prev;
+            // The remote update can drop the card we're sitting on, so keep the
+            // study index inside the new deck.
+            setDi(d => Math.min(d, Math.max(0, merged.active.length - 1)));
+            return merged;
           });
-          setDi(0); setRevealed(false);
-        } catch (e) { console.error("Cloud sync failed", e); }
+        }, e => console.error("Cloud sync failed", e));
       } else {
-        setAdsRemoved(false);
+        setAdsRemovedCloud(false);
         // Clear progress on sign-out so the next user starts fresh — but only if
         // it belonged to a signed-in account. Don't wipe a purely anonymous
         // device's local progress on the initial "no user" callback at startup.
@@ -212,8 +274,17 @@ export default function App() {
       }
       setAuthReady(true);
     });
-    return unsub;
+    return () => { stopDoc(); unsub(); };
   }, []);
+
+  // Keep the RevenueCat identity pinned to the Firebase uid so a Play purchase
+  // is recorded against the account the web signs in with (see monetization.js).
+  // No-op outside the Play build.
+  useEffect(() => {
+    if (!FEATURES.nativePurchase || !authReady) return;
+    const sync = user ? linkRevenueCatUser(user.uid) : unlinkRevenueCatUser();
+    sync.then(owned => setAdsRemovedNative(Boolean(owned)));
+  }, [authReady, user]);
 
   // After returning from Stripe Checkout, re-check the ads-removed flag a few
   // times since the webhook that sets it runs asynchronously and may lag
@@ -234,7 +305,7 @@ export default function App() {
           try {
             const snap = await getDoc(doc(db, "users", u.uid));
             if (snap.exists() && snap.data().adsRemoved) {
-              setAdsRemoved(true);
+              setAdsRemovedCloud(true);
               setPurchaseMsg("Ads removed. Thanks for your support!");
               return;
             }
@@ -280,11 +351,17 @@ export default function App() {
   }, [adCheckDone, adFree]);
 
   // Play (Capacitor) build: initialize AdMob + Play Billing once, and adopt any
-  // ad-removal purchase the user already owns (RevenueCat is the source of truth
-  // for entitlement in the app, not the Stripe-driven Firestore flag).
+  // ad-removal purchase this device already owns. Firestore stays the account-wide
+  // source of truth; this is the local read that keeps the app ad-free offline and
+  // before sign-in.
   useEffect(() => {
     if (!FEATURES.nativeAds && !FEATURES.nativePurchase) return;
-    initMonetization().then(({ adsRemoved: owned }) => { if (owned) setAdsRemoved(true); });
+    initMonetization().then(({ adsRemoved: owned }) => { if (owned) setAdsRemovedNative(true); });
+    // Entitlement can change without any call of ours returning — a purchase
+    // completed inside the paywall sheet, a restore from the Customer Center, a
+    // transfer between accounts. RevenueCat's CustomerInfo listener reports all
+    // of them, so the UI never shows ads to someone who just paid.
+    return onEntitlementChange(active => setAdsRemovedNative(active));
   }, []);
 
   // Play build: show the AdMob banner while the user isn't ad-free, hide it once
@@ -338,31 +415,63 @@ export default function App() {
 
   // Play (Capacitor) build: buy ad removal through Google Play Billing.
   async function buyRemoveAdsNative() {
+    // Require sign-in like the web checkout does: the purchase is recorded
+    // against the RevenueCat app-user id, and only when that id is the Firebase
+    // uid can the webhook mark the account ad-free for the web too.
+    if (firebaseEnabled && !user) {
+      setPurchaseMsg("Sign in first so your purchase works on the web too.");
+      return;
+    }
+    if (!isBillingAvailable()) {
+      setPurchaseMsg("Purchases aren't available in this build.");
+      return;
+    }
     setPurchasing(true);
     setPurchaseMsg("");
     try {
-      const ok = await purchaseRemoveAds();
-      if (ok) { setAdsRemoved(true); setPurchaseMsg("Ads removed. Thanks for your support!"); }
+      // The dashboard-hosted paywall is the primary path: pricing and copy are
+      // edited in RevenueCat, not shipped in an app release. Fall back to a
+      // direct purchase of the offering's first package if no paywall is
+      // configured, so the button is never a dead end.
+      let ok = await presentPaywall();
+      if (!ok) ok = await purchaseRemoveAds();
+      if (ok) { setAdsRemovedNative(true); setPurchaseMsg("You're Pro — ads are gone. Thanks for your support!"); }
       else setPurchaseMsg("Purchase didn't complete.");
     } catch (e) {
       console.error("Play purchase failed", e);
       // RevenueCat rejects on user cancellation too — don't alarm the user then.
-      if (!e?.userCancelled) setPurchaseMsg("Couldn't complete the purchase — please try again.");
+      if (!isUserCancelled(e)) setPurchaseMsg("Couldn't complete the purchase — please try again.");
     } finally {
       setPurchasing(false);
     }
   }
 
-  // Play build: restore a previous ad-removal purchase (required by Play policy).
+  // Play build: restore a previous purchase (required by Play policy).
   async function restoreAdsNative() {
     setPurchaseMsg("");
     try {
       const ok = await restorePurchases();
-      setAdsRemoved(ok);
+      // Only ever grants here — a Play account with no purchase must not clear an
+      // ad-free status this account earned on the web.
+      if (ok) setAdsRemovedNative(true);
       setPurchaseMsg(ok ? "Purchase restored." : "No previous purchase found.");
     } catch (e) {
       console.error("Restore failed", e);
       setPurchaseMsg("Couldn't restore — please try again.");
+    }
+  }
+
+  // Play build: RevenueCat's Customer Center — restore, refund requests,
+  // subscription management and support in one sheet, so those never become
+  // support email. Entitlement can change inside it, hence the state update.
+  async function openCustomerCenter() {
+    setPurchaseMsg("");
+    try {
+      const active = await presentCustomerCenter();
+      if (active) setAdsRemovedNative(true);
+    } catch (e) {
+      console.error("Customer Center failed", e);
+      setPurchaseMsg("Couldn't open purchase management — please try again.");
     }
   }
 
@@ -402,7 +511,10 @@ export default function App() {
   }
 
   function grade(correct) {
-    const cur = di;
+    // Clamped for the same reason as the study render: a live sync from another
+    // device can drop the card this index pointed at.
+    const cur = Math.min(di, st.active.length - 1);
+    if (cur < 0) return;
     upd(p => {
       const ci = p.active[cur];
       const ns = Math.max(0, (p.scores[ci] || 0) + (correct ? 1 : -1));
@@ -529,15 +641,27 @@ export default function App() {
           </button>
         </div>
       )}
-      {/* Play (Capacitor) build: Google Play Billing purchase + restore. */}
+      {/* Play (Capacitor) build: RevenueCat paywall + restore. */}
       {FEATURES.nativePurchase && !adFree && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
+            <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
+              {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : "Cocktail Flashcards Pro — remove ads for good"}
+            </div>
             <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
           </div>
           <button onClick={buyRemoveAdsNative} disabled={purchasing} style={{background:"#22c55e",color:"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:purchasing?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
-            {purchasing ? "Processing…" : "🚫 Remove Ads"}
+            {purchasing ? "Processing…" : "✨ Go Pro"}
+          </button>
+        </div>
+      )}
+      {/* Already Pro in the Play build: Customer Center handles restore, refund
+          requests, and subscription management without a support email. */}
+      {FEATURES.nativePurchase && adFree && adsRemovedNative && (
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
+          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>✨ Cocktail Flashcards Pro is active</div>
+          <button onClick={openCustomerCenter} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+            Manage purchase
           </button>
         </div>
       )}
@@ -674,7 +798,10 @@ export default function App() {
     }
     // Fall back to ALL_200 so cocktails added to the deck from the Index (which
     // may be outside the current mode's pool) still render.
-    const ci = st.active[di], c = pool.find(x => x.name === ci) || ALL_200.find(x => x.name === ci), score = st.scores[ci]||0;
+    // Clamp here too, not just in the effect: a live sync can shrink the deck
+    // and this render happens before the effect corrects the index.
+    const cardIdx = Math.min(di, st.active.length - 1);
+    const ci = st.active[cardIdx], c = pool.find(x => x.name === ci) || ALL_200.find(x => x.name === ci), score = st.scores[ci]||0;
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>

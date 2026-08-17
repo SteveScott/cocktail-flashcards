@@ -33,15 +33,97 @@ native path only activates when running inside the Capacitor app, detected in
    into `AndroidManifest.xml`.
 
 ### 2. RevenueCat + Play product (purchase)
-1. In **Play Console → Monetize → In-app products**, create a **one-time managed
-   product**, e.g. id `remove_ads`, and set the price.
-2. Create a **RevenueCat** account (revenuecat.com), add the Android app, and
-   connect it to Play (upload the Play service-account credentials).
-3. In RevenueCat: create an **Entitlement** `remove_ads`, attach the Play product
-   to an **Offering**.
-4. Put the RevenueCat **public Android SDK key** in `.env` as
-   `VITE_REVENUECAT_ANDROID_KEY` (and `VITE_REMOVE_ADS_ENTITLEMENT=remove_ads` if
-   you used a different entitlement id).
+
+The app uses `@revenuecat/purchases-capacitor` (SDK) and
+`@revenuecat/purchases-capacitor-ui` (hosted Paywall + Customer Center), both
+`13.4.0`. All of it lives in `src/monetization.js`.
+
+**Dashboard setup, in order — the SDK can't work around a gap in any step:**
+
+1. **Product.** Play Console → Monetize → In-app products → create a **one-time
+   managed product** with id `lifetime`, set the price, and **activate** it.
+   (An inactive product silently never appears in an Offering.)
+2. **Project + app.** revenuecat.com → create the project, add the Android app
+   with package `com.cocktailflashcards.app`, and upload the Play service-account
+   credentials so RevenueCat can verify purchases.
+3. **Entitlement.** Create an entitlement whose display name is
+   **Cocktail Flashcards Pro**. Copy its **identifier** — the short slug, *not*
+   the display name — into `.env` as `VITE_REVENUECAT_ENTITLEMENT` and into the
+   Netlify env as `REVENUECAT_ENTITLEMENT`. The default both places is
+   `cocktail_flashcards_pro`; if yours differs, both must change or entitlement
+   checks silently return false.
+4. **Attach** the `lifetime` product to that entitlement.
+5. **Offering.** Create an Offering (e.g. `default`), mark it **current**, and add
+   a package containing `lifetime`. `presentPaywall()` renders the current
+   Offering — no package ids are hardcoded in the app.
+6. **Paywall.** In the Offering, design a **Paywall**. Without one,
+   `presentPaywall()` returns `NOT_PRESENTED` and the app falls back to buying
+   the Offering's first package directly.
+7. **API keys.** `VITE_REVENUECAT_ANDROID_KEY` = the public **goog_** key.
+8. **Webhook** — see below; required for web/mobile sync.
+
+**Test Store vs production keys.** `VITE_REVENUECAT_TEST_KEY` holds a `test_…`
+key, which simulates purchases with no Play setup. RevenueCat forbids submitting
+an app configured with one, so `monetization.js` only uses it when
+`import.meta.env.DEV` is true, and **refuses to configure at all** if a `test_`
+key is found in the production slot. Because the Android shell loads the deployed
+site, a production build is exactly what Play users run — so to exercise the Test
+Store, point `capacitor.config.json` → `server.url` at your dev server
+(`http://<your-lan-ip>:5173`, plus `"cleartext": true`) and run `npm run dev`.
+Revert both before building a release.
+
+**Android manifest.** RevenueCat requires the main Activity's `launchMode` to be
+`standard` or `singleTop`, or purchases can be cancelled during Play's
+verification redirect. Check `android/app/src/main/AndroidManifest.xml` after
+`npx cap add android`.
+
+### What the app does with the SDK
+
+| Concern | Where | Notes |
+|---|---|---|
+| Configure + log level | `initMonetization()` | `LOG_LEVEL.DEBUG` in dev only |
+| Live entitlement updates | `onEntitlementChange()` | wraps `addCustomerInfoUpdateListener` — catches purchases made inside the paywall/Customer Center sheets |
+| Identity | `linkRevenueCatUser(uid)` | `Purchases.logIn` with the Firebase uid |
+| Paywall | `presentPaywall()` | falls back to a direct package purchase |
+| Feature gating | `presentPaywallIfNeeded()` | skips the sheet when already entitled |
+| Manage purchase | `presentCustomerCenter()` | restore, refunds, support |
+| Customer info | `getCustomerInfo()` / `hasProAccess()` | cached by the SDK; cheap to call |
+| Cancellation | `isUserCancelled(e)` | RevenueCat rejects on cancel; don't show an error |
+5. **Webhook (required for web/mobile sync).** RevenueCat → Project settings →
+   Integrations → **Webhooks**:
+   - URL: `https://cocktailflashcards.com/.netlify/functions/revenuecat-webhook`
+   - Authorization header: a long random string of your choosing.
+   Set that same string as `REVENUECAT_WEBHOOK_SECRET` in the **Netlify** site's
+   environment variables (server-only — no `VITE_` prefix). Without this, a
+   purchase made in the app never reaches the web.
+
+## How ad removal + progress stay in sync across web and mobile
+
+Firestore `users/{uid}` is the single source of truth for both. The app keeps a
+live `onSnapshot` subscription to that doc, so a change on one platform shows up
+on the other while it's open.
+
+| | writes it | read by |
+|---|---|---|
+| `progress` | the client, debounced, `merge: true` | every signed-in device |
+| `adsRemoved` (web purchase) | `stripe-webhook.mjs`, Admin SDK | every signed-in device |
+| `adsRemoved` (Play purchase) | `revenuecat-webhook.mjs`, Admin SDK | every signed-in device |
+
+Two details make it work:
+
+- **Identity.** `src/monetization.js` calls `Purchases.logIn(uid)` on sign-in, so
+  RevenueCat reports purchases under the Firebase uid and the webhook knows which
+  account to mark. This is why the app asks users to sign in before buying —
+  a purchase made while signed out lands on an anonymous RevenueCat id and stays
+  device-local until they sign in (RevenueCat then sends a `TRANSFER` event,
+  which the webhook applies to the account).
+- **Union, never overwrite.** `App.jsx` tracks the cloud flag and the on-device
+  Play entitlement separately and treats ad-free as either one. A slow Firestore
+  read can't revoke a native purchase, and a "no purchase found" restore can't
+  revoke a web one.
+
+Clients only ever *read* `adsRemoved` — keep Firestore rules that way, so nobody
+grants themselves ad removal from the browser console.
 
 ### 3. Package name
 `capacitor.config.json` uses `com.cocktailflashcards.app`. **If you already
