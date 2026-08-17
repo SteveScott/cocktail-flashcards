@@ -12,6 +12,14 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID"
 
+# Serve the privacy policy at a clean /privacy URL. Must stay ABOVE the SPA
+# catch-all: redirects are matched in order, so /* would otherwise swallow it and
+# return the app shell. Play Console and AdSense both want a stable policy URL.
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy.html"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
