@@ -48,16 +48,57 @@ function resolveApiKey() {
 }
 const REVENUECAT_API_KEY = resolveApiKey();
 
-// True once Purchases.configure has resolved. Every call below needs it, and
-// the SDK throws if you call it unconfigured.
-let configured = false;
-let initialized = false;
-// Fanned out to React on every CustomerInfo change (see initMonetization).
+let adMobInitialized = false;
+// Fanned out to React on every CustomerInfo change (see configurePurchases).
 const entitlementListeners = new Set();
 
 async function loadPurchases() {
   const { Purchases } = await import("@revenuecat/purchases-capacitor");
   return Purchases;
+}
+
+// The single in-flight (then settled) configuration attempt. Every entry point
+// below awaits it.
+//
+// A plain `configured` boolean raced: whoever called first won, and a caller
+// that arrived a moment early — auth resolving before startup finished, say —
+// would silently no-op and never retry, because nothing re-triggers it. Worst
+// case that stranded the session on the anonymous RevenueCat id, leaving the
+// webhook no uid to attribute a purchase to. Sharing one promise makes call
+// order irrelevant: the first caller starts configuration, everyone else waits
+// for that same attempt.
+let configurePromise = null;
+
+async function configurePurchases() {
+  try {
+    const Purchases = await loadPurchases();
+    if (IS_DEV) {
+      const { LOG_LEVEL } = await import("@revenuecat/purchases-capacitor");
+      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+    }
+    // No appUserID here: at startup we usually don't know the Firebase uid yet.
+    // linkRevenueCatUser() attaches it as soon as auth resolves.
+    await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    await Purchases.addCustomerInfoUpdateListener((customerInfo) => emit(customerInfo));
+    return true;
+  } catch (e) {
+    console.error("RevenueCat configure failed", e);
+    return false;
+  }
+}
+
+// Resolves true once the SDK is usable. Safe to call from anywhere, any number
+// of times.
+function ensureConfigured() {
+  if (!isBillingAvailable()) return Promise.resolve(false);
+  if (!configurePromise) {
+    configurePromise = configurePurchases().then(ok => {
+      // Don't cache a failure forever — a later call gets a fresh attempt.
+      if (!ok) configurePromise = null;
+      return ok;
+    });
+  }
+  return configurePromise;
 }
 
 // RevenueCat is available (Play build, configured with a usable key).
@@ -88,36 +129,21 @@ export function onEntitlementChange(cb) {
 }
 
 // Initialize the ad + billing SDKs and report whether this user already owns
-// Pro. Call once on app start.
+// Pro. Call on app start — but nothing else has to wait for it, since every
+// entry point drives configuration itself via ensureConfigured().
 export async function initMonetization() {
-  if (!isCapacitorApp || initialized) return { adsRemoved: false };
-  initialized = true;
-  let adsRemoved = false;
+  if (!isCapacitorApp) return { adsRemoved: false };
 
-  try {
-    const { AdMob } = await import("@capacitor-community/admob");
-    await AdMob.initialize({});
-  } catch (e) { console.error("AdMob init failed", e); }
+  if (!adMobInitialized) {
+    adMobInitialized = true;
+    try {
+      const { AdMob } = await import("@capacitor-community/admob");
+      await AdMob.initialize({});
+    } catch (e) { console.error("AdMob init failed", e); }
+  }
 
-  if (!REVENUECAT_API_KEY) return { adsRemoved };
-  try {
-    const Purchases = await loadPurchases();
-    if (IS_DEV) {
-      const { LOG_LEVEL } = await import("@revenuecat/purchases-capacitor");
-      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-    }
-    // No appUserID here: at startup we usually don't know the Firebase uid yet.
-    // linkRevenueCatUser() attaches it as soon as auth resolves.
-    await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-    configured = true;
-
-    await Purchases.addCustomerInfoUpdateListener((customerInfo) => emit(customerInfo));
-
-    const { customerInfo } = await Purchases.getCustomerInfo();
-    adsRemoved = isActive(customerInfo);
-  } catch (e) { console.error("RevenueCat init failed", e); }
-
-  return { adsRemoved };
+  if (!(await ensureConfigured())) return { adsRemoved: false };
+  return { adsRemoved: await hasProAccess() };
 }
 
 export async function showBanner() {
@@ -145,7 +171,7 @@ export async function hideBanner() {
 // Safe to call often: the SDK caches CustomerInfo and refreshes it when the app
 // becomes active, so this usually resolves without a network round trip.
 export async function getCustomerInfo() {
-  if (!isBillingAvailable() || !configured) return null;
+  if (!(await ensureConfigured())) return null;
   try {
     const Purchases = await loadPurchases();
     const { customerInfo } = await Purchases.getCustomerInfo();
@@ -170,7 +196,7 @@ export const hasRemovedAds = hasProAccess;
 // matching users/{uid} doc. Without it, purchases live under an anonymous
 // ($RCAnonymousID:…) id the web has no way to resolve.
 export async function linkRevenueCatUser(uid) {
-  if (!isBillingAvailable() || !configured || !uid) return false;
+  if (!uid || !(await ensureConfigured())) return false;
   try {
     const Purchases = await loadPurchases();
     const { customerInfo } = await Purchases.logIn({ appUserID: uid });
@@ -183,9 +209,15 @@ export async function linkRevenueCatUser(uid) {
 // own an entitlement purchased before the user ever signed in — so report what
 // that id actually owns rather than assuming false.
 export async function unlinkRevenueCatUser() {
-  if (!isBillingAvailable() || !configured) return false;
+  if (!(await ensureConfigured())) return false;
   try {
     const Purchases = await loadPurchases();
+    // logOut rejects when the current id is already anonymous, which is exactly
+    // the state at startup before anyone signs in — and this now runs then,
+    // where the old configure race used to swallow it. Nothing to detach, so
+    // just report what the anonymous id owns.
+    const anon = await Purchases.isAnonymous().catch(() => null);
+    if (anon?.isAnonymous) return isActive(await getCustomerInfo());
     const { customerInfo } = await Purchases.logOut();
     emit(customerInfo);
     return isActive(customerInfo);
@@ -196,7 +228,7 @@ export async function unlinkRevenueCatUser() {
 // The current Offering, whose packages are what the paywall renders. Returns
 // null when none is configured — a dashboard problem, not a user error.
 export async function getCurrentOffering() {
-  if (!isBillingAvailable() || !configured) return null;
+  if (!(await ensureConfigured())) return null;
   try {
     const Purchases = await loadPurchases();
     const offerings = await Purchases.getOfferings();
@@ -215,7 +247,7 @@ export function isUserCancelled(e) {
 // and copy change without an app release). Resolves true if the user came out of
 // it entitled. Prefer this over a hand-rolled purchase button.
 export async function presentPaywall() {
-  if (!isBillingAvailable() || !configured) return false;
+  if (!(await ensureConfigured())) return false;
   const { RevenueCatUI } = await import("@revenuecat/purchases-capacitor-ui");
   const { PAYWALL_RESULT } = await import("@revenuecat/purchases-capacitor");
   const { result } = await RevenueCatUI.presentPaywall();
@@ -236,7 +268,7 @@ export async function presentPaywall() {
 // Same, but the SDK skips the paywall when the entitlement is already active —
 // the right call for gating a Pro feature at the point of use.
 export async function presentPaywallIfNeeded() {
-  if (!isBillingAvailable() || !configured) return false;
+  if (!(await ensureConfigured())) return false;
   const { RevenueCatUI } = await import("@revenuecat/purchases-capacitor-ui");
   const { PAYWALL_RESULT } = await import("@revenuecat/purchases-capacitor");
   const { result } = await RevenueCatUI.presentPaywallIfNeeded({
@@ -252,7 +284,7 @@ export async function presentPaywallIfNeeded() {
 // path, and this provides it plus the self-service flows that otherwise become
 // support email.
 export async function presentCustomerCenter() {
-  if (!isBillingAvailable() || !configured) return false;
+  if (!(await ensureConfigured())) return false;
   try {
     const { RevenueCatUI } = await import("@revenuecat/purchases-capacitor-ui");
     await RevenueCatUI.presentCustomerCenter();
@@ -267,7 +299,7 @@ export async function presentCustomerCenter() {
 // for when no paywall is configured in the dashboard. Throws so callers can
 // distinguish cancellation from failure via isUserCancelled().
 export async function purchaseRemoveAds() {
-  if (!isBillingAvailable() || !configured) return false;
+  if (!(await ensureConfigured())) return false;
   const Purchases = await loadPurchases();
   const offerings = await Purchases.getOfferings();
   const pkg = offerings.current?.availablePackages?.[0];
@@ -279,7 +311,7 @@ export async function purchaseRemoveAds() {
 // Restore a previous purchase (required by Play — users who reinstall or switch
 // devices must be able to get their Pro access back without paying again).
 export async function restorePurchases() {
-  if (!isBillingAvailable() || !configured) return false;
+  if (!(await ensureConfigured())) return false;
   const Purchases = await loadPurchases();
   const { customerInfo } = await Purchases.restorePurchases();
   emit(customerInfo);
