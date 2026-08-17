@@ -3,9 +3,9 @@
 // entitlement, which is what removes ads.
 //
 // Everything here is a no-op unless the Capacitor plugin bridge is present (see
-// isCapacitorApp — deliberately narrower than isPlayApp, which also matches the
-// legacy TWA build where these plugins do not exist). Plugins are dynamically
-// imported so their native-only code never loads for web visitors.
+// isCapacitorApp — deliberately narrower than isPlayApp, which can be set by the
+// URL flag alone). Plugins are dynamically imported so their native-only code
+// never loads for web visitors.
 //
 // Required config — set these in a .env file BEFORE building the Play app
 // (Vite inlines VITE_* at build time):

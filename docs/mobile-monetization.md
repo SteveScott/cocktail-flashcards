@@ -6,8 +6,9 @@ for **AdMob** banner ads and **Google Play Billing** (via **RevenueCat**) for th
 one-time "remove ads" purchase.
 
 Web behavior is unchanged: on the web the app still uses AdSense + Stripe. The
-native path only activates when running inside the Capacitor app, detected in
-`src/platform.js` (`isPlayApp`).
+native path only activates when the Capacitor plugin bridge is present, detected
+in `src/platform.js` as `isCapacitorApp`. (`isPlayApp` is the broader flag that
+hides AdSense and Stripe for store-policy reasons; don't gate plugin calls on it.)
 
 ## Code already wired up
 
