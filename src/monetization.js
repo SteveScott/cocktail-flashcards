@@ -79,8 +79,17 @@ export function getAdConsentState() {
 // request ads at all, and Google's guidance is to gather it first.
 async function gatherAdConsent(AdMob) {
   try {
-    const { AdmobConsentStatus } = await import("@capacitor-community/admob");
-    let info = await AdMob.requestConsentInfo();
+    const { AdmobConsentStatus, AdmobConsentDebugGeography } = await import("@capacitor-community/admob");
+
+    // In development, force the EEA geography and add the current test device id
+    // so we can see the consent form even if the production dashboard isn't
+    // fully configured yet. Remove or guard these before production.
+    const debugSettings = import.meta.env.DEV ? {
+      debugGeography: AdmobConsentDebugGeography.EEA,
+      testDeviceIdentifiers: ["D4E142D0230F65BEAF25F94661D24013"],
+    } : undefined;
+
+    let info = await AdMob.requestConsentInfo(debugSettings);
 
     // REQUIRED means this user is in a region that needs a choice and hasn't
     // made one. NOT_REQUIRED and OBTAINED both mean don't interrupt them.
@@ -120,7 +129,7 @@ function ensureAdMob() {
         await AdMob.initialize({});
         return true;
       } catch (e) {
-        console.error("AdMob init failed", e);
+        console.error("AdMob init failed:", e.message || e);
         return false;
       }
     })().then(ok => {
