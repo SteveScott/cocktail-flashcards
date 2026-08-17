@@ -1,0 +1,10 @@
+{
+  "appId": "com.cocktailflashcards.app",
+  "appName": "Cocktail Flashcards",
+  "webDir": "dist",
+  "server": {
+    "url": "https://cocktailflashcards.com/?platform=play",
+    "cleartext": false,
+    "allowNavigation": ["cocktailflashcards.com", "*.firebaseapp.com", "*.google.com", "accounts.google.com"]
+  }
+}

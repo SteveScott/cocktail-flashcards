@@ -11,13 +11,45 @@
     <meta name="apple-mobile-web-app-title" content="Cocktails" />
     <!-- AdSense (adsbygoogle.js) is injected dynamically from src/App.jsx so that
          ad-whitelisted signed-in users never have it loaded. -->
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-6ZM6FWKDMJ"></script>
+    <!-- Google Consent Mode v2 defaults. This block MUST stay above the gtag
+         loader: consent has to be resolved before any Google tag runs, or the
+         first pageview is already sent with storage enabled.
+
+         Region-scoped, per Google's documented pattern — denied everywhere the
+         EEA/UK/CH rules apply, granted elsewhere. Google's own consent message
+         (AdSense → Privacy & messaging), delivered by the AdSense tag, updates
+         these once an in-scope user chooses. A blanket denied default would
+         switch analytics off worldwide, since users outside scope are never
+         shown a message that could grant it. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      // More specific regions win over the global fallback below, regardless of
+      // order — but keep this first so the intent reads correctly.
+      gtag('consent', 'default', {
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        analytics_storage: 'denied',
+        wait_for_update: 500,
+        region: [
+          'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE',
+          'IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+          'IS','LI','NO','GB','CH'
+        ]
+      });
+      gtag('consent', 'default', {
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted',
+        analytics_storage: 'granted'
+      });
+    </script>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JLMGMC80S2"></script>
+    <script>
       gtag('js', new Date());
-      gtag('config', 'G-6ZM6FWKDMJ');
+      gtag('config', 'G-JLMGMC80S2');
     </script>
   </head>
   <body>

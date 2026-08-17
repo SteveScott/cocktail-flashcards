@@ -11,6 +11,10 @@
     "create-remove-ads-product": "node scripts/create-remove-ads-product.mjs"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.1.0",
+    "@capacitor/core": "^8.5.0",
+    "@revenuecat/purchases-capacitor": "^13.4.0",
+    "@revenuecat/purchases-capacitor-ui": "^13.4.0",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",
     "react": "^19.2.7",
@@ -18,6 +22,8 @@
     "stripe": "^22.3.2"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
