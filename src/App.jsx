@@ -733,9 +733,9 @@ export default function App() {
   const btn = (bg, x={}) => ({ padding:"1rem", borderRadius:12, background:bg, color:"#fff", fontWeight:700, fontSize:"1rem", border:"none", cursor:"pointer", ...x });
   const FRAME_BG = "rgba(15, 23, 42, 0.55)";
   const frame = (x={}) => ({ background:FRAME_BG, backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", ...x });
-  // flex-basis 8rem with minWidth 0 lets the two fields sit side by side on a
-  // wide frame and stack on a phone without overflowing it.
-  const emailField = { flex:"1 1 8rem", minWidth:0, background:"#0f172a", border:"1px solid #33415560", borderRadius:8, padding:"0.4rem 0.6rem", fontSize:"0.8rem", color:"#e2e8f0" };
+  // The admin form stacks in a narrow footer column, so the fields take the full
+  // width rather than the flex-basis pairing they used inside the account card.
+  const stackedField = { width:"100%", boxSizing:"border-box", background:"#0f172a", border:"1px solid #33415560", borderRadius:8, padding:"0.4rem 0.6rem", fontSize:"0.8rem", color:"#e2e8f0" };
 
   if (mode === "menu") return (
     <div style={page}><div style={wrap}>
@@ -782,22 +782,9 @@ export default function App() {
               <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
                 <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
                 {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":"#334155",color:firebaseEnabled?"#ffffff":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
-                {firebaseEnabled && (
-                  <button onClick={() => { setShowEmailForm(v => !v); setEmailErr(""); }} aria-expanded={showEmailForm} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.68rem",cursor:"pointer",padding:"0.1rem 0",textDecoration:"underline",alignSelf:"center"}}>
-                    {showEmailForm ? "Cancel" : "Use email instead"}
-                  </button>
-                )}
               </div>
-              {showEmailForm && firebaseEnabled && (
-                <form onSubmit={signInEmail} style={{flexBasis:"100%",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center",borderTop:"1px solid #33415560",paddingTop:"0.6rem"}}>
-                  <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} placeholder="Email" required autoComplete="username" style={emailField} />
-                  <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} placeholder="Password" required autoComplete="current-password" style={emailField} />
-                  <button type="submit" disabled={emailBusy} style={{background:emailBusy?"#334155":"#475569",color:emailBusy?"#64748b":"#e2e8f0",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:emailBusy?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
-                    {emailBusy ? "Signing in…" : "Sign in"}
-                  </button>
-                  {emailErr && <div role="alert" style={{flexBasis:"100%",color:"#f87171",fontSize:"0.7rem"}}>{emailErr}</div>}
-                </form>
-              )}
+              {/* The password form used to sit here as "Use email instead". It now
+                  lives in the footer as "Admin login" — see below. */}
             </>
           )}
         </div>
@@ -932,6 +919,29 @@ export default function App() {
           </button>
         )}
       </div>
+
+      {/* Admin login — the password sign-in, moved out of the account card so
+          Google stays the only visible choice for ordinary users. Still the
+          credentials path for Play Console's App access reviewers, whose OAuth
+          sign-ins trip Google's security challenges, so the App access notes
+          need to name this link. Hidden once anyone is signed in. */}
+      {firebaseEnabled && authReady && !user && (
+        <div style={{textAlign:"center",marginTop:"0.5rem"}}>
+          <button onClick={() => { setShowEmailForm(v => !v); setEmailErr(""); }} aria-expanded={showEmailForm} style={{background:"transparent",border:"none",color:"#475569",fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+            {showEmailForm ? "Cancel" : "Admin login"}
+          </button>
+          {showEmailForm && (
+            <form onSubmit={signInEmail} style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxWidth:260,margin:"0.6rem auto 0"}}>
+              <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} placeholder="Email" required autoComplete="username" style={stackedField} />
+              <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} placeholder="Password" required autoComplete="current-password" style={stackedField} />
+              <button type="submit" disabled={emailBusy} style={{background:emailBusy?"#334155":"#475569",color:emailBusy?"#64748b":"#e2e8f0",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:emailBusy?"not-allowed":"pointer"}}>
+                {emailBusy ? "Signing in…" : "Sign in"}
+              </button>
+              {emailErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem"}}>{emailErr}</div>}
+            </form>
+          )}
+        </div>
+      )}
     </div></div>
   );
 
