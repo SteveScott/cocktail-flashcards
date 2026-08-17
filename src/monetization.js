@@ -83,7 +83,7 @@ async function gatherAdConsent(AdMob) {
 
     // In development, force the EEA geography and add the current test device id
     // so we can see the consent form even if the production dashboard isn't
-    // fully configured yet. Remove or guard these before production.
+    // fully configured yet; production requests consent without these overrides.
     const debugSettings = import.meta.env.DEV ? {
       debugGeography: AdmobConsentDebugGeography.EEA,
       testDeviceIdentifiers: ["D4E142D0230F65BEAF25F94661D24013"],
