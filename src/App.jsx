@@ -7,8 +7,7 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
-import { hasConsented, onConsentChange, resetConsent } from './consent';
-import ConsentBanner from './ConsentBanner';
+import { openPrivacySettings, onGdprApplicable } from './consent';
 import {
   initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
   linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
@@ -149,10 +148,7 @@ function progressEqual(a, b) {
   return true;
 }
 
-// The screens. Split from the default export below only so the consent banner
-// can sit alongside every screen — this component returns early per mode, so
-// there's no single element to hang it off.
-function AppScreens() {
+export default function App() {
   const [st, setSt] = useState(() => loadLocal() || initState(false));
   const [mode, setMode] = useState("menu");
   const [di, setDi] = useState(0);
@@ -184,9 +180,9 @@ function AppScreens() {
   // uid rather than a boolean so switching accounts invalidates it on its own,
   // and so it can't be stale-true for the previous user.
   const [linkedUid, setLinkedUid] = useState(null);
-  // Advertising/analytics cookie consent (web only). Read once at mount; the
-  // banner updates it through onConsentChange.
-  const [adConsent, setAdConsent] = useState(() => hasConsented());
+  // Web only: whether GDPR applies to this visitor, per Google's TCF data. Gates
+  // the "Privacy & cookie settings" link, which is meaningless outside scope.
+  const [gdprApplies, setGdprApplies] = useState(false);
   // Android only: whether Google's UMP wants us to offer a way back into the
   // consent choice (it does in the EEA/UK once a choice has been made).
   const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(false);
@@ -362,20 +358,23 @@ function AppScreens() {
     return () => { cancelled = true; };
   }, [authReady, user]);
 
-  // Only load the AdSense script once we know the current user isn't ad-free AND
-  // has agreed to advertising cookies. Never load it in the Play Store build —
-  // AdSense-in-app breaks program policy.
+  // Only load the AdSense script once we know the current user isn't ad-free.
+  // Never load it in the Play Store build — AdSense-in-app breaks program policy.
   //
-  // Consent is a hard gate, not a personalisation switch: under ePrivacy the
-  // script must not run at all until the user agrees, so a decline means no ad
-  // code is fetched rather than non-personalised ads.
+  // Deliberately NOT gated on consent: Google's GDPR message is delivered by
+  // this very tag, so blocking it would block the consent prompt itself. Ads are
+  // withheld until consent by Google's CMP, and Consent Mode defaults (index.html)
+  // keep storage denied across the EEA/UK/CH until the user decides.
   useEffect(() => {
-    if (!FEATURES.ads || !adCheckDone || adFree || !adConsent) return;
+    if (!FEATURES.ads || !adCheckDone || adFree) return;
     loadAdsenseScript();
-  }, [adCheckDone, adFree, adConsent]);
+  }, [adCheckDone, adFree]);
 
-  // Track consent decisions made in the banner (or withdrawn from the menu).
-  useEffect(() => onConsentChange(granted => setAdConsent(granted)), []);
+  // Show the privacy-settings link only where GDPR applies (web build).
+  useEffect(() => {
+    if (!FEATURES.ads) return;
+    onGdprApplicable(applies => setGdprApplies(applies));
+  }, []);
 
   // Play (Capacitor) build: initialize AdMob + Play Billing once, and adopt any
   // ad-removal purchase this device already owns. Firestore stays the account-wide
@@ -805,9 +804,9 @@ function AppScreens() {
           form instead, since that's where the choice was made. */}
       <div style={{textAlign:"center",marginTop:"0.5rem",fontSize:"0.75rem",color:"#64748b",display:"flex",gap:"0.75rem",justifyContent:"center",flexWrap:"wrap"}}>
         <a href="/privacy" style={{color:"#64748b"}}>Privacy Policy</a>
-        {FEATURES.ads && (
-          <button onClick={resetConsent} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
-            Cookie choices
+        {FEATURES.ads && gdprApplies && (
+          <button onClick={openPrivacySettings} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+            Privacy &amp; cookie settings
           </button>
         )}
         {FEATURES.nativeAds && privacyOptionsRequired && (
@@ -1022,15 +1021,4 @@ function AppScreens() {
       </div></div>
     );
   }
-}
-
-export default function App() {
-  return (
-    <>
-      <AppScreens />
-      {/* Fixed-position overlay, so it shows over whichever screen is active
-          and doesn't depend on the mode-based early returns above. */}
-      <ConsentBanner />
-    </>
-  );
 }

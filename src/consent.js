@@ -1,76 +1,54 @@
-// Web consent for advertising and analytics cookies.
+// Web ad/analytics consent, delegated to Google's own consent management.
 //
-// Under the ePrivacy Directive these must not load until the user has agreed,
-// so consent gates the AdSense script (src/App.jsx) and drives Google Consent
-// Mode v2 signals for Analytics. index.html sets every consent type to "denied"
-// before gtag runs; this module is what later grants it.
+// The GDPR message is configured in the AdSense console (Privacy & messaging)
+// and delivered by the AdSense tag itself, which is why the ad script must be
+// allowed to load for EEA/UK users — the message rides along with it. Google's
+// CMP is IAB TCF certified, which is what serving ads in the EEA/UK requires and
+// what a hand-rolled banner could not satisfy.
 //
-// Scope note: this satisfies "nothing loads before consent" and signals Consent
-// Mode correctly. Google additionally requires a *certified* CMP (IAB TCF) to
-// serve ads to EEA/UK users — see docs/consent.md. The Android app uses Google's
-// own UMP SDK, which is certified; the web still needs that piece.
-const STORAGE_KEY = "consent_v1";
-const GRANTED = "granted";
-const DENIED = "denied";
+// Consent Mode defaults live in index.html and are region-scoped: denied across
+// the EEA/UK/CH until Google's message resolves them, granted elsewhere.
+//
+// This module is only the glue for letting users revisit that choice, which
+// GDPR requires to be as easy as giving it.
 
-const listeners = new Set();
+function fc() {
+  return typeof window !== "undefined" ? window.googlefc : undefined;
+}
 
-// "granted" | "denied" | null (never asked)
-export function getConsent() {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    return v === GRANTED || v === DENIED ? v : null;
-  } catch {
-    // Private mode / locked-down webview: treat as unanswered, and since we
-    // can't persist a choice we'll simply ask again next time.
-    return null;
+// Reopen Google's consent message. Clears the stored EU consent record and shows
+// the message again so the user can change or withdraw their decision.
+export function openPrivacySettings() {
+  const g = fc();
+  if (typeof g?.showRevocationMessage === "function") {
+    g.showRevocationMessage();
+    return true;
   }
+  // Not loaded — the tag is blocked, or no message is published yet.
+  console.error("Google consent message unavailable (googlefc.showRevocationMessage missing)");
+  return false;
 }
 
-export function hasConsented() {
-  return getConsent() === GRANTED;
-}
-
-// True when we still owe the user a choice.
-export function needsConsentChoice() {
-  return getConsent() === null;
-}
-
-// Tell Google what the user decided. Consent Mode expects all four v2 signals;
-// omitting any leaves it at the denied default from index.html.
-function signalConsentMode(granted) {
-  const value = granted ? GRANTED : DENIED;
-  try {
-    if (typeof window.gtag === "function") {
-      window.gtag("consent", "update", {
-        ad_storage: value,
-        ad_user_data: value,
-        ad_personalization: value,
-        analytics_storage: value,
-      });
-    }
-  } catch (e) { console.error("consent update failed", e); }
-}
-
-export function setConsent(granted) {
-  try { localStorage.setItem(STORAGE_KEY, granted ? GRANTED : DENIED); } catch { /* not persistable */ }
-  signalConsentMode(granted);
-  for (const cb of listeners) {
-    try { cb(granted); } catch (e) { console.error("consent listener failed", e); }
-  }
-}
-
-// Reopen the choice — needed so users can withdraw consent as easily as they
-// gave it, which GDPR requires.
-export function resetConsent() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* not persistable */ }
-  signalConsentMode(false);
-  for (const cb of listeners) {
-    try { cb(false); } catch (e) { console.error("consent listener failed", e); }
-  }
-}
-
-export function onConsentChange(cb) {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
+// Report whether GDPR applies to this visitor, so the settings link is shown
+// only to the users it's meaningful for. Google answers this via the TCF API
+// once its consent framework is ready; users outside scope never get a callback
+// with gdprApplies true, so the link simply stays hidden.
+//
+// Fires again whenever the user changes their selections.
+export function onGdprApplicable(cb) {
+  if (typeof window === "undefined") return;
+  window.googlefc = window.googlefc || {};
+  window.googlefc.callbackQueue = window.googlefc.callbackQueue || [];
+  window.googlefc.callbackQueue.push({
+    CONSENT_API_READY: () => {
+      try {
+        window.__tcfapi("addEventListener", 2.2, (tcData, success) => {
+          cb(Boolean(success && tcData?.gdprApplies));
+        });
+      } catch (e) {
+        console.error("TCF addEventListener failed", e);
+        cb(false);
+      }
+    },
+  });
 }

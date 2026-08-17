@@ -1,27 +1,47 @@
 # Ad & analytics consent (GDPR / ePrivacy)
 
-Two separate mechanisms, because the two platforms serve ads from different
-systems and only one of them can use Google's own consent SDK.
+Both platforms use a **Google-certified CMP**, which is what serving ads to
+EEA/UK users requires — a hand-rolled banner does not qualify, however correct
+its behaviour.
 
 | | Web | Android app |
 |---|---|---|
 | Ads | AdSense | AdMob |
-| Consent UI | `src/ConsentBanner.jsx` | Google UMP native dialog |
-| State | `src/consent.js` (localStorage `consent_v1`) | UMP SDK, on-device |
-| Signals | Consent Mode v2 via `gtag` | `canRequestAds` from UMP |
-| Withdraw | "Cookie choices" on the menu | "Ad privacy options" on the menu |
+| Consent UI | Google's GDPR message (AdSense → Privacy & messaging) | Google UMP native dialog |
+| Delivered by | the AdSense tag itself | the AdMob SDK |
+| Signals | Consent Mode v2, region-scoped | `canRequestAds` from UMP |
+| Change/withdraw | "Privacy & cookie settings" on the menu → `googlefc.showRevocationMessage()` | "Ad privacy options" on the menu → `showPrivacyOptionsForm()` |
 
 ## Web
 
-`index.html` sets **all four Consent Mode v2 signals to `denied` before the gtag
-loader runs**, then re-applies a stored `granted` choice inline so returning
-users aren't measured as denied for the first half second. Order matters: move
-that block below the loader and the first pageview is already sent with storage
-enabled.
+`index.html` sets Consent Mode v2 defaults **above the gtag loader**, region
+scoped per Google's documented pattern:
 
-The AdSense script is not merely de-personalised without consent — it is not
-loaded at all (`src/App.jsx`), since ePrivacy requires that nothing non-essential
-runs before agreement.
+- **denied** across the EEA, UK and Switzerland
+- **granted** everywhere else (the unscoped fallback)
+
+Region-specific defaults win over the global one. A blanket `denied` would switch
+analytics off worldwide, because users outside scope are never shown a message
+that could grant it.
+
+**The AdSense script is intentionally not gated on consent** (`src/App.jsx`).
+Google's GDPR message is delivered by that same tag, so blocking it would block
+the consent prompt itself. Ads are withheld until the user decides by Google's
+CMP, and Consent Mode keeps storage denied in the meantime.
+
+`src/consent.js` is only glue:
+
+- `openPrivacySettings()` → `googlefc.showRevocationMessage()`, which clears the
+  stored record and re-shows the message
+- `onGdprApplicable()` → via `googlefc.callbackQueue` / `__tcfapi`, so the
+  settings link appears only for visitors GDPR actually covers
+
+### Dashboard setup required
+
+AdSense console → **Privacy & messaging** → **GDPR** → create a message, select
+the site, **publish**. Until then no message exists, `googlefc` never loads, and
+the settings link stays hidden. Publish the **US states** message too if you want
+CCPA/CPRA handling.
 
 ## Android
 
@@ -42,26 +62,15 @@ be withdrawn as easily as it was given.
 
 ### Dashboard setup required
 
-UMP renders **a message you configure**, so until that exists no form appears and
-`isConsentFormAvailable` is false:
-
-AdMob console → Privacy & messaging → **GDPR** → create a message, select the app,
-publish. Do the same for the **US states** message if you want CCPA/CPRA handling.
+AdMob console → Privacy & messaging → **GDPR** → create a message, select the
+app, publish. Until then `isConsentFormAvailable` is false and no form appears.
 
 Test with `debugGeography: AdmobConsentDebugGeography.EEA` in
 `requestConsentInfo()` plus your device's test id, or you'll never see the form
-from outside Europe. Use `AdMob.resetConsentInfo()` to re-prompt while testing.
+from outside Europe. `AdMob.resetConsentInfo()` re-prompts while testing.
 
-## Known gap: certified CMP on the web
+## Testing the web message from outside the EEA
 
-Google requires a **certified CMP integrated with IAB TCF** to serve ads to
-EEA/UK users. UMP satisfies this on Android. The web banner here satisfies
-ePrivacy (nothing loads before consent) and signals Consent Mode correctly, but
-it is **not** TCF-certified, so EEA/UK web ad serving may be limited until one of:
-
-- AdSense console → Privacy & messaging → publish Google's own GDPR message
-  (free, certified). If you enable it, the AdSense script must be allowed to load
-  so the message can render — revisit the gating in `src/App.jsx` at that point.
-- A third-party certified CMP (Cookiebot, Didomi, …).
-
-Analytics-only consent is unaffected either way.
+Google's message only renders for in-scope users. Use a VPN with an EEA exit, or
+the AdSense message editor's preview. There is no debug-geography equivalent to
+the AdMob one.
