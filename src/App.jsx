@@ -851,7 +851,12 @@ export default function App() {
         </button>
       </div>
       <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#ef4444",fontWeight:600,fontSize:"0.85rem",border:"1px solid #ef444440",cursor:"pointer"}}>Reset Progress</button>
-      <div style={{textAlign:"center",marginTop:"1rem",fontSize:"0.75rem",color:"#64748b"}}>
+      {/* Reference material for adults, not an invitation to drink — states the
+          age expectation the store content rating is filed under. */}
+      <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.75rem",color:"#64748b"}}>
+        Intended for ages 21+. Please drink responsibly.
+      </div>
+      <div style={{textAlign:"center",marginTop:"0.75rem",fontSize:"0.75rem",color:"#64748b"}}>
         Questions or feedback? <a href="mailto:steve@baroqueplusplus.com" style={{color:"#94a3b8"}}>steve@baroqueplusplus.com</a>
       </div>
       {/* Play requires the policy to be reachable from inside the app, not just
