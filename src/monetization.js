@@ -48,9 +48,37 @@ function resolveApiKey() {
 }
 const REVENUECAT_API_KEY = resolveApiKey();
 
-let adMobInitialized = false;
 // Fanned out to React on every CustomerInfo change (see configurePurchases).
 const entitlementListeners = new Set();
+
+// AdMob's shared initialization, same pattern as configurePromise below and for
+// the same reason: the banner effect in App.jsx fires as soon as the ad-free
+// check settles, which can be while AdMob.initialize() is still in flight. A
+// showBanner() that went straight to the plugin would fail against an
+// uninitialized SDK, log once, and never be retried — the effect's dependencies
+// don't change again, so the user would simply never see a banner.
+let adMobPromise = null;
+
+function ensureAdMob() {
+  if (!isCapacitorApp) return Promise.resolve(false);
+  if (!adMobPromise) {
+    adMobPromise = (async () => {
+      try {
+        const { AdMob } = await import("@capacitor-community/admob");
+        await AdMob.initialize({});
+        return true;
+      } catch (e) {
+        console.error("AdMob init failed", e);
+        return false;
+      }
+    })().then(ok => {
+      // Don't cache a failure — the next banner call gets a fresh attempt.
+      if (!ok) adMobPromise = null;
+      return ok;
+    });
+  }
+  return adMobPromise;
+}
 
 async function loadPurchases() {
   const { Purchases } = await import("@revenuecat/purchases-capacitor");
@@ -134,20 +162,13 @@ export function onEntitlementChange(cb) {
 export async function initMonetization() {
   if (!isCapacitorApp) return { adsRemoved: false };
 
-  if (!adMobInitialized) {
-    adMobInitialized = true;
-    try {
-      const { AdMob } = await import("@capacitor-community/admob");
-      await AdMob.initialize({});
-    } catch (e) { console.error("AdMob init failed", e); }
-  }
-
+  await ensureAdMob();
   if (!(await ensureConfigured())) return { adsRemoved: false };
   return { adsRemoved: await hasProAccess() };
 }
 
 export async function showBanner() {
-  if (!isCapacitorApp) return;
+  if (!(await ensureAdMob())) return;
   try {
     const { AdMob, BannerAdPosition, BannerAdSize } = await import("@capacitor-community/admob");
     await AdMob.showBanner({
@@ -160,7 +181,7 @@ export async function showBanner() {
 }
 
 export async function hideBanner() {
-  if (!isCapacitorApp) return;
+  if (!(await ensureAdMob())) return;
   try {
     const { AdMob } = await import("@capacitor-community/admob");
     await AdMob.removeBanner();
@@ -243,25 +264,38 @@ export function isUserCancelled(e) {
     /cancel/i.test(e?.message || "");
 }
 
+// What came of showing the paywall. Callers need these apart: "the user said no"
+// and "there was no paywall to show" both mean not-entitled, but only the second
+// justifies falling back to a direct purchase — doing that after a cancellation
+// would shove a Play purchase dialog at someone who just backed out.
+export const PAYWALL_OUTCOME = {
+  PURCHASED: "purchased",
+  CANCELLED: "cancelled",
+  UNAVAILABLE: "unavailable",
+  ERROR: "error",
+};
+
 // Present the RevenueCat-hosted paywall (configured in the dashboard, so pricing
-// and copy change without an app release). Resolves true if the user came out of
-// it entitled. Prefer this over a hand-rolled purchase button.
+// and copy change without an app release). Prefer this over a hand-rolled
+// purchase button.
 export async function presentPaywall() {
-  if (!(await ensureConfigured())) return false;
+  if (!(await ensureConfigured())) return PAYWALL_OUTCOME.UNAVAILABLE;
   const { RevenueCatUI } = await import("@revenuecat/purchases-capacitor-ui");
   const { PAYWALL_RESULT } = await import("@revenuecat/purchases-capacitor");
   const { result } = await RevenueCatUI.presentPaywall();
   switch (result) {
     case PAYWALL_RESULT.PURCHASED:
     case PAYWALL_RESULT.RESTORED:
-      return true;
+      return PAYWALL_OUTCOME.PURCHASED;
     case PAYWALL_RESULT.NOT_PRESENTED:
       // Nothing to show — almost always a missing Offering or no paywall
       // attached to it in the dashboard.
       console.error("Paywall not presented — check the Offering + paywall config");
-      return false;
-    default: // CANCELLED, ERROR
-      return false;
+      return PAYWALL_OUTCOME.UNAVAILABLE;
+    case PAYWALL_RESULT.CANCELLED:
+      return PAYWALL_OUTCOME.CANCELLED;
+    default:
+      return PAYWALL_OUTCOME.ERROR;
   }
 }
 

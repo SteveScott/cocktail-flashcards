@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { getAdmin } from "./_firebaseAdmin.mjs";
+import { setSourceEntitlement } from "./_entitlements.mjs";
 
 // Stripe calls this endpoint directly (not the browser), so it must verify the
 // request's signature rather than trust its contents. Configure this URL as
@@ -34,11 +34,10 @@ export async function handler(event) {
       return { statusCode: 200, body: JSON.stringify({ received: true }) };
     }
     try {
-      const admin = getAdmin();
-      await admin.firestore().collection("users").doc(uid).set(
-        { adsRemoved: true, adsRemovedAt: Date.now(), stripeSessionId: session.id },
-        { merge: true }
-      );
+      // Writes only the Stripe flag; the Play flag and the derived `adsRemoved`
+      // union are handled by setSourceEntitlement, so the two payment systems
+      // can never revoke each other.
+      await setSourceEntitlement(uid, "stripe", true, { stripeSessionId: session.id });
     } catch (e) {
       console.error("Failed to record purchase in Firestore", e);
       return { statusCode: 500, body: "Failed to record purchase" };

@@ -104,11 +104,19 @@ Firestore `users/{uid}` is the single source of truth for both. The app keeps a
 live `onSnapshot` subscription to that doc, so a change on one platform shows up
 on the other while it's open.
 
-| | writes it | read by |
+| field | writes it | read by |
 |---|---|---|
 | `progress` | the client, debounced, `merge: true` | every signed-in device |
-| `adsRemoved` (web purchase) | `stripe-webhook.mjs`, Admin SDK | every signed-in device |
-| `adsRemoved` (Play purchase) | `revenuecat-webhook.mjs`, Admin SDK | every signed-in device |
+| `adsRemovedStripe` | `stripe-webhook.mjs`, Admin SDK | — |
+| `adsRemovedPlay` | `revenuecat-webhook.mjs`, Admin SDK | — |
+| `adsRemoved` | derived union, written by both | every signed-in device |
+
+Ad removal is two independent purchases, so each payment system owns its own
+flag and `adsRemoved` is recomputed as their union on every write
+(`_entitlements.mjs`). Neither webhook may write `adsRemoved` directly: a Play
+refund, expiration, or transfer would otherwise revoke a valid Stripe purchase
+made on the web. Documents predating the split have `adsRemoved: true` and no
+source flags; those are read as Stripe grants, since nothing else ever set it.
 
 Two details make it work:
 

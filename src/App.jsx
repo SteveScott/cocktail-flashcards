@@ -11,6 +11,7 @@ import {
   initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
   linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
   presentPaywall, presentCustomerCenter, isBillingAvailable, isUserCancelled,
+  PAYWALL_OUTCOME,
 } from './monetization';
 
 const { top50, master150 } = cocktailData;
@@ -431,12 +432,15 @@ export default function App() {
     try {
       // The dashboard-hosted paywall is the primary path: pricing and copy are
       // edited in RevenueCat, not shipped in an app release. Fall back to a
-      // direct purchase of the offering's first package if no paywall is
-      // configured, so the button is never a dead end.
-      let ok = await presentPaywall();
-      if (!ok) ok = await purchaseRemoveAds();
+      // direct purchase of the offering's first package only when there was no
+      // paywall to show, so the button is never a dead end — never after a
+      // cancellation, which would push a purchase dialog at someone who just
+      // backed out.
+      const outcome = await presentPaywall();
+      let ok = outcome === PAYWALL_OUTCOME.PURCHASED;
+      if (outcome === PAYWALL_OUTCOME.UNAVAILABLE) ok = await purchaseRemoveAds();
       if (ok) { setAdsRemovedNative(true); setPurchaseMsg("You're Pro — ads are gone. Thanks for your support!"); }
-      else setPurchaseMsg("Purchase didn't complete.");
+      else if (outcome !== PAYWALL_OUTCOME.CANCELLED) setPurchaseMsg("Purchase didn't complete.");
     } catch (e) {
       console.error("Play purchase failed", e);
       // RevenueCat rejects on user cancellation too — don't alarm the user then.

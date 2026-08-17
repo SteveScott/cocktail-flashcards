@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { getAdmin } from "./_firebaseAdmin.mjs";
+import { setSourceEntitlement } from "./_entitlements.mjs";
 
 // RevenueCat calls this endpoint directly when a Play Billing purchase changes
 // state, which is how a purchase made in the Android app becomes visible to the
@@ -46,20 +46,13 @@ function secretMatches(provided, expected) {
 
 // Grant/revoke on every account id the event names. Normally one; TRANSFER
 // carries arrays because an entitlement is moving between ids.
+//
+// Writes only the Play flag — a revocation here must never clear a Stripe
+// purchase made on the web. setSourceEntitlement recomputes the union.
 async function setAdsRemoved(uids, adsRemoved, eventId) {
-  const admin = getAdmin();
-  const db = admin.firestore();
   await Promise.all(
     uids.filter(isRealUid).map(uid =>
-      db.collection("users").doc(uid).set(
-        {
-          adsRemoved,
-          ...(adsRemoved ? { adsRemovedAt: Date.now() } : {}),
-          adsRemovedSource: "play",
-          revenueCatEventId: eventId || null,
-        },
-        { merge: true }
-      )
+      setSourceEntitlement(uid, "play", adsRemoved, { revenueCatEventId: eventId || null })
     )
   );
 }
