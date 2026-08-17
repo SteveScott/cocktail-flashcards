@@ -40,9 +40,16 @@ function detectPlayApp() {
 export const isPlayApp = detectPlayApp();
 
 export const FEATURES = {
-  // AdSense-for-content inside an app webview violates AdSense program policy.
-  ads: !isPlayApp,
-  // Selling ad removal via Stripe inside a Play app breaks the Play Billing
-  // requirement for digital goods.
-  stripePurchase: !isPlayApp,
+  // Web monetization — only on the web build:
+  //   AdSense-for-content inside an app webview violates AdSense program policy,
+  //   and selling ad removal via Stripe inside a Play app breaks the Play
+  //   Billing requirement for digital goods.
+  ads: !isPlayApp,            // web AdSense
+  stripePurchase: !isPlayApp, // web Stripe checkout
+
+  // Native monetization — only in the Play (Capacitor) build:
+  //   AdMob banner ads + Google Play Billing (via RevenueCat) for the
+  //   ad-removal purchase. Implemented in monetization.js.
+  nativeAds: isPlayApp,
+  nativePurchase: isPlayApp,
 };

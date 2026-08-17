@@ -7,6 +7,7 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
+import { initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases } from './monetization';
 
 const { top50, master150 } = cocktailData;
 const ALL_200 = [...top50, ...master150];
@@ -278,6 +279,21 @@ export default function App() {
     loadAdsenseScript();
   }, [adCheckDone, adFree]);
 
+  // Play (Capacitor) build: initialize AdMob + Play Billing once, and adopt any
+  // ad-removal purchase the user already owns (RevenueCat is the source of truth
+  // for entitlement in the app, not the Stripe-driven Firestore flag).
+  useEffect(() => {
+    if (!FEATURES.nativeAds && !FEATURES.nativePurchase) return;
+    initMonetization().then(({ adsRemoved: owned }) => { if (owned) setAdsRemoved(true); });
+  }, []);
+
+  // Play build: show the AdMob banner while the user isn't ad-free, hide it once
+  // they are. No-ops on web.
+  useEffect(() => {
+    if (!FEATURES.nativeAds || !adCheckDone) return;
+    if (adFree) hideBanner(); else showBanner();
+  }, [adCheckDone, adFree]);
+
   // Load the whitelist list when an admin opens the admin panel.
   useEffect(() => {
     if (!isAdmin || !showAdAdmin) return;
@@ -317,6 +333,36 @@ export default function App() {
       // so the failure is diagnosable instead of always showing a generic message.
       setPurchaseMsg(e?.message ? `Couldn't start checkout — ${e.message}` : "Couldn't start checkout — please try again.");
       setPurchasing(false);
+    }
+  }
+
+  // Play (Capacitor) build: buy ad removal through Google Play Billing.
+  async function buyRemoveAdsNative() {
+    setPurchasing(true);
+    setPurchaseMsg("");
+    try {
+      const ok = await purchaseRemoveAds();
+      if (ok) { setAdsRemoved(true); setPurchaseMsg("Ads removed. Thanks for your support!"); }
+      else setPurchaseMsg("Purchase didn't complete.");
+    } catch (e) {
+      console.error("Play purchase failed", e);
+      // RevenueCat rejects on user cancellation too — don't alarm the user then.
+      if (!e?.userCancelled) setPurchaseMsg("Couldn't complete the purchase — please try again.");
+    } finally {
+      setPurchasing(false);
+    }
+  }
+
+  // Play build: restore a previous ad-removal purchase (required by Play policy).
+  async function restoreAdsNative() {
+    setPurchaseMsg("");
+    try {
+      const ok = await restorePurchases();
+      setAdsRemoved(ok);
+      setPurchaseMsg(ok ? "Purchase restored." : "No previous purchase found.");
+    } catch (e) {
+      console.error("Restore failed", e);
+      setPurchaseMsg("Couldn't restore — please try again.");
     }
   }
 
@@ -480,6 +526,18 @@ export default function App() {
           <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
             {purchasing ? "Redirecting…" : "🚫 Remove Ads — $12.99"}
+          </button>
+        </div>
+      )}
+      {/* Play (Capacitor) build: Google Play Billing purchase + restore. */}
+      {FEATURES.nativePurchase && !adFree && (
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
+            <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
+          </div>
+          <button onClick={buyRemoveAdsNative} disabled={purchasing} style={{background:"#22c55e",color:"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:purchasing?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+            {purchasing ? "Processing…" : "🚫 Remove Ads"}
           </button>
         </div>
       )}
