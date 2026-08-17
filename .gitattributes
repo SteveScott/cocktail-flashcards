@@ -1,0 +1,22 @@
+# core.autocrlf=true expects CRLF in the working tree, but the Capacitor and
+# Gradle files are written with LF — so git reported them permanently modified
+# while their content was byte-identical. Declaring the real endings stops that.
+
+* text=auto
+
+# Build tooling: LF everywhere. gradlew is a shell script — CRLF makes it fail
+# with "bad interpreter" on macOS/Linux and in CI.
+*.gradle     text eol=lf
+*.properties text eol=lf
+gradlew      text eol=lf
+*.sh         text eol=lf
+
+# Windows batch files need CRLF to run.
+*.bat text eol=crlf
+
+# Never normalize these.
+*.jar  binary
+*.png  binary
+*.jpg  binary
+*.webp binary
+*.ico  binary
