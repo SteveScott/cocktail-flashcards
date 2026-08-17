@@ -1,6 +1,6 @@
 // Network-first service worker.
 //
-// The mobile app (TWA/Capacitor) loads the LIVE site, and this app is also a
+// The Capacitor Play Store app loads the LIVE site, and this app is also a
 // PWA, so we deliberately prefer the network on every request and only fall
 // back to cache when offline. That keeps deployed web changes flowing through
 // to installed/wrapped clients immediately — no stale precached bundle to fight.

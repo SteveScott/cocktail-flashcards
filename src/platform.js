@@ -13,10 +13,6 @@
 //     attached by the time this module is evaluated. Ordinary web visitors never
 //     receive that flag.
 //
-// The earlier TWA build was dropped before release, so its detection (the
-// android-app:// referrer and the persisted localStorage flag, both needed only
-// because a TWA has no bridge) is gone with it.
-//
 // NOTE: this HIDES features, it isn't a security boundary — the code still
 // ships in the bundle. That's the accepted approach for store-policy compliance
 // (what matters is how the submitted app behaves).

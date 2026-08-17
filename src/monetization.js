@@ -7,8 +7,10 @@
 // URL flag alone). Plugins are dynamically imported so their native-only code
 // never loads for web visitors.
 //
-// Required config — set these in a .env file BEFORE building the Play app
-// (Vite inlines VITE_* at build time):
+// Required config. Vite inlines VITE_* at build time — and because the Capacitor
+// shell loads the deployed site (capacitor.config.json → server.url), the build
+// that reaches Play users is NETLIFY'S. Set these in the Netlify site's
+// environment variables; a local .env only affects `npm run dev`.
 //   VITE_ADMOB_BANNER_ID         AdMob banner ad unit id (ca-app-pub-…/…)
 //   VITE_REVENUECAT_ANDROID_KEY  RevenueCat public Android SDK key (goog_…)
 //   VITE_REVENUECAT_TEST_KEY     RevenueCat Test Store key (test_…), dev only
