@@ -59,12 +59,62 @@ const entitlementListeners = new Set();
 // don't change again, so the user would simply never see a banner.
 let adMobPromise = null;
 
+// Whether Google's UMP SDK says we may request ads, and whether this user is
+// entitled to a "privacy options" entry point (required in the EEA/UK once
+// consent has been given, so it can be withdrawn again).
+let canRequestAds = false;
+let privacyOptionsRequired = false;
+
+export function getAdConsentState() {
+  return { canRequestAds, privacyOptionsRequired };
+}
+
+// Collect advertising consent through Google's User Messaging Platform before
+// any ad is requested. UMP is a Google-certified CMP, which is what serving ads
+// to EEA/UK users requires — a home-grown dialog would not qualify.
+//
+// Runs before AdMob.initialize: the consent status determines whether we may
+// request ads at all, and Google's guidance is to gather it first.
+async function gatherAdConsent(AdMob) {
+  try {
+    const { AdmobConsentStatus } = await import("@capacitor-community/admob");
+    let info = await AdMob.requestConsentInfo();
+
+    // REQUIRED means this user is in a region that needs a choice and hasn't
+    // made one. NOT_REQUIRED and OBTAINED both mean don't interrupt them.
+    if (info.status === AdmobConsentStatus.REQUIRED && info.isConsentFormAvailable) {
+      info = await AdMob.showConsentForm();
+    }
+
+    canRequestAds = info.canRequestAds !== false;
+    privacyOptionsRequired = info.privacyOptionsRequirementStatus === "REQUIRED";
+  } catch (e) {
+    // A consent failure must not silently become "show ads anyway" in a region
+    // that requires consent, so fail closed.
+    console.error("Ad consent failed", e);
+    canRequestAds = false;
+    privacyOptionsRequired = false;
+  }
+}
+
+// Reopen Google's privacy options form so consent can be withdrawn or changed.
+export async function showAdPrivacyOptions() {
+  if (!isCapacitorApp) return;
+  try {
+    const { AdMob } = await import("@capacitor-community/admob");
+    await AdMob.showPrivacyOptionsForm();
+    // The choice may have changed whether we can serve ads at all.
+    await gatherAdConsent(AdMob);
+  } catch (e) { console.error("privacy options form failed", e); }
+}
+
 function ensureAdMob() {
   if (!isCapacitorApp) return Promise.resolve(false);
   if (!adMobPromise) {
     adMobPromise = (async () => {
       try {
         const { AdMob } = await import("@capacitor-community/admob");
+        await gatherAdConsent(AdMob);
         await AdMob.initialize({});
         return true;
       } catch (e) {
@@ -169,6 +219,9 @@ export async function initMonetization() {
 
 export async function showBanner() {
   if (!(await ensureAdMob())) return;
+  // UMP says this user hasn't allowed ads (or consent couldn't be established).
+  // Showing one anyway would breach both the consent and Google's ad policy.
+  if (!canRequestAds) return;
   try {
     const { AdMob, BannerAdPosition, BannerAdSize } = await import("@capacitor-community/admob");
     await AdMob.showBanner({

@@ -7,11 +7,13 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
+import { hasConsented, onConsentChange, resetConsent } from './consent';
+import ConsentBanner from './ConsentBanner';
 import {
   initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
   linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
   presentPaywall, presentCustomerCenter, isBillingAvailable, isUserCancelled,
-  PAYWALL_OUTCOME,
+  PAYWALL_OUTCOME, getAdConsentState, showAdPrivacyOptions,
 } from './monetization';
 
 const { top50, master150 } = cocktailData;
@@ -147,7 +149,10 @@ function progressEqual(a, b) {
   return true;
 }
 
-export default function App() {
+// The screens. Split from the default export below only so the consent banner
+// can sit alongside every screen — this component returns early per mode, so
+// there's no single element to hang it off.
+function AppScreens() {
   const [st, setSt] = useState(() => loadLocal() || initState(false));
   const [mode, setMode] = useState("menu");
   const [di, setDi] = useState(0);
@@ -179,6 +184,12 @@ export default function App() {
   // uid rather than a boolean so switching accounts invalidates it on its own,
   // and so it can't be stale-true for the previous user.
   const [linkedUid, setLinkedUid] = useState(null);
+  // Advertising/analytics cookie consent (web only). Read once at mount; the
+  // banner updates it through onConsentChange.
+  const [adConsent, setAdConsent] = useState(() => hasConsented());
+  // Android only: whether Google's UMP wants us to offer a way back into the
+  // consent choice (it does in the EEA/UK once a choice has been made).
+  const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
   const adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative;
@@ -351,12 +362,20 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authReady, user]);
 
-  // Only load the AdSense script once we know the current user isn't ad-free.
-  // Never load it in the Play Store build — AdSense-in-app breaks program policy.
+  // Only load the AdSense script once we know the current user isn't ad-free AND
+  // has agreed to advertising cookies. Never load it in the Play Store build —
+  // AdSense-in-app breaks program policy.
+  //
+  // Consent is a hard gate, not a personalisation switch: under ePrivacy the
+  // script must not run at all until the user agrees, so a decline means no ad
+  // code is fetched rather than non-personalised ads.
   useEffect(() => {
-    if (!FEATURES.ads || !adCheckDone || adFree) return;
+    if (!FEATURES.ads || !adCheckDone || adFree || !adConsent) return;
     loadAdsenseScript();
-  }, [adCheckDone, adFree]);
+  }, [adCheckDone, adFree, adConsent]);
+
+  // Track consent decisions made in the banner (or withdrawn from the menu).
+  useEffect(() => onConsentChange(granted => setAdConsent(granted)), []);
 
   // Play (Capacitor) build: initialize AdMob + Play Billing once, and adopt any
   // ad-removal purchase this device already owns. Firestore stays the account-wide
@@ -364,7 +383,12 @@ export default function App() {
   // before sign-in.
   useEffect(() => {
     if (!FEATURES.nativeAds && !FEATURES.nativePurchase) return;
-    initMonetization().then(({ adsRemoved: owned }) => { if (owned) setAdsRemovedNative(true); });
+    initMonetization().then(({ adsRemoved: owned }) => {
+      if (owned) setAdsRemovedNative(true);
+      // Consent was gathered during init; surface the privacy-options entry
+      // point if UMP says this user is entitled to one.
+      setPrivacyOptionsRequired(getAdConsentState().privacyOptionsRequired);
+    });
     // Entitlement can change without any call of ours returning — a purchase
     // completed inside the paywall sheet, a restore from the Customer Center, a
     // transfer between accounts. RevenueCat's CustomerInfo listener reports all
@@ -484,6 +508,16 @@ export default function App() {
       console.error("Restore failed", e);
       setPurchaseMsg("Couldn't restore — please try again.");
     }
+  }
+
+  // Play build: reopen Google's UMP privacy form so ad consent can be changed
+  // or withdrawn. Re-checks whether ads may now be shown afterwards.
+  async function openAdPrivacyOptions() {
+    await showAdPrivacyOptions();
+    const { canRequestAds, privacyOptionsRequired: required } = getAdConsentState();
+    setPrivacyOptionsRequired(required);
+    // Consent may have been withdrawn — drop any banner already on screen.
+    if (!canRequestAds) hideBanner();
   }
 
   // Play build: RevenueCat's Customer Center — restore, refund requests,
@@ -766,9 +800,21 @@ export default function App() {
       </div>
       {/* Play requires the policy to be reachable from inside the app, not just
           from the store listing. Served as a static page, so it renders even if
-          the app bundle fails. */}
-      <div style={{textAlign:"center",marginTop:"0.5rem",fontSize:"0.75rem",color:"#64748b"}}>
+          the app bundle fails. Withdrawing consent must be as easy as giving it,
+          hence the second link — on Android it opens Google's own UMP privacy
+          form instead, since that's where the choice was made. */}
+      <div style={{textAlign:"center",marginTop:"0.5rem",fontSize:"0.75rem",color:"#64748b",display:"flex",gap:"0.75rem",justifyContent:"center",flexWrap:"wrap"}}>
         <a href="/privacy" style={{color:"#64748b"}}>Privacy Policy</a>
+        {FEATURES.ads && (
+          <button onClick={resetConsent} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+            Cookie choices
+          </button>
+        )}
+        {FEATURES.nativeAds && privacyOptionsRequired && (
+          <button onClick={openAdPrivacyOptions} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+            Ad privacy options
+          </button>
+        )}
       </div>
     </div></div>
   );
@@ -976,4 +1022,15 @@ export default function App() {
       </div></div>
     );
   }
+}
+
+export default function App() {
+  return (
+    <>
+      <AppScreens />
+      {/* Fixed-position overlay, so it shows over whichever screen is active
+          and doesn't depend on the mode-based early returns above. */}
+      <ConsentBanner />
+    </>
+  );
 }

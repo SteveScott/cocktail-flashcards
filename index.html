@@ -11,11 +11,36 @@
     <meta name="apple-mobile-web-app-title" content="Cocktails" />
     <!-- AdSense (adsbygoogle.js) is injected dynamically from src/App.jsx so that
          ad-whitelisted signed-in users never have it loaded. -->
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JLMGMC80S2"></script>
+    <!-- Google Consent Mode v2 defaults. This block MUST stay above the gtag
+         loader: consent has to be denied before any Google tag runs, or the
+         first pageview is already sent with storage enabled. src/consent.js
+         flips these to granted once the user agrees. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        analytics_storage: 'denied',
+        wait_for_update: 500
+      });
+      // Re-apply a previously saved choice immediately, so returning users who
+      // already agreed aren't measured as denied for the first half second.
+      try {
+        if (localStorage.getItem('consent_v1') === 'granted') {
+          gtag('consent', 'update', {
+            ad_storage: 'granted',
+            ad_user_data: 'granted',
+            ad_personalization: 'granted',
+            analytics_storage: 'granted'
+          });
+        }
+      } catch (e) { /* storage unavailable — stay denied */ }
+    </script>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JLMGMC80S2"></script>
+    <script>
       gtag('js', new Date());
       gtag('config', 'G-JLMGMC80S2');
     </script>
