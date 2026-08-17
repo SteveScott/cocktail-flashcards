@@ -1,9 +1,9 @@
 # Mobile app: AdMob ads + Play Billing (Capacitor)
 
-The Play Store build is a **Capacitor** app (not the earlier TWA). It loads the
-live site — so web/content changes still carry over without resubmitting — but
-adds a native layer for **AdMob** banner ads and **Google Play Billing** (via
-**RevenueCat**) for the one-time "remove ads" purchase.
+The Play Store build is a **Capacitor** app: it loads the live site — so
+web/content changes still carry over without resubmitting — but adds a native
+layer for **AdMob** banner ads and **Google Play Billing** (via **RevenueCat**)
+for the one-time "remove ads" purchase.
 
 Web behavior is unchanged: on the web the app still uses AdSense + Stripe. The
 native path only activates when the Capacitor plugin bridge is present, detected
@@ -47,9 +47,9 @@ calling them.
 
 `capacitor.config.json` uses `com.cocktailflashcards.app`.
 
-**If you already created a Play Console listing (e.g. for the TWA), reuse that
-exact package name here** — otherwise Play treats it as a different app. Change
-it now; after your first upload it is permanent, and the ids you're about to
+**If a Play Console listing already exists under a different package name,
+reconcile that now** — Play treats a different package as an entirely different
+app. After your first upload the name is permanent, and the ids you're about to
 create in AdMob and RevenueCat are bound to it.
 
 ## Phase 1 — Create the accounts
