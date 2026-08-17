@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// Firestore security rules for Cocktail Flashcards.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+//
+// These rules are the ONLY thing stopping a user from granting themselves ad
+// removal. The client deliberately ships the monetization code (see
+// src/platform.js), so nothing in the bundle can be treated as a boundary —
+// `adsRemoved` is trusted precisely because clients cannot write it.
+//
+// The Admin SDK used by the Netlify functions bypasses rules entirely, so the
+// Stripe and RevenueCat webhooks keep working under the write denials below.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Accounts allowed to manage the ad whitelist. This must be kept in step
+    // with VITE_ADMIN_EMAILS in .env — that variable only hides the admin UI,
+    // it grants nothing. Lowercase entries only.
+    function admins() {
+      return ['stevescott517@gmail.com'];
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in admins();
+    }
+
+    // Everything a client is allowed to write on its own user document. Progress
+    // sync writes exactly these two fields (src/App.jsx), so anything else in a
+    // write is either a bug or an attempt to self-grant an entitlement.
+    function clientWritableKeys() {
+      return ['progress', 'updatedAt'];
+    }
+
+    match /users/{uid} {
+      // Own document only — progress and purchase state are private.
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      // No listing the collection: that would expose every user's document.
+      allow list: if false;
+
+      // hasOnly, not a denylist of server fields: a new server-owned field added
+      // later is then protected by default rather than silently writable.
+      //
+      // create and update are separate because `resource.data` does not exist
+      // on create — calling diff() against it there would error, and an erroring
+      // rule denies, which would lock out every brand-new account.
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(clientWritableKeys());
+
+      allow update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(clientWritableKeys());
+
+      // Purchase history should not be erasable by the buyer.
+      allow delete: if false;
+    }
+
+    match /adWhitelist/{email} {
+      // A signed-in user may check whether their OWN email is whitelisted
+      // (src/firebase.js → isEmailAdWhitelisted), and nothing else. Reading the
+      // collection would leak the list of comped accounts.
+      allow get: if isSignedIn()
+        && request.auth.token.email != null
+        && email == request.auth.token.email.lower();
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Anything not matched above is denied. New collections must opt in here.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

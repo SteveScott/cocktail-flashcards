@@ -131,8 +131,12 @@ Two details make it work:
   read can't revoke a native purchase, and a "no purchase found" restore can't
   revoke a web one.
 
-Clients only ever *read* `adsRemoved` — keep Firestore rules that way, so nobody
-grants themselves ad removal from the browser console.
+Clients only ever *read* `adsRemoved` — `firestore.rules` enforces that, so
+nobody grants themselves ad removal from the browser console. Client writes to
+`users/{uid}` are restricted to `progress` and `updatedAt`; the webhooks write
+the entitlement fields through the Admin SDK, which bypasses rules. Deploy the
+rules with `firebase deploy --only firestore:rules` — editing them in the console
+instead will be silently overwritten by the next deploy.
 
 ### 3. Package name
 `capacitor.config.json` uses `com.cocktailflashcards.app`. **If you already
