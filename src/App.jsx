@@ -411,9 +411,9 @@ export default function App() {
   function signIn(provider = googleProvider) {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
     signInWithPopup(auth, provider).catch(e => {
-      console.error("Popup sign-in failed, falling back to redirect", e);
+      console.error("Popup sign-in failed:", e.code, e.message, e);
       // Popups can be closed prematurely by browser privacy settings or extensions — fall back to a full-page redirect.
-      signInWithRedirect(auth, provider).catch(e2 => console.error("Redirect sign-in failed", e2));
+      signInWithRedirect(auth, provider).catch(e2 => console.error("Redirect sign-in failed:", e2.code, e2.message, e2));
     });
   }
   function signInFacebook() { signIn(facebookProvider); }
