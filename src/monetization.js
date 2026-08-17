@@ -216,21 +216,29 @@ export const hasRemovedAds = hasProAccess;
 // purchases under this app-user id, and the server writes `adsRemoved` on the
 // matching users/{uid} doc. Without it, purchases live under an anonymous
 // ($RCAnonymousID:…) id the web has no way to resolve.
+// Returns { ok, active }: whether the identity is now attached, and whether it
+// owns Pro. These are separate answers — a successful link for someone who has
+// never purchased is ok:true, active:false — and callers about to take money
+// need the first one, since a purchase made before the link lands is recorded
+// against the previous or anonymous id and can never be mapped to the account.
 export async function linkRevenueCatUser(uid) {
-  if (!uid || !(await ensureConfigured())) return false;
+  if (!uid || !(await ensureConfigured())) return { ok: false, active: false };
   try {
     const Purchases = await loadPurchases();
     const { customerInfo } = await Purchases.logIn({ appUserID: uid });
     emit(customerInfo);
-    return isActive(customerInfo);
-  } catch (e) { console.error("RevenueCat logIn failed", e); return false; }
+    return { ok: true, active: isActive(customerInfo) };
+  } catch (e) {
+    console.error("RevenueCat logIn failed", e);
+    return { ok: false, active: false };
+  }
 }
 
 // Detach on sign-out. RevenueCat falls back to an anonymous id, which may still
 // own an entitlement purchased before the user ever signed in — so report what
 // that id actually owns rather than assuming false.
 export async function unlinkRevenueCatUser() {
-  if (!(await ensureConfigured())) return false;
+  if (!(await ensureConfigured())) return { ok: false, active: false };
   try {
     const Purchases = await loadPurchases();
     // logOut rejects when the current id is already anonymous, which is exactly
@@ -238,11 +246,14 @@ export async function unlinkRevenueCatUser() {
     // where the old configure race used to swallow it. Nothing to detach, so
     // just report what the anonymous id owns.
     const anon = await Purchases.isAnonymous().catch(() => null);
-    if (anon?.isAnonymous) return isActive(await getCustomerInfo());
+    if (anon?.isAnonymous) return { ok: true, active: await hasProAccess() };
     const { customerInfo } = await Purchases.logOut();
     emit(customerInfo);
-    return isActive(customerInfo);
-  } catch (e) { console.error("RevenueCat logOut failed", e); return false; }
+    return { ok: true, active: isActive(customerInfo) };
+  } catch (e) {
+    console.error("RevenueCat logOut failed", e);
+    return { ok: false, active: false };
+  }
 }
 
 // ── Offerings & purchasing ──────────────────────────────────────────────

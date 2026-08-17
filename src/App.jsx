@@ -175,6 +175,10 @@ export default function App() {
   // web one. Ad-free is the union.
   const [adsRemovedCloud, setAdsRemovedCloud] = useState(false);
   const [adsRemovedNative, setAdsRemovedNative] = useState(false);
+  // The uid RevenueCat's app-user id is confirmed to be set to. Stored as the
+  // uid rather than a boolean so switching accounts invalidates it on its own,
+  // and so it can't be stale-true for the previous user.
+  const [linkedUid, setLinkedUid] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
   const adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative;
@@ -284,7 +288,10 @@ export default function App() {
   useEffect(() => {
     if (!FEATURES.nativePurchase || !authReady) return;
     const sync = user ? linkRevenueCatUser(user.uid) : unlinkRevenueCatUser();
-    sync.then(owned => setAdsRemovedNative(Boolean(owned)));
+    sync.then(({ ok, active }) => {
+      setLinkedUid(ok && user ? user.uid : null);
+      setAdsRemovedNative(Boolean(active));
+    });
   }, [authReady, user]);
 
   // After returning from Stripe Checkout, re-check the ads-removed flag a few
@@ -430,6 +437,20 @@ export default function App() {
     setPurchasing(true);
     setPurchaseMsg("");
     try {
+      // Confirm the RevenueCat identity is this uid before taking any money.
+      // Having a Firebase user only means auth resolved — Purchases.logIn may
+      // still be in flight, or may have failed, and a purchase started first is
+      // recorded against the previous or anonymous app-user id, which the
+      // webhook can never map back to this account. logIn is idempotent, so
+      // re-confirming here is cheap and doubles as a retry.
+      if (firebaseEnabled && user) {
+        const { ok } = await linkRevenueCatUser(user.uid);
+        if (!ok) {
+          setPurchaseMsg("Couldn't link your account to the store — check your connection and try again.");
+          return;
+        }
+        setLinkedUid(user.uid);
+      }
       // The dashboard-hosted paywall is the primary path: pricing and copy are
       // edited in RevenueCat, not shipped in an app release. Fall back to a
       // direct purchase of the offering's first package only when there was no
@@ -654,9 +675,18 @@ export default function App() {
             </div>
             <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
           </div>
-          <button onClick={buyRemoveAdsNative} disabled={purchasing} style={{background:"#22c55e",color:"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:purchasing?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
-            {purchasing ? "Processing…" : "✨ Go Pro"}
-          </button>
+          {/* Held shut until RevenueCat's app-user id is confirmed to be this
+              uid — a purchase started before that lands on the wrong id and can
+              never be attributed to the account. */}
+          {(() => {
+            const awaitingIdentity = firebaseEnabled && Boolean(user) && linkedUid !== user.uid;
+            const blocked = purchasing || awaitingIdentity;
+            return (
+              <button onClick={buyRemoveAdsNative} disabled={blocked} style={{background:blocked?"#334155":"#22c55e",color:blocked?"#64748b":"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:blocked?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+                {purchasing ? "Processing…" : awaitingIdentity ? "Connecting…" : "✨ Go Pro"}
+              </button>
+            );
+          })()}
         </div>
       )}
       {/* Already Pro in the Play build: Customer Center handles restore, refund
