@@ -39,6 +39,29 @@ function detectPlayApp() {
 
 export const isPlayApp = detectPlayApp();
 
+// Narrower than isPlayApp: are we running inside the Capacitor shell, where the
+// native plugin bridge actually exists?
+//
+// isPlayApp is deliberately broad — it also matches the legacy TWA build via the
+// query string, the referrer, and the persisted localStorage flag. That's right
+// for store-policy gating (a TWA must hide AdSense and Stripe just the same),
+// but wrong for anything that calls a plugin: a TWA is a Chrome tab with no
+// bridge, so AdMob and RevenueCat calls there fail, and offering their UI leaves
+// TWA users a purchase button that cannot work while Stripe is hidden from them.
+function detectCapacitorApp() {
+  if (typeof window === "undefined") return false;
+  const cap = window.Capacitor;
+  if (!cap) return false;
+  // @capacitor/core defines window.Capacitor in plain web pages too, so ask the
+  // bridge whether this is really a native platform rather than trusting the
+  // global's presence.
+  if (typeof cap.isNativePlatform === "function") return cap.isNativePlatform();
+  if (typeof cap.getPlatform === "function") return cap.getPlatform() !== "web";
+  return Boolean(cap.isNative);
+}
+
+export const isCapacitorApp = detectCapacitorApp();
+
 export const FEATURES = {
   // Web monetization — only on the web build:
   //   AdSense-for-content inside an app webview violates AdSense program policy,
@@ -47,9 +70,12 @@ export const FEATURES = {
   ads: !isPlayApp,            // web AdSense
   stripePurchase: !isPlayApp, // web Stripe checkout
 
-  // Native monetization — only in the Play (Capacitor) build:
+  // Native monetization — only where the Capacitor bridge exists:
   //   AdMob banner ads + Google Play Billing (via RevenueCat) for the
   //   ad-removal purchase. Implemented in monetization.js.
-  nativeAds: isPlayApp,
-  nativePurchase: isPlayApp,
+  //
+  //   Gated on isCapacitorApp, NOT isPlayApp: a legacy TWA install trips
+  //   isPlayApp but has no plugins, so these must stay off there.
+  nativeAds: isCapacitorApp,
+  nativePurchase: isCapacitorApp,
 };

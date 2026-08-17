@@ -2,9 +2,10 @@
 // Google Play Billing (via RevenueCat) for the "Cocktail Flashcards Pro"
 // entitlement, which is what removes ads.
 //
-// Everything here is a no-op unless we're running inside the Capacitor app
-// (see isPlayApp). Plugins are dynamically imported so their native-only code
-// never loads for web visitors.
+// Everything here is a no-op unless the Capacitor plugin bridge is present (see
+// isCapacitorApp — deliberately narrower than isPlayApp, which also matches the
+// legacy TWA build where these plugins do not exist). Plugins are dynamically
+// imported so their native-only code never loads for web visitors.
 //
 // Required config — set these in a .env file BEFORE building the Play app
 // (Vite inlines VITE_* at build time):
@@ -12,7 +13,7 @@
 //   VITE_REVENUECAT_ANDROID_KEY  RevenueCat public Android SDK key (goog_…)
 //   VITE_REVENUECAT_TEST_KEY     RevenueCat Test Store key (test_…), dev only
 //   VITE_REVENUECAT_ENTITLEMENT  Entitlement identifier (default cocktail_flashcards_pro)
-import { isPlayApp } from "./platform";
+import { isCapacitorApp } from "./platform";
 
 // Google's official TEST banner id — safe to ship as a fallback; it only serves
 // test ads. Replace via VITE_ADMOB_BANNER_ID for the real release.
@@ -61,7 +62,7 @@ async function loadPurchases() {
 
 // RevenueCat is available (Play build, configured with a usable key).
 export function isBillingAvailable() {
-  return isPlayApp && Boolean(REVENUECAT_API_KEY);
+  return isCapacitorApp && Boolean(REVENUECAT_API_KEY);
 }
 
 function isActive(customerInfo) {
@@ -89,7 +90,7 @@ export function onEntitlementChange(cb) {
 // Initialize the ad + billing SDKs and report whether this user already owns
 // Pro. Call once on app start.
 export async function initMonetization() {
-  if (!isPlayApp || initialized) return { adsRemoved: false };
+  if (!isCapacitorApp || initialized) return { adsRemoved: false };
   initialized = true;
   let adsRemoved = false;
 
@@ -120,7 +121,7 @@ export async function initMonetization() {
 }
 
 export async function showBanner() {
-  if (!isPlayApp) return;
+  if (!isCapacitorApp) return;
   try {
     const { AdMob, BannerAdPosition, BannerAdSize } = await import("@capacitor-community/admob");
     await AdMob.showBanner({
@@ -133,7 +134,7 @@ export async function showBanner() {
 }
 
 export async function hideBanner() {
-  if (!isPlayApp) return;
+  if (!isCapacitorApp) return;
   try {
     const { AdMob } = await import("@capacitor-community/admob");
     await AdMob.removeBanner();
