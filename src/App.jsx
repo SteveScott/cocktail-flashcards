@@ -197,6 +197,10 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState("");
   const [emailErr, setEmailErr] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
+  // Account deletion — required by Play for any app that offers account creation.
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState("");
   const adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative;
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
@@ -420,9 +424,9 @@ export default function App() {
   function signIn(provider = googleProvider) {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
     signInWithPopup(auth, provider).catch(e => {
-      console.error("Popup sign-in failed, falling back to redirect", e);
+      console.error("Popup sign-in failed:", e.code, e.message, e);
       // Popups can be closed prematurely by browser privacy settings or extensions — fall back to a full-page redirect.
-      signInWithRedirect(auth, provider).catch(e2 => console.error("Redirect sign-in failed", e2));
+      signInWithRedirect(auth, provider).catch(e2 => console.error("Redirect sign-in failed:", e2.code, e2.message, e2));
     });
   }
   function signInFacebook() { signIn(facebookProvider); }
@@ -457,6 +461,38 @@ export default function App() {
   function signOutUser() {
     if (!firebaseEnabled) return;
     signOut(auth).catch(e => console.error("Sign-out failed", e));
+  }
+
+  // Deletes the cloud account and its data, then clears this device. The server
+  // does the work — firestore.rules forbids clients deleting users/{uid}, and
+  // the client SDK's deleteUser() rejects sessions older than a few minutes.
+  async function deleteAccount() {
+    if (!user || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteErr("");
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/.netlify/functions/delete-account", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Deletion failed");
+
+      // Local progress is a separate copy that no server call can reach, so
+      // "delete my data" has to clear it here or it would survive on the device.
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* private mode */ }
+      setSt(initState(false));
+      setDeleteConfirm(false);
+      // The account is already gone server-side; this just drops the local
+      // session so the UI returns to signed-out.
+      await signOut(auth).catch(e => console.error("Sign-out after deletion failed", e));
+    } catch (e) {
+      console.error("Account deletion failed:", e);
+      setDeleteErr(e.message || "Deletion failed. Please try again.");
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   async function startCheckout() {
@@ -717,7 +753,28 @@ export default function App() {
                 {user.photoURL && <img src={user.photoURL} alt="" style={{width:28,height:28,borderRadius:"50%"}} />}
                 <div style={{fontSize:"0.8rem",color:"#cbd5e1",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.displayName || user.email}</div>
               </div>
-              <button onClick={signOutUser} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.75rem",cursor:"pointer"}}>Sign out</button>
+              <div style={{display:"flex",alignItems:"center",gap:"0.6rem"}}>
+                <button onClick={signOutUser} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.75rem",cursor:"pointer"}}>Sign out</button>
+                <button onClick={() => { setDeleteConfirm(v => !v); setDeleteErr(""); }} aria-expanded={deleteConfirm} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.68rem",cursor:"pointer",padding:"0.1rem 0",textDecoration:"underline"}}>
+                  Delete account
+                </button>
+              </div>
+              {deleteConfirm && (
+                <div style={{flexBasis:"100%",borderTop:"1px solid #33415560",paddingTop:"0.6rem"}}>
+                  <div style={{fontSize:"0.75rem",color:"#cbd5e1",marginBottom:"0.5rem"}}>
+                    Permanently delete your account and synced progress? This cannot be undone
+                    {adFree ? ", and your ad-free status will be removed from this account" : ""}.
+                    {adFree && FEATURES.nativePurchase ? " You can get it back with Restore purchase." : ""}
+                  </div>
+                  <div style={{display:"flex",gap:"0.4rem",alignItems:"center",flexWrap:"wrap"}}>
+                    <button onClick={deleteAccount} disabled={deleteBusy} style={{background:deleteBusy?"#334155":"#b91c1c",color:deleteBusy?"#64748b":"#fef2f2",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.78rem",fontWeight:600,cursor:deleteBusy?"not-allowed":"pointer"}}>
+                      {deleteBusy ? "Deleting…" : "Yes, delete everything"}
+                    </button>
+                    <button onClick={() => { setDeleteConfirm(false); setDeleteErr(""); }} disabled={deleteBusy} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.78rem",cursor:deleteBusy?"not-allowed":"pointer"}}>Cancel</button>
+                  </div>
+                  {deleteErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem",marginTop:"0.4rem"}}>{deleteErr}</div>}
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -849,7 +906,12 @@ export default function App() {
         </button>
       </div>
       <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#ef4444",fontWeight:600,fontSize:"0.85rem",border:"1px solid #ef444440",cursor:"pointer"}}>Reset Progress</button>
-      <div style={{textAlign:"center",marginTop:"1rem",fontSize:"0.75rem",color:"#64748b"}}>
+      {/* Reference material for adults, not an invitation to drink — states the
+          age expectation the store content rating is filed under. */}
+      <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.75rem",color:"#64748b"}}>
+        Intended for ages 21+. Please drink responsibly.
+      </div>
+      <div style={{textAlign:"center",marginTop:"0.75rem",fontSize:"0.75rem",color:"#64748b"}}>
         Questions or feedback? <a href="mailto:steve@baroqueplusplus.com" style={{color:"#94a3b8"}}>steve@baroqueplusplus.com</a>
       </div>
       {/* Play requires the policy to be reachable from inside the app, not just

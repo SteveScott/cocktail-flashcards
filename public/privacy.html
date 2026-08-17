@@ -99,16 +99,25 @@
   sent to the cloud. Signing in is required only to sync between devices and to make a purchase
   that applies across devices.</p>
 
-  <h2>Keeping and deleting your data</h2>
+  <h2 id="delete-account">Keeping and deleting your data</h2>
   <p>Progress and purchase status are kept while your account exists, so that ad removal you have
   paid for continues to work.</p>
   <ul>
     <li><strong>Clear this device:</strong> use “Reset Progress” in the app.</li>
-    <li><strong>Delete your account and all associated data:</strong> email
+    <li><strong>Delete your account and all associated data:</strong> sign in, then use
+      <strong>Delete account</strong> next to “Sign out” at the top of the app. This is immediate
+      and cannot be undone. It removes your sign-in account, your synced progress, and the record
+      of ad removal held against your account, and it clears the progress stored on the device you
+      delete from.</li>
+    <li><strong>If you cannot sign in:</strong> email
       <a href="mailto:steve@baroqueplusplus.com">steve@baroqueplusplus.com</a> from the address
-      you signed in with, and it will be deleted within 30 days. A record of a purchase may be
-      retained where required for tax or accounting purposes.</li>
+      you signed in with, and it will be deleted within 30 days.</li>
   </ul>
+  <p>A record of a purchase may be retained where required for tax or accounting purposes, and the
+  payment provider (Google Play or Stripe) keeps its own transaction records independently of this
+  app. Deleting your account does not request a refund. If you bought ad removal through Google
+  Play, that purchase stays attached to your Google account — “Restore purchase” will return it on
+  a new account.</p>
 
   <h2>Security</h2>
   <p>Sign-in is handled by Google Firebase Authentication, and cloud data is protected by access
