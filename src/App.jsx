@@ -755,26 +755,9 @@ export default function App() {
               </div>
               <div style={{display:"flex",alignItems:"center",gap:"0.6rem"}}>
                 <button onClick={signOutUser} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.75rem",cursor:"pointer"}}>Sign out</button>
-                <button onClick={() => { setDeleteConfirm(v => !v); setDeleteErr(""); }} aria-expanded={deleteConfirm} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.68rem",cursor:"pointer",padding:"0.1rem 0",textDecoration:"underline"}}>
-                  Delete account
-                </button>
               </div>
-              {deleteConfirm && (
-                <div style={{flexBasis:"100%",borderTop:"1px solid #33415560",paddingTop:"0.6rem"}}>
-                  <div style={{fontSize:"0.75rem",color:"#cbd5e1",marginBottom:"0.5rem"}}>
-                    Permanently delete your account and synced progress? This cannot be undone
-                    {adFree ? ", and your ad-free status will be removed from this account" : ""}.
-                    {adFree && FEATURES.nativePurchase ? " You can get it back with Restore purchase." : ""}
-                  </div>
-                  <div style={{display:"flex",gap:"0.4rem",alignItems:"center",flexWrap:"wrap"}}>
-                    <button onClick={deleteAccount} disabled={deleteBusy} style={{background:deleteBusy?"#334155":"#b91c1c",color:deleteBusy?"#64748b":"#fef2f2",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.78rem",fontWeight:600,cursor:deleteBusy?"not-allowed":"pointer"}}>
-                      {deleteBusy ? "Deleting…" : "Yes, delete everything"}
-                    </button>
-                    <button onClick={() => { setDeleteConfirm(false); setDeleteErr(""); }} disabled={deleteBusy} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.78rem",cursor:deleteBusy?"not-allowed":"pointer"}}>Cancel</button>
-                  </div>
-                  {deleteErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem",marginTop:"0.4rem"}}>{deleteErr}</div>}
-                </div>
-              )}
+              {/* "Delete account" used to sit next to Sign out, one mis-tap away from
+                  wiping an account. It now lives in the footer — see below. */}
             </>
           ) : (
             <>
@@ -919,6 +902,36 @@ export default function App() {
           </button>
         )}
       </div>
+
+      {/* Delete account — deliberately down here rather than beside "Sign out",
+          where a mis-tap could wipe an account that cannot be recovered. Play
+          still requires deletion to be reachable in-app, and the policy page
+          names this location, so it stays a plain visible control: buried, not
+          hidden. The toggle only reveals the confirmation; nothing is destroyed
+          until "Yes, delete everything". Shown only when signed in. */}
+      {firebaseEnabled && authReady && user && (
+        <div style={{textAlign:"center",marginTop:"0.5rem"}}>
+          <button onClick={() => { setDeleteConfirm(v => !v); setDeleteErr(""); }} aria-expanded={deleteConfirm} style={{background:"transparent",border:"none",color:"#475569",fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+            {deleteConfirm ? "Cancel" : "Delete account"}
+          </button>
+          {deleteConfirm && (
+            <div style={{maxWidth:300,margin:"0.6rem auto 0"}}>
+              <div style={{fontSize:"0.75rem",color:"#cbd5e1",marginBottom:"0.5rem"}}>
+                Permanently delete your account and synced progress? This cannot be undone
+                {adFree ? ", and your ad-free status will be removed from this account" : ""}.
+                {adFree && FEATURES.nativePurchase ? " You can get it back with Restore purchase." : ""}
+              </div>
+              <div style={{display:"flex",gap:"0.4rem",alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
+                <button onClick={deleteAccount} disabled={deleteBusy} style={{background:deleteBusy?"#334155":"#b91c1c",color:deleteBusy?"#64748b":"#fef2f2",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.78rem",fontWeight:600,cursor:deleteBusy?"not-allowed":"pointer"}}>
+                  {deleteBusy ? "Deleting…" : "Yes, delete everything"}
+                </button>
+                <button onClick={() => { setDeleteConfirm(false); setDeleteErr(""); }} disabled={deleteBusy} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.78rem",cursor:deleteBusy?"not-allowed":"pointer"}}>Cancel</button>
+              </div>
+              {deleteErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem",marginTop:"0.4rem"}}>{deleteErr}</div>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Admin login — the password sign-in, moved out of the account card so
           Google stays the only visible choice for ordinary users. Still the
