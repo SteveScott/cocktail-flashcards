@@ -148,6 +148,68 @@ function progressEqual(a, b) {
   return true;
 }
 
+const FIREWORK_COLORS = ["#fbbf24", "#f472b6", "#38bdf8", "#4ade80", "#c084fc", "#fb7185"];
+const FIREWORK_SPARKS = 12;
+const BURST_MS = 2400;   // must match the .fw-spark / .fw-fall animation duration
+const LAUNCH_MS = 520;   // gap between launches; ~5 bursts alive at any moment
+
+// Fireworks for a 100% quiz. Each burst is a fresh element launched on a timer
+// at a random spot, so the display never repeats itself -- as opposed to a fixed
+// set of shells on an infinite loop, where the eye picks out the cycle in a
+// couple of seconds and it stops reading as fireworks.
+function Fireworks() {
+  const [bursts, setBursts] = useState([]);
+  useEffect(() => {
+    // Nothing to launch if the viewer asked for less motion -- the CSS hides the
+    // overlay anyway, so without this we would churn state behind display:none.
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let id = 0;
+    // Colors come from a shuffled bag rather than an independent pick each time:
+    // free choice lets the same color land three launches running, which looks
+    // like a stuck palette. A bag guarantees all six appear before any repeats.
+    let bag = [];
+    const nextColor = () => {
+      if (!bag.length) {
+        bag = [...FIREWORK_COLORS];
+        for (let i = bag.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [bag[i], bag[j]] = [bag[j], bag[i]];
+        }
+      }
+      return bag.pop();
+    };
+    const launch = () => {
+      const now = Date.now();
+      const b = {
+        id: id++,
+        born: now,
+        // Kept off the edges, and out of the bottom third where the buttons are.
+        left: `${8 + Math.random() * 84}%`,
+        top: `${8 + Math.random() * 60}%`,
+        color: nextColor(),
+        dist: `${52 + Math.random() * 40}px`,
+      };
+      // Spent bursts are pruned here rather than each on its own timeout, so the
+      // interval is the only thing that ever needs cleaning up.
+      setBursts(v => [...v.filter(x => now - x.born < BURST_MS), b]);
+    };
+    launch();
+    const t = setInterval(launch, LAUNCH_MS);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="fw" aria-hidden="true">
+      {bursts.map(b => (
+        <div key={b.id} className="fw-shell" style={{left:b.left,top:b.top}}>
+          {Array.from({length:FIREWORK_SPARKS},(_,j)=>(
+            <div key={j} className="fw-spark" style={{"--fw-a":`${j*(360/FIREWORK_SPARKS)}deg`,"--fw-d":b.dist,"--fw-c":b.color}} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [st, setSt] = useState(() => loadLocal() || initState(false));
   const [mode, setMode] = useState("menu");
@@ -157,6 +219,9 @@ export default function App() {
   const [qi, setQi] = useState(0);
   const [qr, setQr] = useState(false);
   const [quizPool, setQuizPool] = useState([]);
+  // How many questions the last quiz was started with, so "Retry Quiz" repeats
+  // the same length instead of sending you back through the picker. null = all.
+  const [quizLen, setQuizLen] = useState(null);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
   const [user, setUser] = useState(null);
@@ -663,14 +728,18 @@ export default function App() {
   function next() { setDi(i => (i+1) % st.active.length); setRevealed(false); }
   function prev() { setDi(i => (i-1+st.active.length) % st.active.length); setRevealed(false); }
   // Build a fresh, fully-shuffled quiz order every time — quizzing always draws
-  // the whole pool in random sequence (Fisher–Yates), never the fixed pool order.
-  function startQuiz() {
+  // from the whole pool in random sequence (Fisher–Yates), never the fixed pool
+  // order. Shuffling before the slice is what makes a short quiz a random sample
+  // of the pool rather than its first n cocktails. n = null takes everything.
+  function startQuiz(n) {
     const q = [...pool];
     for (let i = q.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [q[i], q[j]] = [q[j], q[i]];
     }
-    setQuizPool(q); setQa([]); setQi(0); setQr(false); setMode("quiz");
+    setQuizLen(n ?? null);
+    setQuizPool(n ? q.slice(0, n) : q);
+    setQa([]); setQi(0); setQr(false); setMode("quiz");
   }
   function qGrade(k) {
     const ans = [...qa, k];
@@ -863,7 +932,7 @@ export default function App() {
       </div>
 
       <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn("#3b82f6"),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
-      <button onClick={startQuiz} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — All {total} Cocktails</button>
+      <button onClick={()=>setMode("quizlen")} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — Test Yourself</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
 
       <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"})}>
@@ -1094,6 +1163,34 @@ export default function App() {
     );
   }
 
+  // Length picker, shown on the way into a quiz. A quiz over 200 cocktails is a
+  // sitting few people want, so the length is asked for up front rather than
+  // buried in settings. Lengths at or past the pool size are dropped — they'd be
+  // duplicate "All" buttons (in the 50-cocktail pool, "50" IS all of them).
+  if (mode === "quizlen") {
+    const lengths = [10, 20, 50].filter(n => n < total);
+    const opt = (label, sub, onClick, bg) => (
+      <button key={label} onClick={onClick} style={{...btn(bg),width:"100%",marginBottom:"0.75rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span>{label}</span>
+        <span style={{fontSize:"0.8rem",fontWeight:600,opacity:0.75}}>{sub}</span>
+      </button>
+    );
+    return (
+      <div style={page}><div style={wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.75rem"}}>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
+        </div>
+        <div style={{textAlign:"center",marginBottom:"1.75rem"}}>
+          <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>🎯</div>
+          <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
+          <p style={{color:"#94a3b8",fontSize:"0.85rem",margin:0}}>Cocktails are drawn at random from all {total}.</p>
+        </div>
+        {lengths.map(n => opt(`${n} Questions`, "", ()=>startQuiz(n), "#7c3aed"))}
+        {opt("All Cocktails", `${total} questions`, ()=>startQuiz(null), "#4c1d95")}
+      </div></div>
+    );
+  }
+
   if (mode === "quiz") {
     const c = quizPool[qi];
     return (
@@ -1137,11 +1234,17 @@ export default function App() {
     const knew = qa.filter(Boolean).length;
     const pct = Math.round((knew/quizPool.length)*100);
     const missed = quizPool.filter((_,i)=>qa[i]===false);
+    // Score color reuses the deck's own green/amber ramp (see `col`) so a good
+    // quiz reads the same color as a mastered card.
+    const pctColor = pct >= 90 ? "#22c55e" : pct >= 70 ? "#f59e0b" : "#fa5252";
+    // Tested against the raw count, not `pct`: a 199/200 quiz rounds to 100% and
+    // must not get the fireworks. Only a genuine clean sweep does.
+    const perfect = quizPool.length > 0 && knew === quizPool.length;
     return (
       <div style={page}><div style={wrap}>
+        {perfect && <Fireworks />}
         <div style={{textAlign:"center",marginBottom:"2rem"}}>
-          <div style={{fontSize:"3rem",marginBottom:"0.5rem"}}>{pct>=80?"🏆":pct>=50?"📚":"💪"}</div>
-          <h2 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem"}}>{pct}%</h2>
+          <h2 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem",color:pctColor}}>{pct}%</h2>
           <p style={{color:"#94a3b8"}}>You knew {knew} out of {quizPool.length} cocktails</p>
         </div>
         {missed.length > 0 && (
@@ -1155,9 +1258,12 @@ export default function App() {
           </div>
         )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
-          <button onClick={startQuiz} style={btn("#7c3aed")}>Retry Quiz</button>
+          {/* Retries reshuffle at the length you already picked — the common case
+              is another round of the same size, not another trip to the picker. */}
+          <button onClick={()=>startQuiz(quizLen)} style={btn("#7c3aed")}>Retry Quiz</button>
           <button onClick={()=>setMode("menu")} style={btn("#1e293b")}>Menu</button>
         </div>
+        <button onClick={()=>setMode("quizlen")} style={{width:"100%",marginTop:"0.75rem",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#94a3b8",fontWeight:600,fontSize:"0.85rem",border:"none",cursor:"pointer",textDecoration:"underline"}}>Change quiz length</button>
       </div></div>
     );
   }
