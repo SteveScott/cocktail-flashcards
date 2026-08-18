@@ -45,7 +45,10 @@ calling them.
 
 ## Phase 0 — Lock the package name
 
-`capacitor.config.json` uses `com.cocktailflashcards.app`.
+`capacitor.config.json` uses `com.bpp.cocktailflashcards` — matching the existing
+Play Console listing. (It was originally `com.cocktailflashcards.app`; the rename
+touched `capacitor.config.json`, `android/app/build.gradle`, `strings.xml`, and
+the `MainActivity.java` package directory.)
 
 **If a Play Console listing already exists under a different package name,
 reconcile that now** — Play treats a different package as an entirely different
@@ -121,7 +124,7 @@ never appears in an Offering.
 
 The SDK can't work around a gap in any of these.
 
-1. **App.** Add the Android app with package `com.cocktailflashcards.app`, and
+1. **App.** Add the Android app with package `com.bpp.cocktailflashcards`, and
    upload the Play service-account credentials so RevenueCat can verify
    purchases.
 2. **Entitlement.** Create one whose display name is **Cocktail Flashcards Pro**.

@@ -1,4 +1,4 @@
-package com.cocktailflashcards.app;
+package com.bpp.cocktailflashcards;
 
 import com.getcapacitor.BridgeActivity;
 
