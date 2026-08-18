@@ -10,9 +10,14 @@ import { getAdmin } from "./_firebaseAdmin.mjs";
 // anyone who signed in more than a few minutes ago. The Admin SDK bypasses both:
 // it ignores security rules and does not care how old the session is.
 //
-// Order matters. The Firestore document goes first — if the auth user were
-// deleted first and the Firestore delete then failed, the document would be
-// orphaned under a uid that can never sign in again to retry.
+// Order matters. The Firestore documents go first — if the auth user were
+// deleted first and the Firestore delete then failed, they would be orphaned
+// under a uid that can never sign in again to retry.
+//
+// Doc id = the lowercased email, matching how the client writes it
+// (src/firebase.js → normalizeEmail).
+const AD_WHITELIST_COLLECTION = "adWhitelist";
+
 export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method not allowed" };
@@ -26,29 +31,40 @@ export async function handler(event) {
     return { statusCode: 401, body: JSON.stringify({ error: "Missing Authorization bearer token" }) };
   }
 
-  let admin, uid;
+  let admin, uid, email;
   try {
     admin = getAdmin();
     // checkRevoked: a token issued before a password change or a prior deletion
     // should not still authorize destroying data.
     const decoded = await admin.auth().verifyIdToken(idToken, true);
     uid = decoded.uid;
+    // Only ever the token's own email — never one supplied by the caller, which
+    // would let anyone remove another account's ad whitelisting.
+    email = (decoded.email || "").trim().toLowerCase();
   } catch (e) {
     console.error("Token verification failed", e);
     return { statusCode: 401, body: JSON.stringify({ error: "Invalid or expired sign-in token" }) };
   }
 
+  // Both deletes in one batch so the "Nothing was removed" message below stays
+  // true: a failure leaves the account exactly as it was, ready for a retry.
+  // Deleting a document that isn't there is a no-op, so the whitelist entry
+  // needs no existence check — most users never have one.
   try {
-    await admin.firestore().collection("users").doc(uid).delete();
+    const db = admin.firestore();
+    const batch = db.batch();
+    batch.delete(db.collection("users").doc(uid));
+    if (email) batch.delete(db.collection(AD_WHITELIST_COLLECTION).doc(email));
+    await batch.commit();
   } catch (e) {
-    console.error("Failed to delete user document", e);
+    console.error("Failed to delete user data", e);
     return { statusCode: 500, body: JSON.stringify({ error: "Could not delete your data. Nothing was removed." }) };
   }
 
   try {
     await admin.auth().deleteUser(uid);
   } catch (e) {
-    // The document is already gone, so report partial success rather than
+    // The documents are already gone, so report partial success rather than
     // implying nothing happened — a retry is safe, since deleting an absent
     // document is a no-op.
     console.error("Deleted user document but failed to delete auth user", uid, e);
