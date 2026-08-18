@@ -28,5 +28,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Affinity writes a <file>~lock~ sidecar next to any document it has open and
+# deletes it on close. Never worth committing — and it reappears every time the
+# store banner source is edited.
+*~lock~
+
 # Local scratch — anything under a directory named "ignore"
 ignore/
