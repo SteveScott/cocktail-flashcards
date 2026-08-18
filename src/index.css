@@ -174,3 +174,76 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* Fireworks, shown only for a clean sweep on the quiz results screen. Kept in
+   CSS rather than a rAF/canvas loop so the burst costs nothing on the JS thread
+   and stops dead when the screen unmounts. The overlay is inert -- the results
+   buttons underneath stay clickable. */
+.fw {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* One shell = one burst origin, mounted by JS at a random spot and unmounted
+   once spent. It drifts downward for the life of the burst so the sparks arc
+   instead of flying out in a flat, obviously-geometric ring. */
+.fw-shell {
+  position: absolute;
+  width: 0;
+  height: 0;
+  animation: fw-fall 2.4s ease-in forwards;
+}
+
+/* Sparks sit on top of each other at the origin; --fw-a is the only thing that
+   separates them, so the burst is a rotate-then-translate fan. `forwards` holds
+   the final frame -- without it a spent spark snaps back to full opacity for the
+   moment between the animation ending and React unmounting it. */
+.fw-spark {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--fw-c);
+  box-shadow: 0 0 8px 1px var(--fw-c);
+  animation: fw-spark 2.4s ease-out forwards;
+}
+
+@keyframes fw-spark {
+  0% {
+    transform: rotate(var(--fw-a)) translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--fw-a)) translateY(var(--fw-d)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+@keyframes fw-fall {
+  0%,
+  6% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(34px);
+  }
+}
+
+/* The burst is decoration, not information -- the percentage already says 100%.
+   Anyone who has asked for less motion just doesn't get it. (The component also
+   declines to launch, so this is belt and braces.) */
+@media (prefers-reduced-motion: reduce) {
+  .fw {
+    display: none;
+  }
+}
