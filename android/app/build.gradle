@@ -16,10 +16,31 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    signingConfigs {
+        release {
+            if (project.hasProperty('RELEASE_STORE_FILE')) {
+                storeFile file(RELEASE_STORE_FILE)
+                storePassword RELEASE_STORE_PASSWORD
+                keyAlias RELEASE_KEY_ALIAS
+                keyPassword RELEASE_KEY_PASSWORD
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Ship native debug symbols inside the bundle so Play can
+            // symbolicate crashes and ANRs. None of the native code is ours --
+            // it is the .so libraries the AdMob and RevenueCat plugins carry --
+            // and without symbols a crash in one of them reports as bare hex
+            // addresses. Play warns on every upload that omits them.
+            ndk {
+                debugSymbolLevel = 'FULL'
+            }
         }
     }
 }
