@@ -1,5 +1,5 @@
 {
-  "appId": "com.cocktailflashcards.app",
+  "appId": "com.bpp.cocktailflashcards",
   "appName": "Cocktail Flashcards",
   "webDir": "dist",
   "server": {
