@@ -938,7 +938,7 @@ export default function App() {
       <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"})}>
         <div>
           <div style={{fontWeight:700,color:"#f8fafc"}}>Master Mode</div>
-          <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>Expand pool to 200 cocktails</div>
+          <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>Expand pool to {ALL_200.length} cocktails</div>
         </div>
         <button onClick={toggleMaster} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:st.masterMode?"#f59e0b":"#334155",transition:"background 0.3s"}}>
           <div style={{position:"absolute",top:3,left:st.masterMode?27:3,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left 0.3s"}} />
