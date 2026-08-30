@@ -24,7 +24,7 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Only manage same-origin GETs. Let Firebase, Stripe, AdSense, fonts, etc.
+  // Only manage same-origin GETs. Let Firebase, Stripe, the ad tag, fonts, etc.
   // go straight to the network untouched.
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
 

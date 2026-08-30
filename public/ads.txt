@@ -1,0 +1,10 @@
+# ads.txt — authorised digital sellers (IAB spec).
+#
+# Served at https://cocktailflashcards.com/ads.txt, which is the only place ad
+# networks look. Netlify publishes everything in public/ at the site root, so no
+# redirect is needed.
+#
+# TODO: paste the exact line(s) from the PropellerAds dashboard
+# (Sites -> your site -> ads.txt) below and delete this notice. They are
+# account-specific and must be copied verbatim -- a guessed publisher id simply
+# fails verification.

@@ -5,10 +5,11 @@ web/content changes still carry over without resubmitting — but adds a native
 layer for **AdMob** banner ads and **Google Play Billing** (via **RevenueCat**)
 for the one-time "remove ads" purchase.
 
-Web behavior is unchanged: on the web the app still uses AdSense + Stripe. The
-native path only activates when the Capacitor plugin bridge is present, detected
-in `src/platform.js` as `isCapacitorApp`. (`isPlayApp` is the broader flag that
-hides AdSense and Stripe for store-policy reasons; don't gate plugin calls on it.)
+The web path is separate: on the web the app uses **PropellerAds** (`src/ads.js`)
+plus Stripe. The native path only activates when the Capacitor plugin bridge is
+present, detected in `src/platform.js` as `isCapacitorApp`. (`isPlayApp` is the
+broader flag that hides the web ad tag and Stripe for store-policy reasons; don't
+gate plugin calls on it.)
 
 **Part 1 is the release walkthrough** — do it in order. **Part 2 is reference** —
 how the machinery works once it's running.
@@ -329,7 +330,9 @@ registration, so run it after any dependency change.
 
 ## Policy reminders
 
-- Ads = **AdMob only** (never AdSense) inside the app.
+- Ads = **AdMob only** (never the web ad tag) inside the app. `FEATURES.ads` is
+  false in the Play build, so `src/ads.js` never loads there.
 - Digital purchase = **Play Billing only** (never Stripe) inside the app.
 - A **Restore purchase** path is required by Play — it's implemented.
-- Consent must come from a Google-certified CMP (UMP) — see [consent.md](consent.md).
+- In-app consent must come from a Google-certified CMP (UMP). The web now uses
+  its own banner instead — see [consent.md](consent.md).

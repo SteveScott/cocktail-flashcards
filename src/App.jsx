@@ -7,7 +7,8 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
-import { openPrivacySettings, onGdprApplicable } from './consent';
+import { openPrivacySettings, initConsent, onConsentChange, getConsentState } from './consent';
+import { loadAds, unloadAds } from './ads';
 import {
   initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
   linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
@@ -30,17 +31,6 @@ const FACEBOOK_LOGIN_ENABLED = false;
 // access control must come from Firestore security rules (see README).
 const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || "")
   .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
-
-const ADSENSE_SCRIPT_ID = "adsbygoogle-script";
-function loadAdsenseScript() {
-  if (document.getElementById(ADSENSE_SCRIPT_ID)) return;
-  const script = document.createElement("script");
-  script.id = ADSENSE_SCRIPT_ID;
-  script.async = true;
-  script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3044363631644079";
-  script.crossOrigin = "anonymous";
-  document.head.appendChild(script);
-}
 
 const GLASS_ICONS = [
   ["champagne", "🥂"],
@@ -245,9 +235,11 @@ export default function App() {
   // uid rather than a boolean so switching accounts invalidates it on its own,
   // and so it can't be stale-true for the previous user.
   const [linkedUid, setLinkedUid] = useState(null);
-  // Web only: whether GDPR applies to this visitor, per Google's TCF data. Gates
-  // the "Privacy & cookie settings" link, which is meaningless outside scope.
-  const [gdprApplies, setGdprApplies] = useState(false);
+  // Web only: this visitor's consent state (src/consent.js). `required` gates the
+  // "Privacy & cookie settings" link, which is meaningless outside scope, and
+  // `adsAllowed` gates the ad tag itself. The banner that collects the choice is
+  // mounted beside <App/> in main.jsx.
+  const [consent, setConsent] = useState(() => getConsentState());
   // Android only: whether Google's UMP wants us to offer a way back into the
   // consent choice (it does in the EEA/UK once a choice has been made).
   const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(false);
@@ -436,22 +428,29 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authReady, user]);
 
-  // Only load the AdSense script once we know the current user isn't ad-free.
-  // Never load it in the Play Store build — AdSense-in-app breaks program policy.
+  // Load the PropellerAds tag only once we know the visitor isn't ad-free and
+  // consent allows it. Never in the Play Store build, which serves AdMob instead
+  // (see monetization.js) — FEATURES.ads is false there.
   //
-  // Deliberately NOT gated on consent: Google's GDPR message is delivered by
-  // this very tag, so blocking it would block the consent prompt itself. Ads are
-  // withheld until consent by Google's CMP, and Consent Mode defaults (index.html)
-  // keep storage denied across the EEA/UK/CH until the user decides.
+  // Unlike the AdSense tag this replaced, it IS gated on consent. AdSense had to
+  // load before the user decided because it carried Google's consent message
+  // with it; PropellerAds ships no such thing, and our own banner is already up,
+  // so there is nothing to lose by waiting for an answer.
   useEffect(() => {
-    if (!FEATURES.ads || !adCheckDone || adFree) return;
-    loadAdsenseScript();
-  }, [adCheckDone, adFree]);
+    if (!FEATURES.ads || !adCheckDone) return;
+    // Covers buying ad removal or withdrawing consent mid-session, when the tag
+    // may already be on the page.
+    if (adFree || !consent.adsAllowed) { unloadAds(); return; }
+    loadAds();
+  }, [adCheckDone, adFree, consent.adsAllowed]);
 
-  // Show the privacy-settings link only where GDPR applies (web build).
+  // Replay a stored consent decision into Google Consent Mode on startup, and
+  // keep React in step with later changes (accept, decline, or a withdrawal via
+  // the footer link).
   useEffect(() => {
     if (!FEATURES.ads) return;
-    onGdprApplicable(applies => setGdprApplies(applies));
+    initConsent();
+    return onConsentChange(setConsent);
   }, []);
 
   // Play (Capacitor) build: initialize AdMob + Play Billing once, and adopt any
@@ -960,7 +959,7 @@ export default function App() {
           form instead, since that's where the choice was made. */}
       <div style={{textAlign:"center",marginTop:"0.5rem",fontSize:"0.75rem",color:"#64748b",display:"flex",gap:"0.75rem",justifyContent:"center",flexWrap:"wrap"}}>
         <a href="/privacy" style={{color:"#64748b"}}>Privacy Policy</a>
-        {FEATURES.ads && gdprApplies && (
+        {FEATURES.ads && consent.required && (
           <button onClick={openPrivacySettings} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
             Privacy &amp; cookie settings
           </button>
