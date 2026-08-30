@@ -5,9 +5,13 @@
 //
 // Only in-page formats are used (Native Banner / In-Page Push). Deliberately NOT
 // PropellerAds' popunder or browser-push formats: browser push registers its own
-// service worker, which would fight public/sw.js and break the PWA's offline
-// shell, and popunders/interstitials risk Play's disruptive-ads policy if one
-// ever surfaced inside the Capacitor webview.
+// service worker, which would fight the PWA worker (public/pwa-sw.js) and break
+// its offline shell, and popunders/interstitials risk Play's disruptive-ads
+// policy if one ever surfaced inside the Capacitor webview.
+//
+// Note that PropellerAds' verification file at public/sw.js is a separate thing
+// and is inert: a service worker script does nothing until something registers
+// it, and nothing here does.
 //
 // Config (Vite inlines VITE_* at build time — and because the Capacitor shell
 // loads the deployed site, the build that reaches users is NETLIFY'S, so set
