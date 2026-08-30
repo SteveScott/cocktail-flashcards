@@ -3,8 +3,8 @@
 // The Play Store build (Capacitor) loads the SAME live site as the web, so we
 // can't gate features at build time — we detect at runtime whether we're running
 // inside the store app and switch off features that violate Play policy there
-// (AdSense-in-app, and Stripe purchases of digital goods, which Play requires to
-// go through Google Play Billing).
+// (web display ads in-app, and Stripe purchases of digital goods, which Play
+// requires to go through Google Play Billing).
 //
 // How the flag is set:
 //   - `window.Capacitor` exists in the native shell, on every in-app navigation.
@@ -33,9 +33,9 @@ export const isPlayApp = detectPlayApp();
 // Narrower than isPlayApp: is the native plugin bridge actually present?
 //
 // isPlayApp also answers true on the `?platform=play` URL flag alone, which is
-// the right call for hiding AdSense and Stripe (better to suppress them a moment
-// early than to breach store policy) but the wrong one for anything that calls a
-// plugin — that needs the bridge itself, or the call fails.
+// the right call for hiding the web ad tag and Stripe (better to suppress them a
+// moment early than to breach store policy) but the wrong one for anything that
+// calls a plugin — that needs the bridge itself, or the call fails.
 function detectCapacitorApp() {
   if (typeof window === "undefined") return false;
   const cap = window.Capacitor;
@@ -52,10 +52,11 @@ export const isCapacitorApp = detectCapacitorApp();
 
 export const FEATURES = {
   // Web monetization — only on the web build:
-  //   AdSense-for-content inside an app webview violates AdSense program policy,
-  //   and selling ad removal via Stripe inside a Play app breaks the Play
-  //   Billing requirement for digital goods.
-  ads: !isPlayApp,            // web AdSense
+  //   Web display ads (PropellerAds, see src/ads.js) must not run inside the app
+  //   webview, where AdMob serves instead and Play's disruptive-ads policy
+  //   applies; and selling ad removal via Stripe inside a Play app breaks the
+  //   Play Billing requirement for digital goods.
+  ads: !isPlayApp,            // web display ads (PropellerAds)
   stripePurchase: !isPlayApp, // web Stripe checkout
 
   // Native monetization — only where the Capacitor bridge exists:
