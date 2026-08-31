@@ -4,7 +4,73 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cocktail Flashcards</title>
+
+    <!-- ── SEO ──────────────────────────────────────────────────────────────
+         These live in the STATIC index.html on purpose. The app is a
+         client-rendered SPA, so a crawler's first fetch sees an empty
+         <div id="root"> and nothing else — anything set from React would only
+         be seen on a second, render-queued pass, if at all. Keeping title,
+         description and canonical here means they're in the very first byte
+         stream Google reads.
+
+         Keep the description under ~160 characters; past that Google truncates
+         it in the result. Mobile cuts nearer 120, which is why the number and
+         the differentiators come first and the audience note comes last. -->
+    <title>Cocktail Flashcards — Learn 300+ Classic Drink Recipes</title>
+    <meta
+      name="description"
+      content="Memorize 300+ classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices. Built for bartenders."
+    />
+    <!-- The Play app loads this same site at /?platform=play (see
+         capacitor.config.json). Without this, that URL is a duplicate of the
+         homepage competing with it. Canonical consolidates them — deliberately
+         NOT a robots.txt Disallow, which would stop the crawler ever reading
+         this tag. -->
+    <link rel="canonical" href="https://cocktailflashcards.com/" />
+
+    <!-- Social sharing (Facebook, iMessage, Slack, Discord, X). Without these,
+         a shared link renders as a bare URL with no title or image. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Cocktail Flashcards" />
+    <meta property="og:title" content="Cocktail Flashcards — Learn 300+ Classic Drink Recipes" />
+    <meta property="og:description" content="Memorize 300+ classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices." />
+    <meta property="og:url" content="https://cocktailflashcards.com/" />
+    <meta property="og:image" content="https://cocktailflashcards.com/og-image.jpg" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1252" />
+    <meta property="og:image:alt" content="Classic cocktails on a dark bar top" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Cocktail Flashcards — Learn 300+ Classic Drink Recipes" />
+    <meta name="twitter:description" content="Memorize 300+ classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices." />
+    <meta name="twitter:image" content="https://cocktailflashcards.com/og-image.jpg" />
+
+    <!-- Structured data. Deliberately carries NO aggregateRating: there are no
+         real ratings to report, and inventing them is exactly what Google's
+         structured-data spam policy penalizes. Add it only when the Play
+         listing has genuine numbers to mirror. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Cocktail Flashcards",
+      "url": "https://cocktailflashcards.com/",
+      "description": "Spaced-repetition flashcards and quizzes for memorizing 300+ classic cocktail recipes, including ingredients, ratios and glassware.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web browser, Android",
+      "inLanguage": "en",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "featureList": [
+        "322 classic cocktail recipes",
+        "Spaced-repetition flashcards",
+        "Quiz mode with scoring",
+        "Progress syncing across devices",
+        "Works offline"
+      ]
+    }
+    </script>
+
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

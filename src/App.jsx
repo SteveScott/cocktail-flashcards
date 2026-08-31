@@ -7,6 +7,7 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
+import { norm, getMethod } from './recipe-meta';
 import { openPrivacySettings, initConsent, onConsentChange, getConsentState } from './consent';
 import { loadAds, unloadAds } from './ads';
 import {
@@ -53,28 +54,6 @@ const GLASS_ICONS = [
   ["sling", "🥤"],
   ["zombie", "🥤"],
 ];
-
-const BUILT_GLASSES = /highball|collins|copper mug|pint|wine|sling|zombie/;
-const BUILT_MIXERS = /soda water|tonic|ginger beer|coca-cola|\bcola\b|tomato juice|clamato|beer|champagne|prosecco|tequila blanco|grapefruit soda|lemonade/;
-
-// Fold text to lowercase ASCII so accented characters match their plain form
-// (e.g. "piña" and "pina", "crème" and "creme") in search.
-function norm(s) {
-  return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-}
-
-function getMethod(c) {
-  const name = c.name.toLowerCase();
-  const ing = c.ingredients.toLowerCase();
-  const glass = (c.glass || "").toLowerCase();
-
-  if (/blend|frozen/.test(name) || /blend/.test(ing)) return "Blended";
-  if (/layered/.test(ing)) return "Layered";
-  if (BUILT_GLASSES.test(glass) && BUILT_MIXERS.test(ing)) return "Built";
-  if (/egg white|egg\b|heavy cream|cream of coconut|coconut cream|purée|puree|half-and-half/.test(ing)) return "Shaken";
-  if (/fresh (lime|lemon|grapefruit|orange) juice|simple syrup|honey syrup|grenadine|orgeat|agave nectar|\bsyrup\b/.test(ing)) return "Shaken";
-  return "Stirred";
-}
 
 function initState(masterMode) {
   const pool = masterMode ? ALL_200 : top50;

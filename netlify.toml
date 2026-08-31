@@ -20,6 +20,13 @@
   to = "/privacy.html"
   status = 200
 
+# SPA catch-all. MUST stay last.
+#
+# The generated recipe pages (/cocktails/<slug>/, see scripts/seo-pages.mjs) are
+# real files in dist, and Netlify serves an existing file in preference to a
+# rewrite rule — so this does not swallow them. That precedence is exactly why
+# the rule below must never gain `force = true`: forcing it would shadow all 321
+# static pages with the empty app shell and silently undo the whole of docs/seo.md.
 [[redirects]]
   from = "/*"
   to = "/index.html"
