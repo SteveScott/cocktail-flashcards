@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Cocktail Flashcards",
   "short_name": "Cocktails",
-  "description": "Learn 200 classic cocktail recipes with spaced-repetition flashcards",
+  "description": "Memorize 300+ classic cocktail recipes with spaced-repetition flashcards and quizzes",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
