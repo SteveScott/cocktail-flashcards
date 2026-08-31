@@ -18,6 +18,16 @@ import {
 } from './monetization';
 
 const { top50, master150 } = cocktailData;
+
+// Whether RevenueCat actually has an SDK key behind it. Deliberately NOT the
+// same question as FEATURES.nativePurchase: that only says we're in the Play
+// shell, while the key is inlined from the env of the build that reaches users
+// — Netlify's, since the shell loads the deployed site (see
+// docs/mobile-monetization.md). With the key absent every purchase call fails,
+// so the Pro UI is hidden outright rather than shown as a button whose only
+// possible answer is "purchases aren't available in this build".
+const billingReady = isBillingAvailable();
+
 const ALL_200 = [...top50, ...master150];
 
 const DECK_SIZE = 20;
@@ -824,12 +834,13 @@ export default function App() {
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
-            {purchasing ? "Redirecting…" : "🚫 Remove Ads — $12.99"}
+            {purchasing ? "Redirecting…" : "🚫 Remove Ads — $4.99"}
           </button>
         </div>
       )}
-      {/* Play (Capacitor) build: RevenueCat paywall + restore. */}
-      {FEATURES.nativePurchase && !adFree && (
+      {/* Play (Capacitor) build: RevenueCat paywall + restore. Gated on
+          billingReady, not FEATURES.nativePurchase — see above. */}
+      {billingReady && !adFree && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
@@ -853,7 +864,7 @@ export default function App() {
       )}
       {/* Already Pro in the Play build: Customer Center handles restore, refund
           requests, and subscription management without a support email. */}
-      {FEATURES.nativePurchase && adFree && adsRemovedNative && (
+      {billingReady && adFree && adsRemovedNative && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>✨ Cocktail Flashcards Pro is active</div>
           <button onClick={openCustomerCenter} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
@@ -966,7 +977,7 @@ export default function App() {
               <div style={{fontSize:"0.75rem",color:"#cbd5e1",marginBottom:"0.5rem"}}>
                 Permanently delete your account and synced progress? This cannot be undone
                 {adFree ? ", and your ad-free status will be removed from this account" : ""}.
-                {adFree && FEATURES.nativePurchase ? " You can get it back with Restore purchase." : ""}
+                {adFree && billingReady ? " You can get it back with Restore purchase." : ""}
               </div>
               <div style={{display:"flex",gap:"0.4rem",alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
                 <button onClick={deleteAccount} disabled={deleteBusy} style={{background:deleteBusy?"#334155":"#b91c1c",color:deleteBusy?"#64748b":"#fef2f2",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.78rem",fontWeight:600,cursor:deleteBusy?"not-allowed":"pointer"}}>

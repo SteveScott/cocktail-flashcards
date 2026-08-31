@@ -6,10 +6,17 @@
 //
 // This only needs to be run once per Stripe account (test mode and live mode
 // each need their own product/price, so run it once per mode).
+//
+// CHANGING THE PRICE: a Stripe Price is immutable, so editing PRICE_CENTS and
+// re-running does not reprice the old one -- it mints a NEW price, and nothing
+// changes for buyers until STRIPE_PRICE_ID in Netlify points at it. Keep the
+// value in step with the Play Store product and with the button label in
+// src/App.jsx; the two storefronts selling the same thing at different prices
+// is how refund requests start.
 import Stripe from "stripe";
 
 const MANAGED_PAYMENTS_API_VERSION = "2026-02-25.preview";
-const PRICE_CENTS = 1299; // $12.99
+const PRICE_CENTS = 499; // $4.99
 const CURRENCY = "usd";
 
 if (!process.env.STRIPE_SECRET_KEY) {
