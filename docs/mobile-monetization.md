@@ -16,13 +16,24 @@ how the machinery works once it's running.
 
 ## Where things stand
 
+As of 2026-08-31. Part 1 below is the original walkthrough and is kept as a
+reference for the order things have to happen in; this table is what is actually
+done.
+
 | | |
 |---|---|
-| App code | ✅ done — `src/monetization.js`, `src/platform.js`, `src/App.jsx` |
+| App code | ✅ `src/monetization.js`, `src/platform.js`, `src/App.jsx`. The Pro UI is gated on `isBillingAvailable()`, so it hides itself rather than erroring when no SDK key is deployed. |
 | Plugins installed | ✅ `@capacitor-community/admob`, `@revenuecat/purchases-capacitor` + `-ui` |
 | `capacitor.config.json` | ✅ app id, `server.url` → the live site with `?platform=play` |
-| `android/` native project | ❌ not generated yet — `npx cap add android` has never run |
-| Accounts, dashboards, IDs | ❌ all of Part 1 |
+| `android/` native project | ✅ generated and checked in, currently versionCode 4 / versionName 1.2.1 |
+| Signing | ✅ upload keystore at `ignore/key` (alias `Cocktail Flashcards Key`), wired up through the gitignored `android/gradle.properties`. Cert SHA-256 `5A:8F:CA:C5:…` matches what Play has registered. |
+| Play Console | ✅ live on the closed testing (Alpha) track — store listing, app content and content rating reviewed and published 2026-08-21 |
+| In-app product | ✅ `lifetime`, one-time managed, $4.99, activated |
+| Stripe | ✅ web price also $4.99 — see the note in `scripts/create-remove-ads-product.mjs` about Prices being immutable |
+| RevenueCat | ⏳ Android app added with the `revenuecat-play` service account. Entitlement, offering and paywall still to configure. |
+| AdMob | ⏳ App ID is in `AndroidManifest.xml`. Banner ad unit and the GDPR consent message still to create. |
+| Netlify env | ⏳ `VITE_REVENUECAT_ANDROID_KEY` not set, so purchases are inert and the Pro card stays hidden. `VITE_ADMOB_BANNER_ID` deliberately blank so test banners serve during the closed test. |
+| Testers | ⏳ Google Group created and submitted for review; the 14-day clock starts once 12 are opted in. |
 
 ---
 
