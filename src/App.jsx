@@ -9,7 +9,7 @@ import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
 import { norm, getMethod } from './recipe-meta';
 import { openPrivacySettings, initConsent, onConsentChange, getConsentState } from './consent';
-import { loadAds, unloadAds } from './ads';
+import { loadAds, unloadAds, isAdNetworkConfigured } from './ads';
 import {
   initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
   linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
@@ -248,6 +248,15 @@ export default function App() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
   const adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative;
+
+  // Is this visitor actually being served web ads right now? Selling ad removal
+  // when the answer is no leaves a greyed-out "Remove Ads" button advertising a
+  // product that would change nothing — which reads as broken rather than as
+  // "there's nothing here to remove". Mirrors the load gate below: the ad
+  // network has to be configured for this build (with the PropellerAds env vars
+  // unset the tag never loads at all), consent has to allow it, and the user
+  // must not already be ad-free.
+  const webAdsServed = FEATURES.ads && isAdNetworkConfigured && consent.adsAllowed && !adFree;
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
@@ -830,7 +839,7 @@ export default function App() {
         </div>
       )}
 
-      {FEATURES.stripePurchase && firebaseEnabled && authReady && !adFree && (
+      {FEATURES.stripePurchase && webAdsServed && firebaseEnabled && authReady && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
