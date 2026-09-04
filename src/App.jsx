@@ -975,7 +975,7 @@ export default function App() {
         Intended for ages 21+. Please drink responsibly.
       </div>
       <div style={{textAlign:"center",marginTop:"0.75rem",fontSize:"0.75rem",color:"#64748b"}}>
-        Questions or feedback? <a href="mailto:steve@baroqueplusplus.com" style={{color:"#94a3b8"}}>steve@baroqueplusplus.com</a>
+        Questions or feedback? <a href="mailto:steve@cocktailflashcards.com" style={{color:"#94a3b8"}}>steve@cocktailflashcards.com</a>
       </div>
       {/* Play requires the policy to be reachable from inside the app, not just
           from the store listing. Served as a static page, so it renders even if
