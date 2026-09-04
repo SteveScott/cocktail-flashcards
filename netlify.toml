@@ -9,8 +9,14 @@
 # Firebase's client-side config values (below) are not secrets — security is enforced by
 # Firestore security rules, not by hiding these. Skip Netlify's secret scanner for them so
 # builds don't fail when these values coincidentally match strings elsewhere in the repo.
+#
+# VITE_ADMIN_EMAILS belongs on this list for the same reason. Every VITE_ variable is
+# inlined into the client bundle by design, and this one only hides the admin UI — the
+# actual boundary is the admins() list in firestore.rules, which already carries the same
+# addresses in plaintext. Without the exemption the scanner finds it in dist/assets and
+# fails every build with exit code 2.
 [build.environment]
-  SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID"
+  SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID,VITE_ADMIN_EMAILS"
 
 # The Android app config carries the same kind of public Firebase client key, but as a
 # literal in a committed file rather than an env var — so SECRETS_SCAN_OMIT_KEYS above
