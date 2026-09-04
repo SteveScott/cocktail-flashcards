@@ -54,8 +54,10 @@ to write and no drift risk — `src/cocktails.json` stays the single source.
 
 ### Why the pages aren't thin
 
-This matters more than usual here, because the site has been rejected by **both**
-AdSense and PropellerAds. Mass-generated pages are their own rejection category —
+This matters more than usual here, because the site has been rejected by AdSense
+once already, and AdSense is the ad network again (PropellerAds, tried in
+between, does not permit alcohol advertising). Mass-generated pages are their own
+rejection category —
 "scraped or auto-generated content with little added value" — so 321 pages
 carrying nothing but a name and an ingredient line would deepen the hole rather
 than fill it.

@@ -75,20 +75,20 @@
     <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Cocktails" />
-    <!-- The ad tag (PropellerAds) is injected dynamically from src/App.jsx so
-         that ad-free users never have it loaded at all. See src/ads.js. -->
+    <!-- AdSense (adsbygoogle.js) is injected dynamically from src/App.jsx so that
+         ad-free users never have it loaded at all. See src/ads.js. -->
     <!-- Google Consent Mode v2 defaults. This block MUST stay above the gtag
          loader: consent has to be resolved before any Google tag runs, or the
          first pageview is already sent with storage enabled.
 
          Region-scoped, per Google's documented pattern — denied everywhere the
-         EEA/UK/CH rules apply, granted elsewhere. These are updated once an
-         in-scope user chooses, by our own consent banner (src/consent.js →
-         gtag('consent','update')). That call is what keeps Google Analytics
-         working in Europe: the site no longer runs AdSense, and Google's message
-         left with it, so nothing else would ever grant analytics_storage there.
-         A blanket denied default would switch analytics off worldwide, since
-         users outside scope are never shown a banner that could grant it. -->
+         EEA/UK/CH rules apply, granted elsewhere. Google's own consent message
+         (AdSense → Privacy & messaging), delivered by the AdSense tag, updates
+         these once an in-scope user chooses — which is also what keeps Google
+         Analytics alive in Europe, since nothing else there ever grants
+         analytics_storage. A blanket denied default would switch analytics off
+         worldwide, since users outside scope are never shown a message that
+         could grant it. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}

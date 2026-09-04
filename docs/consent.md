@@ -1,30 +1,36 @@
 # Ad & analytics consent (GDPR / ePrivacy)
 
-The two platforms now work differently, and the reason matters.
+The two platforms work differently, and the reason matters.
 
 | | Web | Android app |
 |---|---|---|
-| Ads | PropellerAds | AdMob |
-| Consent UI | our own banner (`src/ConsentBanner.jsx`) | Google UMP native dialog |
-| Delivered by | the app bundle | the AdMob SDK |
-| Signals | Consent Mode v2, region-scoped | `canRequestAds` from UMP |
+| Ads | Google AdSense | AdMob |
+| Consent UI | Google Funding Choices (`window.googlefc`) | Google UMP native dialog |
+| Delivered by | the AdSense tag | the AdMob SDK |
+| Signals | Consent Mode v2, region-scoped + IAB TCF | `canRequestAds` from UMP |
 | Change/withdraw | "Privacy & cookie settings" on the menu | "Ad privacy options" on the menu |
 
 ## Web
 
-### Why this is hand-rolled
+### Why the CMP is Google's, not ours
 
-The site used to run AdSense, whose tag also delivered Google's Funding Choices
-consent message — a certified CMP, for free, with no UI of ours. AdSense rejected
-the site on content grounds and is not being re-enabled, so that message went
-away with it. PropellerAds ships no consent UI, so the banner is ours now.
+Serving AdSense in the EEA/UK requires a Google-certified, IAB TCF CMP. Funding
+Choices is one, it is free, and it arrives on the AdSense tag itself — no UI of
+ours to build, certify or keep certified. A hand-rolled banner cannot satisfy
+that requirement no matter how carefully it is written.
 
-**The non-obvious casualty was Google Analytics.** `index.html` defaults
-`analytics_storage` to *denied* across the EEA/UK/CH, and the only thing that
-ever flipped it to granted was Google's own message. Analytics is staying, so
-`src/consent.js` must issue the `gtag('consent','update',…)` call that the
-AdSense tag used to — otherwise every European visitor silently disappears from
-Analytics forever.
+There was a self-hosted banner here for a while. It existed only because the site
+ran **PropellerAds** in between, which ships no consent UI at all — and it went
+when PropellerAds did (their inventory does not permit alcohol and beverage
+advertising, which is the whole subject of this site). With AdSense back, keeping
+that banner would have been actively wrong: an uncertified prompt gating EEA
+AdSense traffic, and two consent prompts competing for the same answer.
+
+**This is also what keeps Google Analytics alive in Europe.** `index.html`
+defaults `analytics_storage` to *denied* across the EEA/UK/CH, and Google's
+message is the only thing that ever flips it to granted there. During the
+PropellerAds period `src/consent.js` had to issue that `gtag('consent','update',…)`
+call itself; with the CMP back it rides in on the tag again.
 
 ### How it works
 
@@ -35,43 +41,76 @@ scoped per Google's documented pattern:
 - **granted** everywhere else (the unscoped fallback)
 
 Region-specific defaults win over the global one. A blanket `denied` would switch
-analytics off worldwide, because users outside scope are never shown a banner
+analytics off worldwide, because users outside scope are never shown a message
 that could grant it.
 
-`src/consent.js` holds the decision (localStorage, `cocktail_consent_v1`) and:
+Google's message, configured in **AdSense → Privacy & messaging**, resolves those
+defaults once an in-scope user chooses. `src/consent.js` is only the glue for
+revisiting that choice:
 
-- `consentRequired` — is this visitor in scope?
-- `needsConsentDecision()` — in scope and hasn't answered → raise the banner
-- `adsAllowed()` — out of scope, or an explicit grant. Undecided is treated
-  exactly like a refusal
-- `setConsent()` — persists, calls `gtag('consent','update',…)`, notifies React
-- `initConsent()` — replays a stored grant on startup, so a returning visitor
-  isn't stuck on the denied defaults
-- `openPrivacySettings()` — clears the decision, re-denies, and lets the banner
-  return
+- `openPrivacySettings()` — `googlefc.showRevocationMessage()`, so consent can be
+  withdrawn as easily as it was given, which the GDPR requires
+- `onGdprApplicable(cb)` — the TCF `gdprApplies` flag, so the "Privacy & cookie
+  settings" link is shown only to visitors it means anything for
 
-**Unlike the AdSense tag it replaced, the ad tag IS gated on consent**
-(`src/App.jsx` → `src/ads.js`). AdSense had to load before the user decided
-because it carried the consent prompt with it. PropellerAds carries nothing, and
-our banner is already on screen, so there is nothing to lose by waiting.
+### The ad tag is deliberately NOT gated on consent
 
-### Region detection is a time-zone guess
+`src/App.jsx` loads `src/ads.js` as soon as it knows the user isn't ad-free —
+before any consent decision. That is not an oversight. The consent prompt is
+delivered *by the AdSense tag*, so gating the tag on consent would block the
+prompt that produces the consent, and neither would ever happen.
 
-There is no IP geolocation in the browser, so `src/consent.js` matches the IANA
-time zone against `Europe/*` plus a few Atlantic zones. This **deliberately
-over-includes** — Russia, Türkiye and Serbia match too. Showing a banner to
-someone who didn't need one is harmless; skipping it for someone who did is not.
+What protects the user in the meantime is Google's own machinery: the CMP
+withholds ads until the choice is made, and the region-scoped Consent Mode
+defaults keep storage denied across the EEA/UK/CH regardless.
 
-It can under-detect (a VPN, or a traveller whose clock says `America/New_York`).
-Those visitors are treated as out of scope by the banner, while Google's own
-region-scoped defaults still deny their analytics storage by IP. The failure mode
-is lost analytics, never an unconsented tag.
+The one gate that does apply is ad removal — a paid-up user never fetches the
+script at all. There is no mid-session teardown, and `src/ads.js` explains why:
+removing the tag would take Funding Choices with it, and web ad removal goes
+through Stripe Checkout, which returns on a fresh page load anyway.
 
 ### Dashboard setup required
 
-None for consent — that is the point of owning it. PropellerAds still needs its
-zone configured (`VITE_PROPELLER_TAG_SRC`, `VITE_PROPELLER_ZONE_ID`) and its
-`ads.txt` line published at `public/ads.txt`.
+**AdSense console → Privacy & messaging → GDPR** — create a message, select the
+site, publish. Until then `googlefc.showRevocationMessage` is missing, the
+settings link logs an error and does nothing, and no consent message appears for
+European visitors.
+
+The site also needs to be **approved by AdSense** before any of this serves. It
+has been rejected before on content grounds. `public/ads.txt` carries the
+publisher line, and `VITE_ADSENSE_CLIENT` can be set to an empty string to switch
+web ads off entirely while a review is pending (see `.env.example`).
+
+**Ads → By ad unit → Display ads** — create one unit per placement and set
+`VITE_ADSENSE_SLOT_MENU` / `VITE_ADSENSE_SLOT_INDEX` to their ids. Ads are placed
+by hand, not by Auto ads (see below), so without these ids nothing renders no
+matter what else is configured.
+
+## Where web ads go, and what happens when they don't come
+
+`src/AdSlot.jsx` owns this. The app is a 480px column of tightly packed cards,
+which is the layout Auto ads handle worst: left to place themselves they either
+find nowhere and serve nothing, or wedge a unit between two controls. So the
+placements are explicit — currently the **menu** screen (below every control,
+above the legal footer) and the **index** screen (below the results list, outside
+its 60vh scroll box).
+
+Study and quiz screens are deliberately **not** placements. Both are rapid
+tap-tap-tap surfaces, which is the accidental-click pattern AdSense prohibits,
+and an ad mid-deck interrupts the one thing the app is for.
+
+Each slot reserves `minHeight` up front so an arriving ad lands in space already
+made for it, then **collapses to nothing** — unmounting, so margins go too — if
+the ad never comes. That happens three ways: AdSense reports `unfilled`, the push
+throws, or nothing answers within 5s. The last one is what covers an ad blocker,
+a blocked script, or an account still pending approval, none of which call back
+at all. Reserving and then giving the space back is a deliberate layout shift:
+the alternative is either a permanent blank hole or an ad that shoves the page
+down when it lands.
+
+The "Remove Ads" card keys off the same evidence — `areAdsServing()` in
+`src/ads.js` watches for a `data-ad-status="filled"` unit anywhere on the page —
+so a visitor who is served no ad is never offered the chance to remove one.
 
 ## Android
 
@@ -99,9 +138,9 @@ Test with `debugGeography: AdmobConsentDebugGeography.EEA` in
 `requestConsentInfo()` plus your device's test id, or you'll never see the form
 from outside Europe. `AdMob.resetConsentInfo()` re-prompts while testing.
 
-## Testing the web banner from outside the EEA
+## Testing the web consent message from outside the EEA
 
-The banner keys off the browser time zone, so no VPN is needed: set your machine
-(or the browser profile) to a European time zone and reload. Clear the
-`cocktail_consent_v1` localStorage key to get an undecided state back, or just
-use "Privacy & cookie settings" in the footer, which does the same thing.
+Google decides scope by IP, so unlike the old time-zone banner this genuinely
+needs a European IP — a VPN, or the AdSense message preview. Once a choice has
+been made, "Privacy & cookie settings" in the footer reopens it via
+`showRevocationMessage()`, which is the quickest way back to an undecided state.

@@ -2,12 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
-import ConsentBanner from './ConsentBanner.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
-    <ConsentBanner />
   </StrictMode>,
 )
 
@@ -15,17 +13,18 @@ createRoot(document.getElementById('root')).render(
 // inside the Capacitor shell's WebView, which loads this same site). Registered
 // after load so it never blocks first paint.
 //
-// It lives at /pwa-sw.js, not the conventional /sw.js, because PropellerAds
-// claimed that path: /sw.js is now their site-ownership verification file, which
-// their dashboard requires to stay put. Serving that file is harmless — a
-// service worker only does anything once something registers it, and nothing
-// here does.
+// It lives at /pwa-sw.js, not the conventional /sw.js. PropellerAds claimed that
+// path for a site-ownership file while it was the ad network; the network is gone
+// and the file with it, but the worker stays at /pwa-sw.js rather than moving
+// back — every visitor since has a registration pointing here, and a second move
+// would churn their offline shell for no gain.
 //
-// The unregister step is NOT optional. Every existing visitor already has a
-// registration whose script URL is /sw.js, and browsers re-fetch that URL to
-// check for updates. Leave it in place and the next update would hand them
-// PropellerAds' push worker — including inside the Play app, which loads this
-// same site. Dropping the old registration first is what prevents that.
+// The unregister step is what keeps that decision safe. Visitors from before the
+// move still have a registration whose script URL is /sw.js, and browsers
+// re-fetch that URL to check for updates. Nothing is served there now, so leaving
+// them alone would strand a worker this app no longer controls — including inside
+// the Play app, which loads this same site. Dropping the old registration first
+// is what prevents that. It should stay until it's safe to assume none survive.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {

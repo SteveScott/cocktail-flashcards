@@ -4,8 +4,8 @@
 // ---------------
 // The app is one client-rendered route. To a crawler that is a single page
 // containing no recipe text at all — every one of the 322 recipes is locked
-// inside an 840 KB JS bundle. That is almost certainly why both AdSense and
-// PropellerAds looked at the site and saw a thin shell.
+// inside an 840 KB JS bundle. That is almost certainly why AdSense looked at the
+// site and saw a thin shell.
 //
 // This plugin turns the JSON the app already ships into real HTML: one page per
 // drink, each with its own title, description, canonical and Recipe structured
