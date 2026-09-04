@@ -7,6 +7,7 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
+import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative } from './native-auth';
 import { norm, getMethod } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
@@ -244,6 +245,7 @@ export default function App() {
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [emailErr, setEmailErr] = useState("");
+  const [googleErr, setGoogleErr] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   // Account deletion — required by Play for any app that offers account creation.
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -505,8 +507,39 @@ export default function App() {
     listAdWhitelist().then(setWhitelist).catch(e => console.error("Failed to load ad whitelist", e));
   }, [isAdmin, showAdAdmin]);
 
+  // Which Android exceptions mean "the user backed out" rather than "it broke".
+  // The plugin passes Android's own exception text straight through and the
+  // wording shifts between OS versions, so match loosely rather than pinning an
+  // exact string.
+  function isSignInCancellation(e) {
+    return /cancel/i.test(e?.message || "");
+  }
+  function isNoAccountOnDevice(e) {
+    return /nocredential|no credentials/i.test(e?.message || "");
+  }
+
+  // Google sign-in takes one of two routes.
+  //
+  // In the store app the popup and redirect below are both dead ends — see
+  // src/native-auth.js — so hand off to Android's account picker. Everywhere
+  // else, and on store installs too old to carry the plugin, keep the popup
+  // with the redirect behind it.
   function signIn(provider = googleProvider) {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
+    setGoogleErr("");
+    if (provider === googleProvider && nativeGoogleSignInAvailable()) {
+      signInWithGoogleNative().catch(e => {
+        console.error("Native Google sign-in failed:", e.code, e.message, e);
+        // Dismissing the picker is a decision, not a fault — don't nag about it.
+        if (isSignInCancellation(e)) return;
+        setGoogleErr(
+          isNoAccountOnDevice(e)
+            ? "No Google account on this device. Add one in Android settings, then try again."
+            : "Google sign-in didn't complete. Check your connection and try again."
+        );
+      });
+      return;
+    }
     signInWithPopup(auth, provider).catch(e => {
       console.error("Popup sign-in failed:", e.code, e.message, e);
       // Popups can be closed prematurely by browser privacy settings or extensions — fall back to a full-page redirect.
@@ -544,6 +577,10 @@ export default function App() {
   }
   function signOutUser() {
     if (!firebaseEnabled) return;
+    setGoogleErr("");
+    // Fire-and-forget alongside the JS sign-out: this only drops the native
+    // account selection; the JS sign-out below is what ends the session.
+    signOutGoogleNative();
     signOut(auth).catch(e => console.error("Sign-out failed", e));
   }
 
@@ -852,6 +889,7 @@ export default function App() {
               <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>{firebaseEnabled ? "Sign in to sync progress" : "Cloud sync not configured"}</div>
               <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
                 <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
+                {googleErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem"}}>{googleErr}</div>}
                 {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":"#334155",color:firebaseEnabled?"#ffffff":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
               </div>
               {/* The password form used to sit here as "Use email instead". It now

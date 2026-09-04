@@ -13,4 +13,10 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+
+    // @capacitor-firebase/authentication ships the Google Sign-In and
+    // Credential Manager libraries as compileOnly unless this is set, so
+    // without it the app builds fine and then dies at runtime with
+    // NoClassDefFoundError the first time someone taps Sign in with Google.
+    rgcfaIncludeGoogle = true
 }
