@@ -4,7 +4,7 @@
 # networks look. Netlify publishes everything in public/ at the site root, so no
 # redirect is needed.
 #
-# TODO: paste the exact line(s) from the PropellerAds dashboard
-# (Sites -> your site -> ads.txt) below and delete this notice. They are
-# account-specific and must be copied verbatim -- a guessed publisher id simply
-# fails verification.
+# The publisher id must match VITE_ADSENSE_CLIENT in src/ads.js; f08c47fec0942fa0
+# is Google's own fixed certification authority id, the same for every AdSense
+# publisher, and is not a per-account secret.
+google.com, pub-3044363631644079, DIRECT, f08c47fec0942fa0

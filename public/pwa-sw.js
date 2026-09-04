@@ -1,9 +1,10 @@
 // Network-first service worker.
 //
-// Served from /pwa-sw.js rather than the conventional /sw.js: that path is taken
-// by PropellerAds' site-ownership verification file, which their dashboard
-// requires to remain in place. See src/main.jsx, which also unregisters the old
-// /sw.js registration so existing visitors don't inherit their push worker.
+// Served from /pwa-sw.js rather than the conventional /sw.js. That path was taken
+// by a PropellerAds verification file while it was the ad network; both are gone,
+// but the worker stays here rather than moving back, since every visitor since
+// the move is registered against this path. See src/main.jsx, which unregisters
+// any surviving /sw.js registration from before it.
 //
 // The Capacitor Play Store app loads the LIVE site, and this app is also a
 // PWA, so we deliberately prefer the network on every request and only fall

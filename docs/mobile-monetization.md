@@ -5,7 +5,7 @@ web/content changes still carry over without resubmitting — but adds a native
 layer for **AdMob** banner ads and **Google Play Billing** (via **RevenueCat**)
 for the one-time "remove ads" purchase.
 
-The web path is separate: on the web the app uses **PropellerAds** (`src/ads.js`)
+The web path is separate: on the web the app uses **Google AdSense** (`src/ads.js`)
 plus Stripe. The native path only activates when the Capacitor plugin bridge is
 present, detected in `src/platform.js` as `isCapacitorApp`. (`isPlayApp` is the
 broader flag that hides the web ad tag and Stripe for store-policy reasons; don't

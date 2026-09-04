@@ -17,19 +17,19 @@ itself** — it's a Capacitor app built in Android Studio. See
 
 ## Why it isn't at /sw.js
 
-PropellerAds verifies site ownership with a file it requires to be served at
-`/sw.js` and to stay there ("required for the proper Multitag functioning"), so
-that path is theirs. The PWA worker moved to `/pwa-sw.js`.
+PropellerAds claimed `/sw.js` for a site-ownership file during its brief run as
+the ad network, so the PWA worker moved to `/pwa-sw.js`. PropellerAds is gone and
+its file with it, but the worker **stays** at `/pwa-sw.js`: every visitor since
+the move is registered against that path, and moving back would churn their
+offline shell to regain nothing but a conventional filename.
 
-Serving their file is harmless on its own — a service worker script is inert
-until something calls `navigator.serviceWorker.register()` on it, and nothing in
-this app does. What is **not** harmless is the leftover registration: every
-visitor from before the move has one whose script URL is `/sw.js`, and browsers
-periodically re-fetch that URL to check for updates. Left alone, those visitors
-would quietly be handed PropellerAds' push worker — inside the Play app too,
-which loads this same site. `src/main.jsx` therefore unregisters any `/sw.js`
-registration before registering the new one. That cleanup should stay until it's
-safe to assume no old registrations survive.
+The leftover registration from *before* the move is the part that still matters.
+Those visitors have one whose script URL is `/sw.js`, and browsers periodically
+re-fetch that URL to check for updates. Nothing is served there now, so leaving
+them alone strands a worker this app no longer controls — inside the Play app
+too, which loads this same site. `src/main.jsx` therefore unregisters any
+`/sw.js` registration before registering the new one. That cleanup should stay
+until it's safe to assume no old registrations survive.
 
 ## Why network-first
 

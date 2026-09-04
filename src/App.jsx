@@ -8,8 +8,9 @@ import {
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
 import { norm, getMethod } from './recipe-meta';
-import { openPrivacySettings, initConsent, onConsentChange, getConsentState } from './consent';
-import { loadAds, unloadAds, isAdNetworkConfigured } from './ads';
+import { openPrivacySettings, onGdprApplicable } from './consent';
+import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
+import AdSlot from './AdSlot.jsx';
 import {
   initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
   linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
@@ -224,11 +225,12 @@ export default function App() {
   // uid rather than a boolean so switching accounts invalidates it on its own,
   // and so it can't be stale-true for the previous user.
   const [linkedUid, setLinkedUid] = useState(null);
-  // Web only: this visitor's consent state (src/consent.js). `required` gates the
-  // "Privacy & cookie settings" link, which is meaningless outside scope, and
-  // `adsAllowed` gates the ad tag itself. The banner that collects the choice is
-  // mounted beside <App/> in main.jsx.
-  const [consent, setConsent] = useState(() => getConsentState());
+  // Web only: whether GDPR applies to this visitor, per Google's TCF data. Gates
+  // the "Privacy & cookie settings" link, which is meaningless outside scope.
+  const [gdprApplies, setGdprApplies] = useState(false);
+  // Web only: has an ad actually rendered on this page? Starts false and flips
+  // once AdSense fills a unit — see areAdsServing() in src/ads.js.
+  const [adsServing, setAdsServing] = useState(() => areAdsServing());
   // Android only: whether Google's UMP wants us to offer a way back into the
   // consent choice (it does in the EEA/UK once a choice has been made).
   const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(false);
@@ -252,11 +254,29 @@ export default function App() {
   // Is this visitor actually being served web ads right now? Selling ad removal
   // when the answer is no leaves a greyed-out "Remove Ads" button advertising a
   // product that would change nothing — which reads as broken rather than as
-  // "there's nothing here to remove". Mirrors the load gate below: the ad
-  // network has to be configured for this build (with the PropellerAds env vars
-  // unset the tag never loads at all), consent has to allow it, and the user
-  // must not already be ad-free.
-  const webAdsServed = FEATURES.ads && isAdNetworkConfigured && consent.adsAllowed && !adFree;
+  // "there's nothing here to remove". Three things have to hold:
+  //
+  //   1. this is the web build (the Play build sells the same thing natively);
+  //   2. a publisher id is configured — VITE_ADSENSE_CLIENT set to an empty
+  //      string switches web ads off outright and the tag never loads;
+  //   3. an ad has actually rendered. Condition 2 is true on every normal build,
+  //      so it cannot carry this alone: the tag loads perfectly well against an
+  //      account AdSense hasn't approved, behind an ad blocker, or on a page
+  //      nothing filled, and renders nothing in all three cases. adsServing is
+  //      the page's own answer rather than a guess from config.
+  //
+  // ...and the user must not already be ad-free, which is what they'd be buying.
+  //
+  // Consent is deliberately not a term here. The AdSense tag loads before the
+  // user decides because it carries the consent prompt — but an undecided
+  // European visitor is shown no ad, so condition 3 already covers them without
+  // needing to reason about consent state separately.
+  //
+  // The split matters: the ad SLOTS render on eligibility, and adsServing only
+  // becomes true because one of them filled. Gating the slots on adsServing too
+  // would be circular — no slot, so no fill, so no slot.
+  const webAdsEligible = FEATURES.ads && isAdNetworkConfigured && !adFree;
+  const webAdsServed = webAdsEligible && adsServing;
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
@@ -426,29 +446,31 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authReady, user]);
 
-  // Load the PropellerAds tag only once we know the visitor isn't ad-free and
-  // consent allows it. Never in the Play Store build, which serves AdMob instead
-  // (see monetization.js) — FEATURES.ads is false there.
+  // Load the AdSense tag only once we know the current user isn't ad-free. Never
+  // in the Play Store build, which serves AdMob instead (see monetization.js) —
+  // FEATURES.ads is false there, and AdSense-in-app breaks AdSense program policy.
   //
-  // Unlike the AdSense tag this replaced, it IS gated on consent. AdSense had to
-  // load before the user decided because it carried Google's consent message
-  // with it; PropellerAds ships no such thing, and our own banner is already up,
-  // so there is nothing to lose by waiting for an answer.
+  // Deliberately NOT gated on consent: Google's GDPR message is delivered by this
+  // very tag, so blocking it would block the consent prompt itself. Ads are
+  // withheld until consent by Google's CMP, and the Consent Mode defaults in
+  // index.html keep storage denied across the EEA/UK/CH until the user decides.
   useEffect(() => {
-    if (!FEATURES.ads || !adCheckDone) return;
-    // Covers buying ad removal or withdrawing consent mid-session, when the tag
-    // may already be on the page.
-    if (adFree || !consent.adsAllowed) { unloadAds(); return; }
+    if (!FEATURES.ads || !adCheckDone || adFree) return;
     loadAds();
-  }, [adCheckDone, adFree, consent.adsAllowed]);
+  }, [adCheckDone, adFree]);
 
-  // Replay a stored consent decision into Google Consent Mode on startup, and
-  // keep React in step with later changes (accept, decline, or a withdrawal via
-  // the footer link).
+  // Show the privacy-settings link only where GDPR applies (web build).
   useEffect(() => {
     if (!FEATURES.ads) return;
-    initConsent();
-    return onConsentChange(setConsent);
+    onGdprApplicable(applies => setGdprApplies(applies));
+  }, []);
+
+  // Reveal the "Remove Ads" card only once an ad is genuinely on screen. The
+  // subscription is set up unconditionally rather than inside the load effect
+  // above, so it is already listening whichever order the two resolve in.
+  useEffect(() => {
+    if (!FEATURES.ads) return;
+    return onAdsServing(setAdsServing);
   }, []);
 
   // Play (Capacitor) build: initialize AdMob + Play Billing once, and adopt any
@@ -943,6 +965,10 @@ export default function App() {
         </button>
       </div>
       <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#ef4444",fontWeight:600,fontSize:"0.85rem",border:"1px solid #ef444440",cursor:"pointer"}}>Reset Progress</button>
+      {/* Below every control and above the legal footer: the one band of this
+          screen where a mis-tap costs a stray ad click rather than a reset, and
+          where holding space open pushes nothing the user was aiming at. */}
+      {webAdsEligible && <AdSlot placement="menu" />}
       {/* Reference material for adults, not an invitation to drink — states the
           age expectation the store content rating is filed under. */}
       <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.75rem",color:"#64748b"}}>
@@ -958,7 +984,7 @@ export default function App() {
           form instead, since that's where the choice was made. */}
       <div style={{textAlign:"center",marginTop:"0.5rem",fontSize:"0.75rem",color:"#64748b",display:"flex",gap:"0.75rem",justifyContent:"center",flexWrap:"wrap"}}>
         <a href="/privacy" style={{color:"#64748b"}}>Privacy Policy</a>
-        {FEATURES.ads && consent.required && (
+        {FEATURES.ads && gdprApplies && (
           <button onClick={openPrivacySettings} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
             Privacy &amp; cookie settings
           </button>
@@ -1067,6 +1093,11 @@ export default function App() {
             </div>
           ))}
         </div>
+        {/* Outside the scroll container, not inside it: an ad that scrolled with
+            the results would be re-measured on every scroll and sits among the
+            "＋ Study" buttons. Here it is a fixed band under a list that has its
+            own 60vh box, so reserving space costs the results nothing. */}
+        {webAdsEligible && <AdSlot placement="index" />}
       </div></div>
     );
   }
