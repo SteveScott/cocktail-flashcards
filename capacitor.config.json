@@ -5,6 +5,19 @@
   "server": {
     "url": "https://cocktailflashcards.com/?platform=play",
     "cleartext": false,
-    "allowNavigation": ["cocktailflashcards.com", "*.firebaseapp.com", "*.google.com", "accounts.google.com"]
+    "allowNavigation": [
+      "cocktailflashcards.com",
+      "*.firebaseapp.com",
+      "*.google.com",
+      "accounts.google.com"
+    ]
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": [
+        "google.com"
+      ]
+    }
   }
 }
