@@ -33,5 +33,13 @@ dist-ssr
 # store banner source is edited.
 *~lock~
 
+# Affinity documents. Editable artwork sources, ~19MB each and rewritten whole
+# on every save, so each revision adds that much to history permanently. They
+# live in ignore/artwork/ instead. Nothing builds from them: Vite only bundles
+# assets that source code imports, so these never reached dist, the Capacitor
+# assets or the AAB even while one was tracked. The exported .jpg/.png that the
+# store listing and the app actually use stay in src/assets.
+*.af
+
 # Local scratch — anything under a directory named "ignore"
 ignore/
