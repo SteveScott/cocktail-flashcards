@@ -22,19 +22,27 @@
           }
         },
         {
+          "client_id": "130519173102-5cb8iirin5ksi3aeqhsvch8au038n91i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bpp.cocktailflashcards",
+            "certificate_hash": "5bef837f697f7309a7c4bce1b82696f4416a626e"
+          }
+        },
+        {
+          "client_id": "130519173102-fs733f7dg19ljju562bjp385ufh28tpt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bpp.cocktailflashcards",
+            "certificate_hash": "0eb861d65c1a72b48481e9051323584bdd431d9c"
+          }
+        },
+        {
           "client_id": "130519173102-l0mo2i1bdbcbdhqjmaaveon8dd93lbca.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.bpp.cocktailflashcards",
             "certificate_hash": "fc051789bb227b8e21cb95e2c5422ab6b370f28e"
-          }
-        },
-        {
-          "client_id": "130519173102-nn3kn1qcre43am0d4ap9o8k3lqgeagmq.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.bpp.cocktailflashcards",
-            "certificate_hash": "5d7a39ce418b865986923fde94b3ba517670db2e"
           }
         },
         {
