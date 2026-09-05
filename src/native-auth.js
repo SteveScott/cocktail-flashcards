@@ -44,8 +44,24 @@ export function nativeGoogleSignInAvailable() {
   }
 }
 
-function isCancellation(e) {
-  return /cancel/i.test(String(e?.message || e || ""));
+export function signInFailureText(e) {
+  return String(e?.message || e || "");
+}
+
+// Did the person dismiss the picker, or did sign-in fail?
+//
+// This has to be asked precisely, because "cancel" appears in the text of a
+// failure that isn't one. Play services reports "account reauth failed" under
+// status 16, which is CommonStatusCodes.CANCELED, so the message reads
+// "...: 16: Canceled — [16] Account reauth failed". Matching a bare /cancel/
+// classified that as a user decision: the error was suppressed instead of
+// shown, and the legacy retry below was skipped before it ever ran.
+//
+// So match only the phrasings Android uses when someone genuinely backs out --
+// the dedicated cancellation exception, "cancelled by the user", or the legacy
+// SIGN_IN_CANCELLED status 12501.
+export function isSignInCancellation(e) {
+  return /cancell?ed by the user|GetCredentialCancellationException|\b12501\b/i.test(signInFailureText(e));
 }
 
 // Runs the native account picker and signs the JS SDK in with the result.
@@ -72,11 +88,11 @@ export async function signInWithGoogleNative() {
   } catch (e) {
     // Backing out of the first picker is a decision. Don't answer it by
     // immediately opening a second one.
-    if (isCancellation(e)) throw e;
+    if (isSignInCancellation(e)) throw e;
     try {
       result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
     } catch (legacyError) {
-      if (isCancellation(legacyError)) throw legacyError;
+      if (isSignInCancellation(legacyError)) throw legacyError;
       // Carry both messages. Which route failed, and how differently, is the
       // whole diagnosis -- and on a store install this text is the only way it
       // reaches anyone.
