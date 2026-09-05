@@ -44,12 +44,50 @@ export function nativeGoogleSignInAvailable() {
   }
 }
 
+function isCancellation(e) {
+  return /cancel/i.test(String(e?.message || e || ""));
+}
+
 // Runs the native account picker and signs the JS SDK in with the result.
 // Throws on failure so the caller can decide between showing an error and
 // falling back to the web flow.
 export async function signInWithGoogleNative() {
   const { FirebaseAuthentication } = await loadPlugin();
-  const result = await FirebaseAuthentication.signInWithGoogle();
+
+  // Two native routes, tried in order.
+  //
+  // The plugin defaults to Credential Manager, which is the modern API and the
+  // one to prefer. It also fails on some device and account combinations with
+  // errors that name nothing actionable -- "account reauth failed" being the one
+  // we hit, which recurred identically for both a Workspace account and a
+  // personal one, so it isn't about which account was chosen.
+  //
+  // useCredentialManager: false takes the legacy Google Sign-In intent instead,
+  // which doesn't involve Credential Manager at all. Worth a second attempt
+  // before showing a failure, and it reports Play services' ApiException status
+  // codes, which are specific enough to act on where the first error wasn't.
+  let result;
+  try {
+    result = await FirebaseAuthentication.signInWithGoogle();
+  } catch (e) {
+    // Backing out of the first picker is a decision. Don't answer it by
+    // immediately opening a second one.
+    if (isCancellation(e)) throw e;
+    try {
+      result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
+    } catch (legacyError) {
+      if (isCancellation(legacyError)) throw legacyError;
+      // Carry both messages. Which route failed, and how differently, is the
+      // whole diagnosis -- and on a store install this text is the only way it
+      // reaches anyone.
+      const err = new Error(
+        `Credential Manager: ${e?.message || e} — legacy: ${legacyError?.message || legacyError}`
+      );
+      err.cause = legacyError;
+      throw err;
+    }
+  }
+
   const idToken = result?.credential?.idToken;
   if (!idToken) {
     // Can happen if the picker is dismissed in a way the plugin reports as
