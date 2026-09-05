@@ -7,7 +7,7 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
-import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative } from './native-auth';
+import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
 import { norm, getMethod } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
@@ -513,27 +513,31 @@ export default function App() {
   // The plugin hands Android's own GetCredentialException text straight through
   // as the message, and derives no error code for it at all — createErrorCode
   // only maps FirebaseAuthException, so e.code is null on this path. The message
-  // is therefore the only signal there is, and its wording shifts between OS and
-  // Play services versions, so match loosely.
-  function signInFailureText(e) {
-    return String(e?.message || e || "");
-  }
-  function isSignInCancellation(e) {
-    return /cancel/i.test(signInFailureText(e));
-  }
-  // Play services surfaces its status codes inside the message. 10 is
-  // DEVELOPER_ERROR — the calling app's package name and signing certificate
-  // don't match an OAuth client registered for the project, which is the single
-  // most common way native sign-in fails once everything else is right.
+  // is the only signal there is.
+  //
+  // Match on phrasing, not on status code alone. Play services reuses status 16
+  // (CommonStatusCodes.CANCELED) for several unrelated outcomes — a dismissed
+  // picker, a missing credential, and an account that failed to re-authenticate
+  // — so keying off ":16:" reported whichever of those was checked first rather
+  // than what actually happened. isSignInCancellation lives in native-auth.js
+  // alongside the retry that depends on it, so the two can't drift apart.
+  //
+  // 10 is DEVELOPER_ERROR: the running app's package name and signing
+  // certificate match no OAuth client registered for the project.
   function isSigningCertMismatch(e) {
     const t = signInFailureText(e);
     return /developer console is not set up correctly|:\s*10:/i.test(t);
   }
-  // 16 arrives as "Cannot find a matching credential" when the device has no
-  // Google account the picker is willing to offer.
   function isNoAccountOnDevice(e) {
     const t = signInFailureText(e);
-    return /nocredential|no credentials|cannot find a matching credential|:\s*16:/i.test(t);
+    return /nocredential|no credentials|cannot find a matching credential/i.test(t);
+  }
+  // Play services could not refresh the Google account already on the device.
+  // Nothing about the app or the project is wrong in this case — the account's
+  // own token is stale, which is why it reproduces for every account signed in
+  // on that device and for none of them anywhere else.
+  function isAccountReauthFailure(e) {
+    return /account reauth failed/i.test(signInFailureText(e));
   }
 
   // Google sign-in takes one of two routes.
@@ -552,7 +556,9 @@ export default function App() {
         // Dismissing the picker is a decision, not a fault — don't nag about it.
         if (isSignInCancellation(e)) return;
         setGoogleErr(
-          isNoAccountOnDevice(e)
+          isAccountReauthFailure(e)
+            ? "Android couldn't re-authenticate your Google account. In Android settings, remove the account and add it back, then check Date & time is set automatically."
+            : isNoAccountOnDevice(e)
             ? "No Google account on this device. Add one in Android settings, then try again."
             : isSigningCertMismatch(e)
             ? "This build isn't registered for Google sign-in. Its signing certificate needs adding to the Firebase project."
