@@ -517,27 +517,29 @@ export default function App() {
   //
   // Match on phrasing, not on status code alone. Play services reuses status 16
   // (CommonStatusCodes.CANCELED) for several unrelated outcomes — a dismissed
-  // picker, a missing credential, and an account that failed to re-authenticate
-  // — so keying off ":16:" reported whichever of those was checked first rather
-  // than what actually happened. isSignInCancellation lives in native-auth.js
+  // picker, a missing credential, and an unregistered signing certificate — so
+  // keying off ":16:" reported whichever of those was checked first rather than
+  // what actually happened. isSignInCancellation lives in native-auth.js
   // alongside the retry that depends on it, so the two can't drift apart.
   //
   // 10 is DEVELOPER_ERROR: the running app's package name and signing
   // certificate match no OAuth client registered for the project.
+  //
+  // "account reauth failed" is that same fault seen through Credential Manager,
+  // which reports it under status 16 and names nothing useful. It reads like a
+  // stale account on the device, and following that reading cost most of a day
+  // — the account is fine, and the wording is why the search results for it all
+  // recommend re-adding it and checking the clock. The tell was that it
+  // reproduced identically for a Workspace account and a personal one on the
+  // same phone. The legacy path, which reports Play services' status codes
+  // plainly, answered 10 for the very same attempt. One cause, two wordings.
   function isSigningCertMismatch(e) {
     const t = signInFailureText(e);
-    return /developer console is not set up correctly|:\s*10:/i.test(t);
+    return /developer console is not set up correctly|account reauth failed|:\s*10:/i.test(t);
   }
   function isNoAccountOnDevice(e) {
     const t = signInFailureText(e);
     return /nocredential|no credentials|cannot find a matching credential/i.test(t);
-  }
-  // Play services could not refresh the Google account already on the device.
-  // Nothing about the app or the project is wrong in this case — the account's
-  // own token is stale, which is why it reproduces for every account signed in
-  // on that device and for none of them anywhere else.
-  function isAccountReauthFailure(e) {
-    return /account reauth failed/i.test(signInFailureText(e));
   }
 
   // Google sign-in takes one of two routes.
@@ -556,9 +558,7 @@ export default function App() {
         // Dismissing the picker is a decision, not a fault — don't nag about it.
         if (isSignInCancellation(e)) return;
         setGoogleErr(
-          isAccountReauthFailure(e)
-            ? "Android couldn't re-authenticate your Google account. In Android settings, remove the account and add it back, then check Date & time is set automatically."
-            : isNoAccountOnDevice(e)
+          isNoAccountOnDevice(e)
             ? "No Google account on this device. Add one in Android settings, then try again."
             : isSigningCertMismatch(e)
             ? "This build isn't registered for Google sign-in. Its signing certificate needs adding to the Firebase project."
