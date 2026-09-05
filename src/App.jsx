@@ -246,6 +246,7 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState("");
   const [emailErr, setEmailErr] = useState("");
   const [googleErr, setGoogleErr] = useState("");
+  const [googleErrDetail, setGoogleErrDetail] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   // Account deletion — required by Play for any app that offers account creation.
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -507,15 +508,32 @@ export default function App() {
     listAdWhitelist().then(setWhitelist).catch(e => console.error("Failed to load ad whitelist", e));
   }, [isAdmin, showAdAdmin]);
 
-  // Which Android exceptions mean "the user backed out" rather than "it broke".
-  // The plugin passes Android's own exception text straight through and the
-  // wording shifts between OS versions, so match loosely rather than pinning an
-  // exact string.
-  function isSignInCancellation(e) {
-    return /cancel/i.test(e?.message || "");
+  // Classifying a native sign-in failure.
+  //
+  // The plugin hands Android's own GetCredentialException text straight through
+  // as the message, and derives no error code for it at all — createErrorCode
+  // only maps FirebaseAuthException, so e.code is null on this path. The message
+  // is therefore the only signal there is, and its wording shifts between OS and
+  // Play services versions, so match loosely.
+  function signInFailureText(e) {
+    return String(e?.message || e || "");
   }
+  function isSignInCancellation(e) {
+    return /cancel/i.test(signInFailureText(e));
+  }
+  // Play services surfaces its status codes inside the message. 10 is
+  // DEVELOPER_ERROR — the calling app's package name and signing certificate
+  // don't match an OAuth client registered for the project, which is the single
+  // most common way native sign-in fails once everything else is right.
+  function isSigningCertMismatch(e) {
+    const t = signInFailureText(e);
+    return /developer console is not set up correctly|:\s*10:/i.test(t);
+  }
+  // 16 arrives as "Cannot find a matching credential" when the device has no
+  // Google account the picker is willing to offer.
   function isNoAccountOnDevice(e) {
-    return /nocredential|no credentials/i.test(e?.message || "");
+    const t = signInFailureText(e);
+    return /nocredential|no credentials|cannot find a matching credential|:\s*16:/i.test(t);
   }
 
   // Google sign-in takes one of two routes.
@@ -527,6 +545,7 @@ export default function App() {
   function signIn(provider = googleProvider) {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
     setGoogleErr("");
+    setGoogleErrDetail("");
     if (provider === googleProvider && nativeGoogleSignInAvailable()) {
       signInWithGoogleNative().catch(e => {
         console.error("Native Google sign-in failed:", e.code, e.message, e);
@@ -535,8 +554,15 @@ export default function App() {
         setGoogleErr(
           isNoAccountOnDevice(e)
             ? "No Google account on this device. Add one in Android settings, then try again."
-            : "Google sign-in didn't complete. Check your connection and try again."
+            : isSigningCertMismatch(e)
+            ? "This build isn't registered for Google sign-in. Its signing certificate needs adding to the Firebase project."
+            : "Google sign-in didn't complete. Try again."
         );
+        // The raw text as well. A Play-installed app can't be reached with
+        // logcat or a WebView inspector, so without this a tester's only report
+        // is "it didn't work" — which is what sent the last round of debugging
+        // down the wrong path.
+        setGoogleErrDetail(signInFailureText(e));
       });
       return;
     }
@@ -578,6 +604,7 @@ export default function App() {
   function signOutUser() {
     if (!firebaseEnabled) return;
     setGoogleErr("");
+    setGoogleErrDetail("");
     // Fire-and-forget alongside the JS sign-out: this only drops the native
     // account selection; the JS sign-out below is what ends the session.
     signOutGoogleNative();
@@ -889,7 +916,16 @@ export default function App() {
               <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>{firebaseEnabled ? "Sign in to sync progress" : "Cloud sync not configured"}</div>
               <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
                 <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
-                {googleErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem"}}>{googleErr}</div>}
+                {googleErr && (
+                  <div role="alert" style={{color:"#f87171",fontSize:"0.7rem"}}>
+                    {googleErr}
+                    {googleErrDetail && (
+                      <div style={{color:"#64748b",fontSize:"0.65rem",marginTop:"0.25rem",wordBreak:"break-word",userSelect:"text"}}>
+                        {googleErrDetail}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":"#334155",color:firebaseEnabled?"#ffffff":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
               </div>
               {/* The password form used to sit here as "Use email instead". It now
