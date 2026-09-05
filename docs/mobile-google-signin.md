@@ -70,6 +70,31 @@ a broken sign-out.
 
 `android/app/google-services.json` is in place (project `cocktail-flashcards`,
 package `com.bpp.cocktailflashcards`). It is not a secret — it is committed.
+Every value in it already ships inside the APK, where anyone can read it; access
+is enforced by Firestore security rules, not by hiding the file.
+
+**Committing it stops Netlify building until the path is excluded.** The
+scanner's smart detection reads the Firebase client key in it as a leaked
+secret and fails the build with exit code 2, so `netlify.toml` carries
+`SECRETS_SCAN_OMIT_PATHS = "android/app/google-services.json"`. The path is
+excluded rather than the value, since pasting the key into
+`SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES` would duplicate it into a second
+file and disabling smart detection would drop scanning across the whole repo.
+Nothing under `android/` is ever served.
+
+That failure is worth recognising quickly, because of how it presents. The web
+half of sign-in lives on the deployed site (see *Old installs keep working*),
+so a blocked deploy leaves master correct and the live site stale — and the app
+keeps taking the old popup path and showing the same white screen it did before
+any of this was fixed. It looks exactly like the code change not working. Check
+what the site is actually serving before doubting the app:
+
+```
+curl -s https://cocktailflashcards.com/ | grep -o 'assets/index-[A-Za-z0-9_-]*\.js'
+```
+
+then fetch that file and confirm it contains `FirebaseAuthentication`. If it
+doesn't, the deploy never landed and nothing about the app is wrong.
 
 It supplies `R.string.default_web_client_id`, the OAuth web client the account
 picker authenticates against. Confirm it resolved after any change:
@@ -165,8 +190,17 @@ curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signInWithId
 
 ## Releasing
 
-This adds native code, so a **new Play upload is required** — a Netlify deploy
-alone can't deliver it. `versionCode` is 6.
+Sign-in has two halves that ship on separate schedules, and knowing which half
+a change belongs to saves a release cycle:
+
+| Change | How it reaches users |
+|---|---|
+| Anything under `src/` — the branch in `signIn()`, error handling, `native-auth.js` | **Netlify deploy.** Reaches already-installed apps immediately, since the shell loads the live site. |
+| The plugin, `variables.gradle`, `capacitor.config.json`, `google-services.json` | **New Play upload.** Native code can't be delivered by a web deploy. |
+| Registering a SHA-1 fingerprint | **Neither.** OAuth clients are validated server-side; an installed app starts working within minutes. |
+
+Adding the plugin needed an upload, and `versionCode` is 6. Everything since has
+been JS, delivered by deploy alone.
 
 ## Diagnosing a failure
 
