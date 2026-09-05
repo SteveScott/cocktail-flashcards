@@ -74,11 +74,15 @@ function initState(masterMode) {
   return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], deckSize: DECK_SIZE };
 }
 
+// Bring the study deck to exactly its chosen size. Too short: pad from the pool.
+// Too long: truncate in order, dropping the cards past the limit (their scores
+// are kept). Trimming here — not only in the size picker — is what stops the
+// cloud merge (a union of two devices' decks) from leaving an oversized deck.
 function refillDeck(st, pool) {
   const target = st.deckSize || DECK_SIZE;
   const lSet = new Set(st.learned), aSet = new Set(st.active);
   const avail = pool.map(c => c.name).filter(n => !lSet.has(n) && !aSet.has(n));
-  const na = [...st.active];
+  const na = st.active.slice(0, target);
   while (na.length < target && avail.length > 0) na.push(avail.shift());
   return { ...st, active: na };
 }
@@ -853,14 +857,17 @@ export default function App() {
   }
   // Add or remove a cocktail from the study deck (st.active) by name. Adding a
   // cocktail also gives it a starting score and pulls it out of `learned` so it
-  // reappears in study; removing just drops it from the deck.
+  // reappears in study. The deck keeps its chosen size either way: an added card
+  // goes to the FRONT so the size cap trims the deck's last card rather than the
+  // one just added; a removed card's slot is refilled from the pool.
   function toggleStudy(name) {
     upd(p => {
-      if (p.active.includes(name)) return { ...p, active: p.active.filter(n => n !== name) };
+      const np = p.masterMode ? ALL_200 : top50;
+      if (p.active.includes(name)) return refillDeck({ ...p, active: p.active.filter(n => n !== name) }, np);
       const scores = { ...p.scores };
       if (scores[name] === undefined) scores[name] = 0;
       const learned = (p.learned || []).filter(n => n !== name);
-      return { ...p, scores, learned, active: [...p.active, name] };
+      return refillDeck({ ...p, scores, learned, active: [name, ...p.active] }, np);
     });
   }
   // Randomize the order of the study deck (Fisher–Yates) and jump to the first card.
@@ -878,11 +885,7 @@ export default function App() {
   // Change how many cards the study deck holds. Shrinking trims the extra cards
   // immediately (from the end; their scores are kept); growing refills from the pool.
   function setDeckSizeTo(n) {
-    upd(p => {
-      const np = p.masterMode ? ALL_200 : top50;
-      const active = p.active.length > n ? p.active.slice(0, n) : p.active;
-      return refillDeck({ ...p, deckSize: n, active }, np);
-    });
+    upd(p => refillDeck({ ...p, deckSize: n }, p.masterMode ? ALL_200 : top50));
     setDi(0); setRevealed(false);
   }
 
