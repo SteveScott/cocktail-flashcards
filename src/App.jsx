@@ -71,7 +71,7 @@ function initState(masterMode) {
   const pool = masterMode ? ALL_200 : top50;
   const scores = {};
   pool.forEach(c => { scores[c.name] = 0; });
-  return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], deckSize: DECK_SIZE };
+  return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], tried: [], deckSize: DECK_SIZE };
 }
 
 // Bring the study deck to exactly its chosen size. Too short: pad from the pool.
@@ -107,12 +107,15 @@ function mergeStates(a, b) {
   const scores = { ...a.scores };
   for (const k in b.scores) scores[k] = Math.max(scores[k] || 0, b.scores[k] || 0);
   const learned = Array.from(new Set([...(a.learned||[]), ...(b.learned||[])]));
+  // Tried is a union like learned: having drunk something on one device is a
+  // fact that a second device cannot un-know.
+  const tried = Array.from(new Set([...(a.tried||[]), ...(b.tried||[])]));
   const masterMode = a.masterMode || b.masterMode;
   const pool = masterMode ? ALL_200 : top50;
   const lSet = new Set(learned);
   const active = Array.from(new Set([...(a.active||[]), ...(b.active||[])])).filter(n => !lSet.has(n));
   const deckSize = a.deckSize || b.deckSize || DECK_SIZE;
-  return refillDeck({ scores, learned, active, masterMode, deckSize }, pool);
+  return refillDeck({ scores, learned, tried, active, masterMode, deckSize }, pool);
 }
 
 // True when two progress states carry the same progress (identity aside).
@@ -128,6 +131,7 @@ function progressEqual(a, b) {
   if ((a.deckSize || DECK_SIZE) !== (b.deckSize || DECK_SIZE)) return false;
   const sameList = (x = [], y = []) => x.length === y.length && x.every((n, i) => n === y[i]);
   if (!sameList(a.learned, b.learned) || !sameList(a.active, b.active)) return false;
+  if (!sameList(a.tried, b.tried)) return false;
   const keys = new Set([...Object.keys(a.scores || {}), ...Object.keys(b.scores || {})]);
   for (const k of keys) if ((a.scores?.[k] || 0) !== (b.scores?.[k] || 0)) return false;
   return true;
@@ -209,6 +213,9 @@ export default function App() {
   const [quizLen, setQuizLen] = useState(null);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
+  // "all" | "tried" | "untried" — index-only, deliberately not persisted: it is a
+  // way of looking at the list, not progress worth syncing between devices.
+  const [triedFilter, setTriedFilter] = useState("all");
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(!firebaseEnabled);
   const [adWhitelisted, setAdWhitelisted] = useState(false);
@@ -342,6 +349,9 @@ export default function App() {
               const sameUser = prev.uid && prev.uid === u.uid;
               const hasLocalProgress =
                 (prev.learned && prev.learned.length > 0) ||
+                // Drinks marked tried before signing in are progress too, and
+                // without this they are discarded by the branch below.
+                (prev.tried && prev.tried.length > 0) ||
                 Object.values(prev.scores || {}).some(v => v > 0);
               const anonymousWithProgress = !prev.uid && hasLocalProgress;
               const resolved = (sameUser || anonymousWithProgress)
@@ -788,6 +798,26 @@ export default function App() {
 
   function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
 
+  // The tried marker reads the same on a card and on an index row, so both use
+  // this. Unchecked it asks the question, checked it states the answer.
+  function triedChip(name, big) {
+    const on = (st.tried || []).includes(name);
+    return (
+      <button
+        onClick={()=>toggleTried(name)}
+        aria-pressed={on}
+        title={on ? "Marked as tried — click to unmark" : "Mark as tried"}
+        style={{whiteSpace:"nowrap",borderRadius:8,cursor:"pointer",fontWeight:700,
+          padding: big ? "0.35rem 0.7rem" : "0.3rem 0.6rem",
+          fontSize: big ? "0.8rem" : "0.72rem",
+          border: on ? "none" : "1px solid #a855f780",
+          background: on ? "#7e22ce" : "transparent",
+          color: on ? "#fff" : "#c084fc"}}>
+        {on ? "☑ Tried" : "☐ Tried?"}
+      </button>
+    );
+  }
+
   function glassIcon(glass) {
     if (!glass) return "🥃";
     const g = glass.toLowerCase();
@@ -870,6 +900,17 @@ export default function App() {
       return refillDeck({ ...p, scores, learned, active: [name, ...p.active] }, np);
     });
   }
+  // Marking a drink tried is unrelated to studying it: it does not touch the
+  // deck, the scores or the learned list, and a drink can be tried without ever
+  // having been studied.
+  function toggleTried(name) {
+    upd(p => {
+      const tried = new Set(p.tried || []);
+      if (tried.has(name)) tried.delete(name); else tried.add(name);
+      return { ...p, tried: Array.from(tried) };
+    });
+  }
+
   // Randomize the order of the study deck (Fisher–Yates) and jump to the first card.
   function shuffleActive() {
     upd(p => {
@@ -1138,23 +1179,36 @@ export default function App() {
     const q = norm(search.trim());
     // Match on both the cocktail name and its ingredient list, accent-insensitively,
     // so "pina" finds "Piña Colada" and "rum" finds every drink containing rum.
-    const results = q ? ALL_200.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_200;
+    const matches = q ? ALL_200.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_200;
+    const triedSet = new Set(st.tried || []);
+    const results = triedFilter === "all"
+      ? matches
+      : matches.filter(c => triedSet.has(c.name) === (triedFilter === "tried"));
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_200.length}</span>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_200.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
         </div>
         <input
           autoFocus
           value={search}
           onChange={e=>setSearch(e.target.value)}
           placeholder="Search name or ingredient…"
-          style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"1.25rem",outline:"none"})}
+          style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
+        <div style={{display:"flex",gap:"0.5rem",marginBottom:"1.25rem"}}>
+          {[["all","All"],["tried","☑ Tried"],["untried","☐ Not tried"]].map(([k,label])=>(
+            <button key={k} onClick={()=>setTriedFilter(k)} aria-pressed={triedFilter===k}
+              style={{flex:1,borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
+                border: triedFilter===k ? "none" : "1px solid #33415580",
+                background: triedFilter===k ? "#7e22ce" : "transparent",
+                color: triedFilter===k ? "#fff" : "#94a3b8"}}>{label}</button>
+          ))}
+        </div>
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
           {results.length === 0 && (
-            <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>No cocktails found.</div>
+            <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>{triedFilter === "tried" ? "No tried cocktails match." : triedFilter === "untried" ? "Nothing left untried here." : "No cocktails found."}</div>
           )}
           {results.map(c=>(
             <div key={c.name} style={frame({borderRadius:14,padding:"1rem 1.25rem"})}>
@@ -1165,6 +1219,7 @@ export default function App() {
                   <button onClick={()=>toggleStudy(c.name)} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:st.active.includes(c.name)?"none":"1px solid #3b82f680",background:st.active.includes(c.name)?"#16a34a":"transparent",color:st.active.includes(c.name)?"#fff":"#60a5fa"}}>
                     {st.active.includes(c.name) ? "✓ In Study" : "＋ Study"}
                   </button>
+                  {triedChip(c.name, false)}
                 </div>
               </div>
               <div style={{color:"#cbd5e1",lineHeight:1.7,fontSize:"0.85rem"}}>
@@ -1222,7 +1277,10 @@ export default function App() {
               <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0,lineHeight:1.2}}>{c.name}</h2>
               {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2026</div>}
             </div>
-            <div style={{background:col(score),color:"#fff",borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap",marginLeft:"0.75rem"}}>{score}/{MASTERY_SCORE}</div>
+            <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginLeft:"0.75rem"}}>
+              {triedChip(c.name, true)}
+              <div style={{background:col(score),color:"#fff",borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap"}}>{score}/{MASTERY_SCORE}</div>
+            </div>
           </div>
           <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem 0"}}>
             {!revealed
