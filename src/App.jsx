@@ -1277,7 +1277,7 @@ export default function App() {
               <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0,lineHeight:1.2}}>{c.name}</h2>
               {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2026</div>}
             </div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"0.5rem",marginLeft:"0.75rem"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginLeft:"0.75rem"}}>
               {triedChip(c.name, true)}
               <div style={{background:col(score),color:"#fff",borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap"}}>{score}/{MASTERY_SCORE}</div>
             </div>
