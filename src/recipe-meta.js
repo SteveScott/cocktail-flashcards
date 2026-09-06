@@ -65,7 +65,7 @@ export function getMethod(c) {
   if (/layered/.test(ing)) return "Layered";
   if (BUILT_GLASSES.test(glass) && BUILT_MIXERS.test(ing)) return "Built";
   if (SHAKE_TRIGGERS.test(ing)) return "Shaken";
-  if (/crushed ice/.test(ing)) return "Built";
+  if (/crushed ice/.test(ing) || c.serve === "over crushed ice") return "Built";
   return "Stirred";
 }
 
@@ -90,20 +90,21 @@ function splitParts(str) {
 // after a pinch or a dash is optional because the data writes it both ways:
 // "Dash of Cognac" and "Dash Cognac" are the same ingredient, and only the
 // first was being counted as one.
-const MEASURE_RE = /^((?:[\d½¼¾⅓⅔⅛⅜⅝⅞]+(?:[-–][\d½¼¾⅓⅔⅛⅜⅝⅞]+)?\s*(?:oz|dash(?:es)?|drops?|tsp|tbsp|cups?|scoops?|barspoons?|barspoon)?|(?:pinch|splash|dash|shot|handful)(?: of)?)\s*)\s*(.*)$/i;
+const MEASURE_RE = /^((?:[\d½¼¾⅓⅔⅛⅜⅝⅞]+(?:[-–][\d½¼¾⅓⅔⅛⅜⅝⅞]+)?\s*(?:oz|dash(?:es)?|drops?|tsp|tbsp|cups?|scoops?|shots?|barspoons?|barspoon)?|(?:pinch|splash|dash|shot|handful)(?: of)?)\s*)\s*(.*)$/i;
 const GARNISH_RE = /garnish|peel|twist|sprig|wedge|wheel|slice|cherry|olive|rinse|zest|rim|dusting|grated|flamed|expressed|skewer|umbrella|nutmeg$/i;
 
 // A trailing "(top)" marks a modifier poured over the finished drink — the soda
 // in a Mojito, the Champagne in a Champagne Cocktail. It carries no measure, so
 // it used to fall through to the garnish bucket and drop out of the build
 // entirely, which left the Champagne Cocktail with nothing in it but sugar and
-// bitters.
+// bitters. Floats stay garnishes on purpose: an Irish Coffee's cream goes on
+// after the drink is made, not into it.
 const TOPPER_RE = /\((?:top|topped|top up)\)\s*$/i;
 
-// A float, a drizzle, a splash and a rinse are amounts of liquid, no different
-// from an ounce — the data just writes the unit after the ingredient instead of
-// before it. "Dark Rum float" is a measure of dark rum, and reading it as
-// unmeasured is what dropped a Mai Tai's float into the garnish line.
+// A float, a splash and a rinse are amounts of liquid, no different from an
+// ounce — the data just writes the unit after the ingredient instead of before
+// it. "Dark Rum float" is a measure of dark rum, and reading it as unmeasured
+// is what dropped a Mai Tai's float into the garnish line.
 const TRAILING_MEASURE_RE = /^(.*?)[\s(]+(float|drizzle|splash|rinse)\)?\s*$/i;
 
 // Build order. Where a recipe does not dictate its own sequence, ingredients go
@@ -119,8 +120,6 @@ const ORDER_SYRUP  = /\b(syrup|orgeat|grenadine|honey|agave|sugar|cane|gomme|nec
 function buildRank(x) {
   const measure = (x.measure || "").toLowerCase();
   const item = x.item || "";
-  // A rinse is a small measured amount that never joins the pour, so in a
-  // written recipe it belongs with the dashes and floats at the end.
   if (x.role === "float" || x.role === "rinse") return 4;
   if (/^(top|splash|float|drizzle|rinse)$/.test(measure) || /dash|drop/.test(measure)) return 4;
   if (ORDER_TOPPER.test(item)) return 4;
@@ -220,11 +219,24 @@ export function baseSpirit(c) {
 }
 
 // The method names double as adjectives in prose ("a shaken cocktail", "a
-// stirred cocktail"). Only these two need spelling out.
+// stirred cocktail"). Only the flash blend needs its participle spelled out.
 const METHOD_ADJECTIVE = { "Flash Blend": "flash-blended", "Dropped": "bomb-style" };
 
 function methodAdjective(method) {
   return METHOD_ADJECTIVE[method] || method.toLowerCase();
+}
+
+// Where the finished drink lands. The serve style is the fact that says whether
+// there is ice in the glass and what kind — glassware never said it: a Sazerac
+// and an Old Fashioned are both rocks glasses, and only one of them has ice in
+// it. Up is chilled and iceless; neat is iceless and never chilled at all.
+function serveTarget(c, glass) {
+  switch (c.serve) {
+    case "on the rocks":     return `${glass} filled with fresh ice`;
+    case "over crushed ice": return `${glass} packed with crushed ice`;
+    case "up":               return `a chilled ${glass.replace(/^an? /, "")}`;
+    default:                 return glass;
+  }
 }
 
 function glassPhrase(glass) {
@@ -233,8 +245,7 @@ function glassPhrase(glass) {
   // "Coupe or Martini" → "a coupe or martini glass"; don't append "glass" to
   // things that already name the vessel.
   // Word boundaries matter: "marTINi" contains "tin", which was suppressing the
-  // noun and leaving drinks "served in a martini". "Shot" is the vessel's whole
-  // name, so it does need "glass" appended.
+  // noun and leaving drinks "served in a martini".
   const needsGlass = !/\b(glass|mug|flute|tin|cup)\b/i.test(g);
   const phrase = `${g.toLowerCase()}${needsGlass ? " glass" : ""}`;
   // No vessel in the set starts with a "yu" sound ("a unicorn"), so the plain
@@ -268,9 +279,9 @@ export function buildSteps(c) {
   const toppers = strained ? parsed.filter(x => /^(top|splash)$/i.test(x.measure)) : [];
   const held = new Set([...floats, ...rinses, ...toppers]);
   // "Where not specified" is the whole point of the default: a recipe that
-  // states its own sequence keeps it. The IBA's Aperol Spritz leads with the
-  // prosecco, a Caipirinha muddles the lime and sugar first, and neither is
-  // the default order. A layered drink's sequence IS the recipe.
+  // states its own sequence keeps it. Berry's Zombie pours lime before
+  // falernum and the IBA's Aperol Spritz leads with the prosecco, and neither
+  // is the default order. A layered drink's sequence IS the recipe.
   const asWritten = layered || c.order === "as-written";
   const components = asWritten ? parsed.filter(x => layered || !held.has(x))
                                : inBuildOrder(parsed.filter(x => !held.has(x)));
@@ -286,23 +297,21 @@ export function buildSteps(c) {
       steps.push("Dry-shake without ice for about 10 seconds to emulsify the egg white and build foam.");
     }
     steps.push("Fill the shaker with ice and shake hard for 10–12 seconds, until the tin is frosted and well chilled.");
-    steps.push(`Double-strain into ${glass}.`);
+    steps.push(`Double-strain into ${serveTarget(c, glass)}.`);
   } else if (method === "Stirred") {
     steps.push(`Add ${list} to a mixing glass.`);
     steps.push("Fill with ice and stir for 20–30 seconds, until well chilled and properly diluted.");
-    steps.push(`Strain into ${glass}.`);
+    steps.push(`Strain into ${serveTarget(c, glass)}.`);
   } else if (method === "Built") {
     // "Built" covers a wider range than it looks: a soda highball, a muddled
     // Old Fashioned and a hot toddy are all assembled in the serving vessel,
     // but they do not start the same way. Ice is wrong for a hot drink, and
     // the sugar has to be dealt with before the ice goes in.
-    const g = (c.glass || "").toLowerCase();
-    // "Hot sauce" is not a hot drink — a Michelada was being served preheated.
-    const hot = /\bhot (?!sauce)|\bboiling|heatproof/i.test(c.ingredients + " " + g);
     const fizzy = CARBONATED.test(c.ingredients);
-    // A flute, a wine glass or a shot glass is never packed with ice, and a hot
-    // drink never sees any at all.
-    const iced = !hot && !/flute|wine|shot/.test(g);
+    const hot = c.serve === "hot";
+    const crushed = c.serve === "over crushed ice";
+    const neat = c.serve === "neat";
+    const iced = c.serve === "on the rocks" || crushed;
     const SWEETENER = /sugar|syrup|bitters|disc of lime/i;
     const muddled = /sugar cube|muddle|disc of lime/i.test(c.ingredients);
 
@@ -318,18 +327,20 @@ export function buildSteps(c) {
         // goes in, and the wine reads as a garnish — leaving nothing to add.
         if (rest.length) {
           steps.push(iced
-            ? `Fill with ice and add ${rest.map(x => x.text).join(", ")}.`
+            ? `Fill with ${crushed ? "crushed ice" : "ice"} and add ${rest.map(x => x.text).join(", ")}.`
             : `Add ${rest.map(x => x.text).join(", ")}.`);
         } else if (iced) {
           steps.push("Fill with ice.");
         }
       } else {
-        if (iced) steps.push(`Fill ${glass} with fresh ice.`);
+        if (iced) steps.push(`Fill ${glass} with ${crushed ? "crushed ice" : "fresh ice"}.`);
         steps.push(`Add ${list} directly to ${iced ? "the glass" : glass}, in order.`);
       }
-      steps.push(fizzy
-        ? "Stir gently once or twice to combine without knocking out the carbonation."
-        : iced ? "Stir briefly to combine and chill." : "Stir briefly to combine.");
+      steps.push(neat
+        ? "Stir briefly to combine, and serve as it is — no ice, at room temperature."
+        : fizzy
+          ? "Stir gently once or twice to combine without knocking out the carbonation."
+          : iced ? "Stir briefly to combine and chill." : "Stir briefly to combine.");
     }
   } else if (method === "Blended") {
     steps.push(`Add ${list} to a blender along with about a cup of crushed ice.`);
