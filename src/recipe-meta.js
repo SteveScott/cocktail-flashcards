@@ -269,7 +269,10 @@ export function buildSteps(c) {
   // supposed to sit on top of. A layered drink is the exception: there the
   // float IS the layering, so leave it in sequence.
   const layered = method === "Layered";
-  const floats = layered ? [] : parsed.filter(x => x.role === "float");
+  // A layered drink with a float has a base and something set on top of it — a
+  // True Blood's wine, a Baby Guinness's cream. Only a drink whose every
+  // component is a layer gets poured over the back of a spoon.
+  const floats = parsed.filter(x => x.role === "float");
   const rinses = layered ? [] : parsed.filter(x => x.role === "rinse");
   // A topper only needs pulling out when the drink is mixed somewhere else and
   // strained: a Seelbach's Champagne was going into the mixing glass and being
@@ -283,7 +286,7 @@ export function buildSteps(c) {
   // falernum and the IBA's Aperol Spritz leads with the prosecco, and neither
   // is the default order. A layered drink's sequence IS the recipe.
   const asWritten = layered || c.order === "as-written";
-  const components = asWritten ? parsed.filter(x => layered || !held.has(x))
+  const components = asWritten ? parsed.filter(x => !held.has(x))
                                : inBuildOrder(parsed.filter(x => !held.has(x)));
   const list = components.map(x => x.text).join(", ");
 
@@ -368,6 +371,8 @@ export function buildSteps(c) {
   } else if (method === "Chased") {
     steps.push(`Pour the spirit into ${glass} and the chaser into a second one. Nothing is mixed.`);
     steps.push("Drink the spirit first, then the chaser immediately behind it.");
+  } else if (floats.length) {
+    steps.push(`Pour ${list} into ${serveTarget(c, glass)}.`);
   } else {
     steps.push(`Pour ${list} slowly over the back of a bar spoon, in the order listed.`);
     steps.push(`Take care to keep each layer distinct in ${glass}.`);
