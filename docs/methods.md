@@ -63,6 +63,12 @@ Poured over the back of a spoon so the layers hold.
 | Baby Guinness | Irish cream floated over coffee liqueur to make the miniature pint's head ([Wikipedia](https://en.wikipedia.org/wiki/Baby_Guinness)) |
 | True Blood | The base is built over ice and the red wine set on top as its own layer. Inference cannot see it: BUILT_MIXERS does not list wine, so the cranberry juice sends the drink to Shaken, which would mix the wine straight through. |
 
+**The True Blood is a house cocktail from QXT's, and has no external source.**
+Searching for it turns up an unrelated drink of the same name — vodka, rum,
+peach schnapps, orange juice and grenadine — which is not this recipe. Do not
+reconcile this entry against it. The measurements here are the house build, and
+the owner of the recipe is the authority on them.
+
 ## Shaken
 
 Dairy the shake rule misses, because it looks for *heavy* cream and
