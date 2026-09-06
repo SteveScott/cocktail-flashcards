@@ -131,6 +131,7 @@ function recipePage(c, related) {
 <ul class="facts">
   <li>${esc(method)}</li>
   <li>${esc(c.glass || "—")}</li>
+  ${c.serve ? `<li>${esc(c.serve)}</li>` : ""}
   <li>${esc(spirit)}</li>
   ${c.rank ? `<li>#${c.rank} most essential</li>` : ""}
 </ul>
