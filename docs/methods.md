@@ -50,6 +50,7 @@ is assembled in the glass it is served in.
 | Sombrero | Coffee liqueur poured over ice, cream floated on top — the cream sitting on the liqueur "like a hat" is the whole drink |
 | Prairie Fire | Built in the shot glass |
 | Seven & Seven | A two-ingredient highball, built over ice |
+| True Blood | Built in the glass and topped with wine. `BUILT_MIXERS` does not list wine, so inference falls through to Shaken on the cranberry juice — which would shake the wine through the drink instead of leaving it on top. Adding wine to that list would reclassify Sangria as a side effect, so this is an override rather than a rule change. |
 
 ## Layered
 
@@ -60,6 +61,13 @@ Poured over the back of a spoon so the layers hold.
 | Black Velvet | Champagne first, stout floated over a spoon to keep the bands distinct ([Wikipedia](https://en.wikipedia.org/wiki/Black_velvet_(cocktail))) |
 | Snakebite | Cider first, lager poured over the back of a spoon ([Craft Beering](https://www.craftbeering.com/snakebite-drink-beer-cider/)) |
 | Baby Guinness | Irish cream floated over coffee liqueur to make the miniature pint's head ([Wikipedia](https://en.wikipedia.org/wiki/Baby_Guinness)) |
+| True Blood | The base is built over ice and the red wine set on top as its own layer. Inference cannot see it: BUILT_MIXERS does not list wine, so the cranberry juice sends the drink to Shaken, which would mix the wine straight through. |
+
+**The True Blood is a house cocktail from QXT's, and has no external source.**
+Searching for it turns up an unrelated drink of the same name — vodka, rum,
+peach schnapps, orange juice and grenadine — which is not this recipe. Do not
+reconcile this entry against it. The measurements here are the house build, and
+the owner of the recipe is the authority on them.
 
 ## Shaken
 
@@ -143,6 +151,77 @@ ingredient in their lists.
 Values a rule cannot reach are set by hand: the Sazerac (chilled, ice discarded,
 so `up` in a rocks glass) and the cold-but-uniced Kir, Snakebite, Boilermaker,
 Eggnog and Jägerbomb.
+
+## Units written after the ingredient
+
+A float, a drizzle, a splash and a rinse are amounts of liquid, no different
+from an ounce — the data just writes the unit after the ingredient rather than
+before it. `parseIngredients()` reads them all as measures, so "Dark Rum float"
+parses as *Float* of *Dark Rum* rather than dropping into the garnish bucket as
+something unmeasured.
+
+Being an ingredient is not the same as being poured in with everything else, so
+each carries a `role` saying where it goes in the sequence:
+
+| Unit | Placement |
+|---|---|
+| `rinse` | First. The glass is coated and the excess discarded before anything is poured — a Sazerac's absinthe. |
+| `float`, `drizzle` | Last, on the finished drink: a Mai Tai's dark rum, a Penicillin's Islay, a Bramble's crème de mûre. |
+| `top`, `splash` | After straining, but only for a drink mixed somewhere else. In a build the topper is already last in the list and goes in in order. |
+
+A layered drink is not an exception. A float there marks a base with something
+set on top of it — a True Blood's wine over its vodka and cranberry, a Baby
+Guinness's cream over its coffee liqueur — and the steps say so. Only a drink
+whose every component is a layer, like a B-52 or a Black Velvet, is poured over
+the back of a spoon.
+
+This matters more than the garnish line suggests: nine of the eleven floats in
+the deck already carried a leading measure, so they parsed as ordinary
+ingredients and were being shaken or stirred into the drink they are supposed
+to sit on top of.
+
+## Ingredient order
+
+Order is part of the method. Where a recipe does not state its own sequence,
+ingredients go in:
+
+**liquor → citrus → syrup → juice → dashes, floats and splashes**
+
+"Liquor" means everything alcoholic, liqueurs included — which is how the data
+already writes it: a Last Word, a Sidecar, a Margarita and a Paper Plane all
+group the liqueur with the base spirit, ahead of the citrus. Carbonated mixers
+rank last whatever their volume, since a Moscow Mule's four ounces of ginger
+beer is still the thing that goes in on top. The sort is stable, so ingredients
+the ranking cannot separate keep the order the recipe wrote them in.
+
+The `ingredients` strings are stored in this order too, so a flashcard and the
+recipe page generated from it agree. `canonicalIngredientOrder()` is the one
+implementation of the rule and `buildSteps()` uses the same ranking, which is
+why normalising 46 recipes changed no generated step at all.
+
+`order: "as-written"` opts a recipe out, for the "where not specified" case —
+the sequence is either sourced or structural and the default would break it:
+
+| Recipe | Why it is pinned |
+|---|---|
+| Aperol Spritz | The [IBA](https://iba-world.com/iba-cocktail/spritz/) builds prosecco, then Aperol, then soda — the 3-2-1 |
+| Caipirinha, Caipiroska | The lime and sugar are muddled together first; the order is the technique |
+| Michelada, Chelada | Built on the beer, which the default would rank as a topper and send to the end |
+| Trinidad Sour | Angostura is the base spirit here, not a dash |
+| Blue Blazer | Scotch and boiling water go into the mug before the sugar |
+
+Layered drinks are never reordered — the sequence *is* the recipe.
+
+Two candidates were checked and **not** pinned. Difford's orders the
+Don-the-Beachcomber tiki drinks in the default order — Three Dots and a Dash as
+*rums, falernum, allspice dram, lime, orange, honey, dash* — so the deck's old
+sequence was inconsistent data rather than preserved sourcing. And the
+[IBA's Mimosa](https://iba-world.com/iba-cocktail/mimosa/) pours the juice
+before the sparkling wine, which is the default rule anyway.
+
+The Zombie is not pinned either. Berry's own published order lists the juice
+first and the rums last — a juice-first convention this deck does not use
+anywhere — so its sequence here was never his to preserve.
 
 ## Known gaps
 
