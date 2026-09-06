@@ -86,9 +86,40 @@ function splitParts(str) {
 }
 
 // A component is "measured" when it opens with a quantity — a digit or a
-// vulgar fraction. Everything else is a garnish, rinse, or topper.
-const MEASURE_RE = /^((?:[\d½¼¾⅓⅔⅛⅜⅝⅞]+(?:[-–][\d½¼¾⅓⅔⅛⅜⅝⅞]+)?\s*(?:oz|dash(?:es)?|drops?|tsp|tbsp|cups?|scoops?|barspoons?|barspoon)?|(?:pinch|splash|dash|shot|handful) of)\s*)\s*(.*)$/i;
+// vulgar fraction. Everything else is a garnish, rinse, or topper. The "of"
+// after a pinch or a dash is optional because the data writes it both ways:
+// "Dash of Cognac" and "Dash Cognac" are the same ingredient, and only the
+// first was being counted as one.
+const MEASURE_RE = /^((?:[\d½¼¾⅓⅔⅛⅜⅝⅞]+(?:[-–][\d½¼¾⅓⅔⅛⅜⅝⅞]+)?\s*(?:oz|dash(?:es)?|drops?|tsp|tbsp|cups?|scoops?|barspoons?|barspoon)?|(?:pinch|splash|dash|shot|handful)(?: of)?)\s*)\s*(.*)$/i;
 const GARNISH_RE = /garnish|peel|twist|sprig|wedge|wheel|slice|cherry|olive|rinse|zest|rim|dusting|grated|flamed|expressed|skewer|umbrella|nutmeg$/i;
+
+// A trailing "(top)" marks a modifier poured over the finished drink — the soda
+// in a Mojito, the Champagne in a Champagne Cocktail. It carries no measure, so
+// it used to fall through to the garnish bucket and drop out of the build
+// entirely, which left the Champagne Cocktail with nothing in it but sugar and
+// bitters.
+const TOPPER_RE = /\((?:top|topped|top up)\)\s*$/i;
+
+// A float, a drizzle, a splash and a rinse are amounts of liquid, no different
+// from an ounce — the data just writes the unit after the ingredient instead of
+// before it. "Dark Rum float" is a measure of dark rum, and reading it as
+// unmeasured is what dropped a Mai Tai's float into the garnish line.
+const TRAILING_MEASURE_RE = /^(.*?)[\s(]+(float|drizzle|splash|rinse)\)?\s*$/i;
+
+// Where a component goes in the sequence. A float lands on the finished drink
+// and a rinse coats the glass before anything else, so neither is poured in
+// with the body of the drink — but both are ingredients.
+function roleOf(text) {
+  if (/[\s(](?:float|drizzle)\)?\s*$/i.test(text)) return "float";
+  if (/[\s(]rinse\)?\s*$/i.test(text)) return "rinse";
+  return null;
+}
+
+// Strip the trailing unit, so "¼ oz Islay Scotch (float)" reads as "¼ oz Islay
+// Scotch" once the step itself says to float it.
+export function stripTrailingUnit(text) {
+  return text.replace(/[\s(]+(?:float|drizzle|splash|rinse)\)?\s*$/i, "").trim();
+}
 
 // Parse the ingredient string into structured components plus garnishes.
 export function parseIngredients(str) {
@@ -98,13 +129,19 @@ export function parseIngredients(str) {
     const m = part.match(MEASURE_RE);
     if (m && !/\(garnish\)/i.test(part)) {
       components.push({ measure: m[1].trim(), item: m[2].trim(), text: part });
+    } else if (!m && TOPPER_RE.test(part)) {
+      components.push({ measure: "Top", item: part.replace(TOPPER_RE, "").trim(), text: part });
+    } else if (!m && TRAILING_MEASURE_RE.test(part)) {
+      const t = part.match(TRAILING_MEASURE_RE);
+      const unit = t[2][0].toUpperCase() + t[2].slice(1).toLowerCase();
+      components.push({ measure: unit, item: t[1].trim(), text: part });
     } else if (GARNISH_RE.test(part) || !m) {
       garnishes.push(part.replace(/\s*\(garnish\)\s*/i, "").trim());
     } else {
       components.push({ measure: m[1].trim(), item: m[2].trim(), text: part });
     }
   }
-  return { components, garnishes };
+  return { components: components.map(x => ({ ...x, role: roleOf(x.text) })), garnishes };
 }
 
 const SPIRITS = [
@@ -149,8 +186,14 @@ function glassPhrase(glass) {
   if (!g) return "a chilled glass";
   // "Coupe or Martini" → "a coupe or martini glass"; don't append "glass" to
   // things that already name the vessel.
-  const needsGlass = !/glass|mug|flute|tin|cup|shot/i.test(g);
-  return `a ${g.toLowerCase()}${needsGlass ? " glass" : ""}`;
+  // Word boundaries matter: "marTINi" contains "tin", which was suppressing the
+  // noun and leaving drinks "served in a martini". "Shot" is the vessel's whole
+  // name, so it does need "glass" appended.
+  const needsGlass = !/\b(glass|mug|flute|tin|cup)\b/i.test(g);
+  const phrase = `${g.toLowerCase()}${needsGlass ? " glass" : ""}`;
+  // No vessel in the set starts with a "yu" sound ("a unicorn"), so the plain
+  // vowel test is safe here.
+  return `${/^[aeiou]/i.test(phrase) ? "an" : "a"} ${phrase}`;
 }
 
 // Step-by-step build instructions, composed from the method, glassware and
@@ -159,10 +202,31 @@ function glassPhrase(glass) {
 // list, these pages teach the execution.
 export function buildSteps(c) {
   const method = getMethod(c);
-  const { components, garnishes } = parseIngredients(c.ingredients);
-  const list = components.map(x => x.text).join(", ");
+  const { components: parsed, garnishes } = parseIngredients(c.ingredients);
   const glass = glassPhrase(c.glass);
   const steps = [];
+
+  // A float goes on after the drink is finished and a rinse coats the glass
+  // before it is poured, so neither belongs in the shaker with everything
+  // else — a Penicillin's Islay float was being shaken into the drink it is
+  // supposed to sit on top of. A layered drink is the exception: there the
+  // float IS the layering, so leave it in sequence.
+  const layered = method === "Layered";
+  const floats = layered ? [] : parsed.filter(x => x.role === "float");
+  const rinses = layered ? [] : parsed.filter(x => x.role === "rinse");
+  // A topper only needs pulling out when the drink is mixed somewhere else and
+  // strained: a Seelbach's Champagne was going into the mixing glass and being
+  // strained back out again. In a build the topper is already last in the list
+  // and goes into the glass in the right order.
+  const strained = method === "Shaken" || method === "Stirred";
+  const toppers = strained ? parsed.filter(x => /^(top|splash)$/i.test(x.measure)) : [];
+  const held = new Set([...floats, ...rinses, ...toppers]);
+  const components = layered ? parsed : parsed.filter(x => !held.has(x));
+  const list = components.map(x => x.text).join(", ");
+
+  for (const r of rinses) {
+    steps.push(`Rinse ${glass} with ${stripTrailingUnit(r.text)}, swirl to coat, and discard the excess.`);
+  }
 
   if (method === "Shaken") {
     steps.push(`Add ${list} to a cocktail shaker.`);
@@ -244,6 +308,15 @@ export function buildSteps(c) {
   } else {
     steps.push(`Pour ${list} slowly over the back of a bar spoon, in the order listed.`);
     steps.push(`Take care to keep each layer distinct in ${glass}.`);
+  }
+
+  for (const t of toppers) {
+    steps.push(`Top with ${t.item}.`);
+  }
+
+  for (const f of floats) {
+    const verb = /drizzle/i.test(f.text) ? "Drizzle" : "Float";
+    steps.push(`${verb} ${stripTrailingUnit(f.text)} over the top.`);
   }
 
   if (garnishes.length) {
