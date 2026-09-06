@@ -106,6 +106,52 @@ const TOPPER_RE = /\((?:top|topped|top up)\)\s*$/i;
 // unmeasured is what dropped a Mai Tai's float into the garnish line.
 const TRAILING_MEASURE_RE = /^(.*?)[\s(]+(float|drizzle|splash|rinse)\)?\s*$/i;
 
+// Build order. Where a recipe does not dictate its own sequence, ingredients go
+// in liquor, citrus, syrup, juice order, with dashes, floats and splashes last.
+//
+// Carbonated things rank last whatever their volume: a Moscow Mule's four
+// ounces of ginger beer is still the thing that goes in on top.
+const ORDER_TOPPER = /\b(soda|seltzer|sparkling|tonic|ginger beer|ginger ale|cola|coca-cola|lemon-lime|lemonade|energy drink|champagne|prosecco|cava|topo chico|beer|lager|stout|cider)\b/i;
+const ORDER_LIQUOR = /\b(gin|vodka|rum|rhum|whisk(e)?y|rye|bourbon|scotch|tequila|mezcal|cachaça|cognac|brandy|armagnac|calvados|pisco|applejack|aquavit|absinthe|chartreuse|campari|aperol|suze|cynar|amaro|averna|fernet|bénédictine|drambuie|galliano|amaretto|kahlúa|baileys|curaçao|cointreau|triple sec|maraschino|liqueur|crème de|creme de|vermouth|sherry|port|lillet|dubonnet|punt e mes|pimm's|wine|sake|jägermeister|passoa|midori|chambord|st-germain|st\. germain|falernum|allspice dram|pastis|sambuca|schnapps|licor 43|heering|arrack|grappa|limoncello|advocaat|sloe gin|old tom|genever|overproof|southern comfort|151)\b/i;
+const ORDER_CITRUS = /\b(lime|lemon|grapefruit|orange)\b[^,]*\bjuice\b/i;
+const ORDER_SYRUP  = /\b(syrup|orgeat|grenadine|honey|agave|sugar|cane|gomme|nectar|cordial)\b/i;
+
+function buildRank(x) {
+  const measure = (x.measure || "").toLowerCase();
+  const item = x.item || "";
+  // A rinse is a small measured amount that never joins the pour, so in a
+  // written recipe it belongs with the dashes and floats at the end.
+  if (x.role === "float" || x.role === "rinse") return 4;
+  if (/^(top|splash|float|drizzle|rinse)$/.test(measure) || /dash|drop/.test(measure)) return 4;
+  if (ORDER_TOPPER.test(item)) return 4;
+  if (ORDER_LIQUOR.test(item)) return 0;
+  if (ORDER_CITRUS.test(item)) return 1;
+  if (ORDER_SYRUP.test(item)) return 2;
+  return 3; // juice, and anything the ranks cannot name — dairy, egg, mint
+}
+
+// The same ordering applied to a raw ingredient string, so the recipe as written
+// and the steps generated from it agree. Garnishes hold their relative order at
+// the end.
+export function canonicalIngredientOrder(str) {
+  const parts = splitParts(str || "");
+  const byText = new Map(parseIngredients(str).components.map(x => [x.text, x]));
+  return parts
+    .map((text, i) => ({ text, i, rank: byText.has(text) ? buildRank(byText.get(text)) : 9 }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .map(x => x.text)
+    .join(", ");
+}
+
+// Stable, so ingredients the ranking cannot separate keep the order the recipe
+// wrote them in.
+function inBuildOrder(components) {
+  return components
+    .map((x, i) => [x, i])
+    .sort((a, b) => buildRank(a[0]) - buildRank(b[0]) || a[1] - b[1])
+    .map(([x]) => x);
+}
+
 // Where a component goes in the sequence. A float lands on the finished drink
 // and a rinse coats the glass before anything else, so neither is poured in
 // with the body of the drink — but both are ingredients.
@@ -221,7 +267,13 @@ export function buildSteps(c) {
   const strained = method === "Shaken" || method === "Stirred";
   const toppers = strained ? parsed.filter(x => /^(top|splash)$/i.test(x.measure)) : [];
   const held = new Set([...floats, ...rinses, ...toppers]);
-  const components = layered ? parsed : parsed.filter(x => !held.has(x));
+  // "Where not specified" is the whole point of the default: a recipe that
+  // states its own sequence keeps it. The IBA's Aperol Spritz leads with the
+  // prosecco, a Caipirinha muddles the lime and sugar first, and neither is
+  // the default order. A layered drink's sequence IS the recipe.
+  const asWritten = layered || c.order === "as-written";
+  const components = asWritten ? parsed.filter(x => layered || !held.has(x))
+                               : inBuildOrder(parsed.filter(x => !held.has(x)));
   const list = components.map(x => x.text).join(", ");
 
   for (const r of rinses) {
