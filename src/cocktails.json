@@ -17,7 +17,7 @@
     { "rank": 15, "name": "Americano", "glass": "Highball or Rocks", "ingredients": "1 oz Campari, 1 oz Sweet Vermouth, Soda Water (top), Orange slice (garnish)" },
     { "rank": 16, "name": "Moscow Mule", "glass": "Copper Mug", "ingredients": "2 oz Vodka, ½ oz Fresh Lime Juice, 4 oz Ginger Beer, Lime wedge & Mint (garnish)" },
     { "rank": 17, "name": "Bamboo", "glass": "Coupe or Nick & Nora", "ingredients": "1½ oz Dry Sherry, 1½ oz Dry Vermouth, 1 dash Orange Bitters, 1 dash Angostura Bitters" },
-    { "rank": 18, "name": "Zombie", "glass": "Zombie (Highball)", "ingredients": "1½ oz Dark Rum, 1½ oz Gold Rum, 1 oz 151 Rum, 1 oz Falernum, 1 oz Fresh Lime Juice, 1 oz Grapefruit Juice, ½ oz Cinnamon Syrup, 2 dashes Grenadine, Absinthe float" },
+    { "rank": 18, "name": "Zombie", "glass": "Zombie (Chimney)", "ingredients": "1½ oz Gold Puerto Rican Rum, 1½ oz Dark Jamaican Rum, 1 oz 151 Demerara Rum, ¾ oz Fresh Lime Juice, ½ oz Falernum, ½ oz Don's Mix (2 parts grapefruit juice, 1 part cinnamon syrup), 1 tsp Grenadine, 1 dash Angostura Bitters, 6 drops Absinthe" },
     { "rank": 19, "name": "Boulevardier", "glass": "Coupe or Rocks", "ingredients": "1¼ oz Bourbon, 1 oz Campari, 1 oz Sweet Vermouth, Orange peel (garnish)" },
     { "rank": 20, "name": "Penicillin", "glass": "Rocks", "ingredients": "2 oz Blended Scotch, ¾ oz Fresh Lemon Juice, ¾ oz Honey-Ginger Syrup, ¼ oz Islay Scotch (float)" },
     { "rank": 21, "name": "Pisco Sour", "glass": "Coupe or Rocks", "ingredients": "2 oz Pisco, 1 oz Fresh Lime Juice, ¾ oz Simple Syrup, 1 Egg White, 2 dashes Angostura Bitters (garnish)" },
