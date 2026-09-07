@@ -756,3 +756,4 @@ npm run icons     # redraw every icon and splash from scripts/icons.mjs
 | [docs/consent.md](docs/consent.md) | GDPR consent on web and Android, and what happens when ads do not come. |
 | [docs/mobile-google-signin.md](docs/mobile-google-signin.md) | Native Google sign-in for the Capacitor build, and diagnosing failures. |
 | [docs/mobile-monetization.md](docs/mobile-monetization.md) | AdMob, Play Billing and RevenueCat setup, phase by phase. |
+| [docs/store-listing.md](docs/store-listing.md) | The Play listing copy — app name, short and full description — and the claims it is allowed to make. |
