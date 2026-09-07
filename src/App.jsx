@@ -1,3 +1,4 @@
+/* global __BUILD_TIME__ */ // injected by vite.config.js — see the build stamp in the billing diagnostics
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
@@ -361,6 +362,12 @@ export default function App() {
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
+  // Held shut until RevenueCat's app-user id is confirmed to be this uid — a
+  // purchase started before that lands on the wrong id and can never be
+  // attributed to the account. Computed here rather than inside the button so
+  // the diagnostics below can explain the wait.
+  const awaitingIdentity = firebaseEnabled && Boolean(user) && linkedUid !== user.uid;
+
   // Master Mode counts only when it is both switched on and paid for.
   const masterOn = Boolean(st.masterMode) && isPro;
   const pool = poolFor(st, isPro);
@@ -489,6 +496,10 @@ export default function App() {
       setLinkedUid(ok && user ? user.uid : null);
       setAdsRemovedNative(Boolean(active));
       setBillingErr(ok ? null : (error || null));
+    }).catch(e => {
+      // A rejection here would otherwise leave the button on "Connecting…" with
+      // nothing said, which is the exact failure this panel exists to end.
+      setBillingErr({ step: "link", message: e?.message || String(e), code: e?.code ? String(e.code) : null });
     });
   }, [authReady, user]);
 
@@ -1164,38 +1175,30 @@ export default function App() {
             </div>
             <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
           </div>
-          {/* Held shut until RevenueCat's app-user id is confirmed to be this
-              uid — a purchase started before that lands on the wrong id and can
-              never be attributed to the account. */}
-          {(() => {
-            const awaitingIdentity = firebaseEnabled && Boolean(user) && linkedUid !== user.uid;
-            const blocked = purchasing || awaitingIdentity;
-            return (
-              <button onClick={buyRemoveAdsNative} disabled={blocked} style={{background:blocked?"#334155":"#22c55e",color:blocked?"#64748b":"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:blocked?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
-                {purchasing ? "Processing…" : awaitingIdentity ? "Connecting…" : "✨ Go Pro"}
-              </button>
-            );
-          })()}
+          <button onClick={buyRemoveAdsNative} disabled={purchasing || awaitingIdentity} style={{background:(purchasing||awaitingIdentity)?"#334155":"#22c55e",color:(purchasing||awaitingIdentity)?"#64748b":"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:(purchasing||awaitingIdentity)?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+            {purchasing ? "Processing…" : awaitingIdentity ? "Connecting…" : "✨ Go Pro"}
+          </button>
         </div>
         {/* Stands in for the console this build has no way to reach. Shown only
             when linking actually failed, and it names the step, the SDK's own
             message, and the few facts that separate the causes: a missing key, a
             key with whitespace on it, the wrong entitlement id, or no bridge. */}
-        {billingErr && (() => {
+        {(billingErr || awaitingIdentity) && (() => {
           const d = getBillingDiagnostics();
           const rows = [
-            ["failed at", billingErr.step],
-            ["message", billingErr.message],
-            ["code", billingErr.code || "—"],
+            ["failed at", billingErr ? billingErr.step : "nothing reported — still waiting"],
+            ["message", billingErr ? billingErr.message : "The link has not come back yet."],
+            ["code", (billingErr && billingErr.code) || "—"],
             ["sdk key", d.keySet ? `${d.keyPrefix}… (${d.keyLength} chars)` : "MISSING"],
             ["key whitespace", d.keyStripped ? `${d.keyStripped} stray character(s) trimmed — fix the env var` : "none"],
             ["entitlement", d.entitlement],
             ["native bridge", d.bridge ? "present" : "absent"],
+            ["build", typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown"],
           ];
           return (
             <div role="alert" style={{borderTop:"1px solid #33415560",paddingTop:"0.65rem"}}>
-              <div style={{color:"#f87171",fontSize:"0.75rem",fontWeight:700,marginBottom:"0.45rem"}}>
-                Couldn't link this account to the store
+              <div style={{color:billingErr?"#f87171":"#f59e0b",fontSize:"0.75rem",fontWeight:700,marginBottom:"0.45rem"}}>
+                {billingErr ? "Couldn't link this account to the store" : "Still connecting to the store"}
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:"0.15rem",fontSize:"0.68rem",userSelect:"text"}}>
                 {rows.map(([k,v]) => (
