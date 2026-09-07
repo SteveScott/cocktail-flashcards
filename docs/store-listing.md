@@ -20,13 +20,12 @@ Two rules the copy follows deliberately:
   quiz lengths, the price and what Pro carries all come from
   `src/cocktails.json` and `src/App.jsx`. When those change, this file changes
   with them.
-- **The size of the collection is a floor, not a count.** The copy says "320+",
-  and Pro "adds every other cocktail in the collection" rather than naming the
-  271 it happens to be today, so adding recipes does not silently make the
-  listing wrong. `src/cocktails.json` holds 321 (50 free + 271 Pro) as of this
-  writing; raise the floor to the next round number once the collection passes
-  it, never above the real total. The free tier is the top 50 and is fixed, so
-  that one is stated outright.
+- **The collection sizes are floors, not counts.** "320+" for the whole book and
+  "270+" for what Pro adds, so shipping a new recipe does not silently make the
+  listing wrong. `src/cocktails.json` holds 321 as of this writing (50 free +
+  271 Pro); raise each floor to the next round number once the collection passes
+  it, and never above the real total. The free tier is the top 50 and is a fixed
+  list rather than a running total, so that one is stated outright.
 - **No ranking or endorsement claims.** No "best", no "#1", no "as featured in",
   no invented testimonials — Play's metadata policy prohibits them, and there are
   no real numbers to cite yet anyway. The one external reference, Drinks
@@ -47,7 +46,7 @@ Cocktail Flashcards
 Learn 320+ classic cocktail recipes by heart with flashcards and drill quizzes.
 ```
 
-## Full description — 2,586 / 4000
+## Full description — 2,979 / 4000
 
 ```
 Bar guides tell you what is in a drink. Flashcards make you remember it.
@@ -66,17 +65,23 @@ Pick a length, get a fresh shuffle of the whole book, and mark yourself honestly
 Every ingredient in the drink, plus one to three that have no business being there, all checked. Uncheck the fakes. This one grades itself: right only when every real ingredient survives and every impostor is gone. The impostors are drawn from every ingredient in the collection, so a Margarita can be sabotaged with anything on the shelf.
 
 Index — Search Cocktails
-Search all 320+ recipes by name, accent-insensitive, so "pina" finds the Piña Colada. Read any spec, add drinks straight to your deck, and mark off the ones you have actually made.
+Search all 320+ recipes by name, accent-insensitive, so "pina" finds the Piña Colada. Read any spec and add drinks straight to your deck.
 
-PROGRESS THAT FOLLOWS YOU
+KEEP TRACK OF WHAT YOU HAVE TRIED
 
-Start with no account — everything works on the device, and once the app has loaded it keeps working without a signal. Sign in with Google and your deck, scores, learned pile and tried list sync across devices, so a card mastered on your phone at the bar is mastered on your laptop at home. Signing in merges the progress already on your device rather than wiping it.
+Mark a drink as tried, from its card or from the index, and the app remembers. Filter the list down to the ones you have had, or the ones you have not, and pick your next round from there. It is a separate tally from studying: you can have drunk a Vesper without ever putting it in your deck, and learning one does not tick it off for you.
+
+YOUR PROGRESS GOES WITH YOU
+
+Nothing to sign up for — open it and start. Lose the signal on the subway and it keeps going, because your cards are already on the phone, and everything you get right down there is still there when you come back up.
+
+Sign in with Google and your progress follows you between the app and the website. Run through a few on your phone at the bar, sit down at a laptop at home, and the same deck, the same scores and the same tried list are waiting.
 
 FREE, AND PRO
 
 Free: the top 50 bestselling classics in Study Mode and both quizzes, the full index of 320+ recipes to read and search, supported by ads.
 
-Cocktail Flashcards Pro — $7.99, paid once, not a subscription: adds every other cocktail in the collection to Study Mode and both quizzes, and removes the ads. The purchase carries over to cocktailflashcards.com with the same Google account, and it restores on a new device.
+Cocktail Flashcards Pro — $7.99, paid once, not a subscription: adds all 270+ cocktails to Study Mode and both quizzes, and removes the ads. Buy it in the app and it works on the website too under the same Google account, and it restores on a new device.
 
 Built for bartenders learning a new menu, barbacks working toward the well, home hosts, and anyone tired of looking up the Last Word for the fourth time.
 
