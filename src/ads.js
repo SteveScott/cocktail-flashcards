@@ -51,8 +51,8 @@ export function adSlotId(placement) {
   return AD_SLOTS[placement] || "";
 }
 
-// Whether any ad COULD be served by this build. Necessary for the "Remove Ads"
-// card in App.jsx, but not sufficient — see areAdsServing() below.
+// Whether any ad COULD be served by this build. Necessary before the Pro card in
+// App.jsx may promise to remove ads, but not sufficient — see areAdsServing().
 export const isAdNetworkConfigured = Boolean(ADSENSE_CLIENT);
 
 export function loadAds() {
@@ -77,20 +77,21 @@ export function loadAds() {
 // Tearing the tag out mid-session would take Funding Choices with it, breaking
 // "Privacy & cookie settings" for a user who is still on the page. Nothing needs
 // it either: web ad removal goes through Stripe Checkout, which leaves the site
-// entirely and returns on a fresh page load (startCheckout in App.jsx sets
-// window.location.href), so the load gate below has already re-evaluated by the
+// entirely and returns on a fresh page load (startCheckout in App.jsx calls
+// window.location.assign), so the load gate below has already re-evaluated by the
 // time the buyer sees the app again. A paid-up user never fetches this script.
 
 // ── Is an ad actually on the screen right now? ──────────────────────────────
 //
 // isAdNetworkConfigured only says a publisher id exists. It is true on every
-// normal build, so on its own it would let the "Remove Ads" card offer to remove
-// ads that are not there — which is exactly what it looks like today, with the
-// tag loading fine against an account AdSense has not yet approved. An unapproved
-// account, a site pending review, an ad blocker and an unfilled page all serve
-// the script happily and render nothing.
+// normal build, so on its own it would let the Pro card offer to remove ads that
+// are not there — which is exactly what it looks like today, with the tag loading
+// fine against an account AdSense has not yet approved. An unapproved account, a
+// site pending review, an ad blocker and an unfilled page all serve the script
+// happily and render nothing.
 //
-// So the card asks this instead, and the answer comes from the page itself.
+// So the card's ad promise asks this instead, and the answer comes from the page
+// itself.
 // AdSense stamps each unit it resolves with data-ad-status="filled" or
 // "unfilled"; one filled unit is proof an ad is on screen. Auto ads inject those
 // <ins> elements themselves, which is why nothing here places a slot.

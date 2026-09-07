@@ -89,7 +89,7 @@ Five ideas explain most of the design:
 | `src/main.jsx` | Mounts the app; registers the PWA service worker. |
 | `src/index.css`, `src/App.css` | Global styles and self-hosted fonts. Component styling is inline. |
 | `scripts/seo-pages.mjs` | Vite plugin that emits a static HTML page per recipe, an index, and a sitemap. |
-| `scripts/create-remove-ads-product.mjs` | One-time Stripe product/price setup. |
+| `scripts/create-pro-product.mjs` | One-time Stripe product/price setup. |
 | `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
 | `firestore.rules` | The access-control model. Read this before touching the `users` document. |
 | `public/` | Static assets, `manifest.json`, `pwa-sw.js`, `privacy.html`, `robots.txt`, `ads.txt`. |
@@ -102,12 +102,15 @@ Five ideas explain most of the design:
 `src/cocktails.json` holds two arrays:
 
 - **`top50`** — the 50 ranked drinks (`rank` 1–50, Drinks International 2026).
-  This is the default study pool.
-- **`master150`** — the rest. The name is historical; it holds 271 recipes.
+  This is the free study pool, and the default one.
+- **`master150`** — the rest. The name is historical; it holds 271 recipes. This
+  is what a Pro purchase adds to study and quizzes.
 
-Together they are 321 recipes. In `App.jsx` the combined list is called
-`ALL_200` for the same historical reason. Neither number in either name is
-true any more; the names are not worth a migration.
+Together they are 321 recipes, combined in `App.jsx` as `ALL_CARDS`. The two
+array names are historical and neither number in them is true any more, but they
+are the Firestore-adjacent shape of the data and not worth a migration; the
+combined list was renamed when the split stopped being cosmetic and became the
+line the paywall runs along.
 
 A recipe is one JSON object on one line, and that formatting is load-bearing:
 several maintenance scripts edit the file line by line, and one-line-per-recipe
@@ -323,16 +326,20 @@ values:
 
 | `mode` | Screen |
 |---|---|
-| `menu` | Stats, sign-in, mode buttons, ad-removal and admin panels. |
-| `index` | Search across all 321 (accent-insensitive: "pina" finds Piña Colada), add/remove from the study deck, mark tried, filter by tried. |
+| `menu` | Stats, sign-in, mode buttons, the "Add All Cards" switch (the paywall), Pro and admin panels. |
+| `index` | Search across all 321 (accent-insensitive: "pina" finds Piña Colada), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
-| `quizlen` | Choose a quiz length. |
-| `quiz` | Self-graded reveal quiz over a fresh shuffle of the whole pool. |
-| `results` | Score, missed list, fireworks at 100%. |
+| `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
+| `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Both draw a fresh shuffle of the whole pool. |
+| `results` | Score, missed list, fireworks at 100%. Retry repeats the same quiz and length. |
 
 ### Study
 
-- The **pool** is `top50`, or all 321 in *master mode* (`masterMode`).
+- The **pool** is `top50`, or all 321 in *master mode* (`masterMode`) — but only
+  for a Pro user. `poolFor(st, pro)` is the one place that decides, and it
+  ignores `masterMode` without the entitlement, so a lapsed purchase or an
+  entitlement that has not loaded yet falls back to the free 50 rather than
+  handing out paid cocktails.
 - The **deck** (`active`) is a list of names of size `deckSize` (default 20),
   filled from the pool in order. `refillDeck` brings it to size after any
   change — padding from the pool, or truncating past the limit.
@@ -341,15 +348,29 @@ values:
   refills. Card colours follow the score: grey, blue at 2, amber at 4, green at 6.
 - Adding a drink from the index puts it at the **front** of the deck, so the size
   cap trims the deck's last card rather than the one just added, and pulls it
-  out of `learned` so it reappears.
-- Switching master mode filters `learned` and `active` to names valid in the new
-  pool; scores are kept.
+  out of `learned` so it reappears. Only pool drinks can be added: past the free
+  50 the index button is `🔒 Pro` and opens the purchase instead. For a Pro user
+  whose library is merely switched off, adding one switches it back on.
+- `refillDeck` also **drops names the pool does not hold**, and the deck is
+  narrowed to the pool again at the point of use (`deck`), so a deck built while
+  master mode was free collapses to its free cards without a migration.
+- Switching master mode off leaves `learned`, `tried` and scores alone — it is a
+  change of scope, not a reset. Only the deck narrows, and the cards come back
+  when the pool widens.
 
 ### Quiz
 
 Every quiz is a fresh Fisher–Yates shuffle of the **whole pool**, not the deck,
 sliced to the chosen length — shuffle before slice is what makes a short quiz a
-random sample. Grading is self-reported and does not touch study scores.
+random sample. Since the pool honours the entitlement, a free player is quizzed
+on the top 50 in both quizzes.
+
+**Self Quiz** grading is self-reported and does not touch study scores. **86 It**
+grades itself: right only when every real ingredient survives and every impostor
+is gone. Its impostors are drawn from `CODEX`, a frequency-weighted index of every
+ingredient in the corpus — deliberately the whole corpus and not the player's
+pool, because an impostor is an ingredient name rather than a recipe, and a
+smaller draw would make the free game easier rather than smaller.
 
 ### Tried
 
@@ -371,7 +392,7 @@ Everything that is *progress* lives in one object, `st`:
   active:     [name],               // the study deck, in order
   learned:    [name],               // mastered
   tried:      [name],               // marked tried
-  masterMode: boolean,              // pool = all 321 (true) or top50
+  masterMode: boolean,              // wants all 321 — honoured only with Pro
   deckSize:   number,               // default 20
   uid?:       string                // stamped when it belongs to an account
 }
@@ -505,14 +526,31 @@ platforms. See [docs/mobile-google-signin.md](docs/mobile-google-signin.md).
 
 ## Monetization, entitlements and consent
 
-A user is **ad-free** if any of three things is true:
+One purchase, **Cocktail Flashcards Pro** ($4.99, one-time), carrying two things:
+
+- **The library.** Study and both quizzes cover the top 50 for free; the "Add All
+  Cards" switch on the menu adds the other 271 to both, and that switch is the
+  paywall. The index still lists every recipe to read either way — a locked one
+  simply cannot enter a deck. Marking a drink **tried** is never gated: it is a
+  fact about the drinker, not study content.
+- **No ads.**
+
+A user has it if any of three things is true:
 
 ```
-adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative
+isPro = adWhitelisted || adsRemovedCloud || adsRemovedNative
 ```
 
 — on the whitelist, `adsRemoved` on their Firestore document, or (Play build)
-RevenueCat reports the entitlement on this device.
+RevenueCat reports the entitlement on this device. `adFree` is an alias of the
+same flag, so each call site reads as the half it is about.
+
+**The field names lag the product.** `adsRemoved`, `adsRemovedStripe` and
+`adsRemovedPlay` all now mean "is Pro". They kept their names because the Stripe
+and RevenueCat webhooks write them and a rename would be a migration for no
+behavioural gain; the RevenueCat entitlement has been `cocktail_flashcards_pro`
+all along. Nothing server-side changed when the library was added to the product
+— `poolFor()` reads the same flag the banner logic does.
 
 ### Web
 
@@ -525,10 +563,15 @@ RevenueCat reports the entitlement on this device.
 - Ads are placed explicitly by `AdSlot` (menu and index), which reserves space,
   keeps it if an ad fills, and unmounts if nothing arrives within 5 s — an ad
   blocker, a blocked script, or an account still pending review.
-- The **"Remove Ads" card appears only once an ad is demonstrably on screen**
+- The Pro card is always offered, because there is always the library to sell,
+  but **its ad promise appears only once an ad is demonstrably on screen**
   (`areAdsServing` watches for `data-ad-status="filled"` for 30 s). Offering to
-  remove ads that are not there reads as a broken button.
-- Purchase is **Stripe Checkout** ($4.99, one-time). The function verifies the
+  remove ads that are not there reads as a broken button; the card drops that
+  half of the pitch instead of hiding.
+- Purchase is **Stripe Checkout** ($4.99, one-time), reached from anywhere the
+  paywall is met — the library switch, a locked index row, the quiz length
+  picker — through one `unlockPro()` entry point that picks the flow the build
+  supports. The function verifies the
   buyer's Firebase ID token and sets `client_reference_id = uid`; Stripe's
   webhook grants `adsRemovedStripe`. The app returns to `/?purchase=success` and
   polls the document six times at 1.5 s, since the webhook lags the redirect.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import {
@@ -30,11 +30,17 @@ const { top50, master150 } = cocktailData;
 // possible answer is "purchases aren't available in this build".
 const billingReady = isBillingAvailable();
 
-const ALL_200 = [...top50, ...master150];
+// Every cocktail in the book. The free tier studies and quizzes the top 50 of
+// them; the rest is what a Pro purchase adds — see poolFor() below.
+const ALL_CARDS = [...top50, ...master150];
 
 // Every ingredient in the corpus with its frequency, for drawing impostors in
-// the 86 It quiz. Built once — the codex never changes at runtime.
-const CODEX = buildCodex(ALL_200);
+// the 86 It quiz. Built once — the codex never changes at runtime. Deliberately
+// the whole corpus and not the player's pool: an impostor is an ingredient name,
+// not a recipe, and drawing them from 50 drinks would make the free game easier
+// rather than smaller.
+const CODEX = buildCodex(ALL_CARDS);
+
 const DECK_SIZE = 20;
 const MASTERY_SCORE = 6;
 const STORAGE_KEY = "cocktail_state_v4";
@@ -70,6 +76,15 @@ const GLASS_ICONS = [
   ["zombie", "🥤"],
 ];
 
+// The cocktails a progress state actually studies and quizzes from. Master Mode
+// — the switch that adds the whole library — is the paid half of the product, so
+// it only widens the pool when Pro is unlocked: a lapsed purchase, or an
+// entitlement that hasn't loaded yet, falls back to the free top 50 rather than
+// handing out paid cocktails.
+function poolFor(st, pro) {
+  return pro && st?.masterMode ? ALL_CARDS : top50;
+}
+
 // Fisher–Yates on a copy. Shared by both quizzes, which each need a fresh
 // random order of the whole pool rather than its first n cocktails.
 function shuffled(list) {
@@ -82,21 +97,26 @@ function shuffled(list) {
 }
 
 function initState(masterMode) {
-  const pool = masterMode ? ALL_200 : top50;
+  const pool = masterMode ? ALL_CARDS : top50;
   const scores = {};
   pool.forEach(c => { scores[c.name] = 0; });
   return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], tried: [], deckSize: DECK_SIZE };
 }
 
-// Bring the study deck to exactly its chosen size. Too short: pad from the pool.
-// Too long: truncate in order, dropping the cards past the limit (their scores
-// are kept). Trimming here — not only in the size picker — is what stops the
-// cloud merge (a union of two devices' decks) from leaving an oversized deck.
+// Bring the study deck to exactly its chosen size, holding only cards the pool
+// actually contains. Out of pool: dropped — that is what keeps paid cocktails
+// out of a deck once the full library is switched off, and it costs nothing
+// permanent, since scores and `learned` are left alone and the cards come back
+// when the pool widens again. Too short: pad from the pool. Too long: truncate
+// in order, dropping the cards past the limit. Trimming here — not only in the
+// size picker — is what stops the cloud merge (a union of two devices' decks)
+// from leaving an oversized deck.
 function refillDeck(st, pool) {
   const target = st.deckSize || DECK_SIZE;
+  const inPool = new Set(pool.map(c => c.name));
   const lSet = new Set(st.learned), aSet = new Set(st.active);
   const avail = pool.map(c => c.name).filter(n => !lSet.has(n) && !aSet.has(n));
-  const na = st.active.slice(0, target);
+  const na = st.active.filter(n => inPool.has(n)).slice(0, target);
   while (na.length < target && avail.length > 0) na.push(avail.shift());
   return { ...st, active: na };
 }
@@ -114,8 +134,10 @@ function saveLocal(s) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
 }
 
-// Merge two progress states (e.g. local device + cloud account) without losing progress either side made.
-function mergeStates(a, b) {
+// Merge two progress states (e.g. local device + cloud account) without losing
+// progress either side made. `pro` is passed in rather than read from module
+// state because it decides how wide the merged deck may be — see poolFor().
+function mergeStates(a, b, pro) {
   if (!a) return b;
   if (!b) return a;
   const scores = { ...a.scores };
@@ -125,7 +147,7 @@ function mergeStates(a, b) {
   // fact that a second device cannot un-know.
   const tried = Array.from(new Set([...(a.tried||[]), ...(b.tried||[])]));
   const masterMode = a.masterMode || b.masterMode;
-  const pool = masterMode ? ALL_200 : top50;
+  const pool = poolFor({ masterMode }, pro);
   const lSet = new Set(learned);
   const active = Array.from(new Set([...(a.active||[]), ...(b.active||[])])).filter(n => !lSet.has(n));
   const deckSize = a.deckSize || b.deckSize || DECK_SIZE;
@@ -282,12 +304,24 @@ export default function App() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
-  const adFree = adWhitelisted || adsRemovedCloud || adsRemovedNative;
+  // One purchase — "Cocktail Flashcards Pro" — carries both halves of the
+  // product: no ads, and the whole library instead of the free top 50. Two names
+  // for the one flag so each call site reads as the half it is about. The ad
+  // whitelist grants Pro outright: it is handed out by an admin, not bought.
+  const isPro = adWhitelisted || adsRemovedCloud || adsRemovedNative;
+  const adFree = isPro;
+  // The cloud-sync effect below mounts once, so the `isPro` its snapshot handler
+  // closed over is frozen at whatever it was then — false, on a cold start. A ref
+  // keeps the live value reachable in there, so a merge can never narrow the pool
+  // of someone who has already been confirmed as Pro.
+  const proRef = useRef(false);
+  useEffect(() => { proRef.current = isPro; }, [isPro]);
 
-  // Is this visitor actually being served web ads right now? Selling ad removal
-  // when the answer is no leaves a greyed-out "Remove Ads" button advertising a
-  // product that would change nothing — which reads as broken rather than as
-  // "there's nothing here to remove". Three things have to hold:
+  // Is this visitor actually being served web ads right now? It no longer
+  // decides whether Pro is offered — Pro also unlocks the library, so there is
+  // always something to sell — but it does decide whether the pitch may promise
+  // to remove ads, which would otherwise advertise a change this visitor would
+  // never see. Three things have to hold:
   //
   //   1. this is the web build (the Play build sells the same thing natively);
   //   2. a publisher id is configured — VITE_ADSENSE_CLIENT set to an empty
@@ -298,7 +332,8 @@ export default function App() {
   //      nothing filled, and renders nothing in all three cases. adsServing is
   //      the page's own answer rather than a guess from config.
   //
-  // ...and the user must not already be ad-free, which is what they'd be buying.
+  // ...and the user must not already be ad-free, since there'd be nothing left
+  // for the ad half of the pitch to promise.
   //
   // Consent is deliberately not a term here. The AdSense tag loads before the
   // user decides because it carries the consent prompt — but an undecided
@@ -313,8 +348,21 @@ export default function App() {
 
   const isAdmin = firebaseEnabled && Boolean(user?.email) && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
-  const pool = st.masterMode ? ALL_200 : top50;
-  const learned = st.learned?.length || 0;
+  // Master Mode counts only when it is both switched on and paid for.
+  const masterOn = Boolean(st.masterMode) && isPro;
+  const pool = poolFor(st, isPro);
+  const poolNames = new Set(pool.map(c => c.name));
+  // Counted within the pool: a deck that once held the whole library would
+  // otherwise report more cocktails learned than the free tier even has, and
+  // push the progress bar past 100%.
+  const learned = (st.learned || []).filter(n => poolNames.has(n)).length;
+  // The deck as it is studied, which is `st.active` narrowed to the pool. Stored
+  // state can hold cards the pool no longer covers — progress saved while the
+  // full library was on, and every deck built back when it was free — and
+  // refillDeck only clears those out on the next write. Narrowing at the point of
+  // use means the free tier never studies a paid cocktail in the meantime, and
+  // nothing is deleted to achieve it.
+  const deck = st.active.filter(n => poolNames.has(n));
   const total = pool.length;
   const deckSize = st.deckSize || DECK_SIZE;
 
@@ -351,7 +399,12 @@ export default function App() {
           if (snap.metadata.hasPendingWrites) return;
           const data = snap.exists() ? snap.data() : null;
           const cloud = data?.progress || null;
-          setAdsRemovedCloud(Boolean(data?.adsRemoved));
+          const accountPro = Boolean(data?.adsRemoved);
+          setAdsRemovedCloud(accountPro);
+          // How wide the merged pool may be. Read from this very snapshot rather
+          // than from state that hasn't re-rendered yet, and unioned with what we
+          // already know so a native-only purchase isn't overlooked.
+          const pro = accountPro || proRef.current;
 
           if (firstSnapshot) {
             firstSnapshot = false;
@@ -374,8 +427,8 @@ export default function App() {
                 Object.values(prev.scores || {}).some(v => v > 0);
               const anonymousWithProgress = !prev.uid && hasLocalProgress;
               const resolved = (sameUser || anonymousWithProgress)
-                ? mergeStates(prev, cloud)
-                : (cloud ? refillDeck(cloud, cloud.masterMode ? ALL_200 : top50) : initState(false));
+                ? mergeStates(prev, cloud, pro)
+                : (cloud ? refillDeck(cloud, poolFor(cloud, pro)) : initState(false));
               const stamped = { ...resolved, uid: u.uid };
               setDoc(doc(db, "users", u.uid), { progress: stamped, updatedAt: Date.now() }, { merge: true })
                 .catch(e => console.error("Cloud sync failed", e));
@@ -392,7 +445,7 @@ export default function App() {
           if (!cloud) return;
           setSt(prev => {
             if (prev.uid !== u.uid) return prev;
-            const merged = { ...mergeStates(prev, cloud), uid: u.uid };
+            const merged = { ...mergeStates(prev, cloud, pro), uid: u.uid };
             if (progressEqual(prev, merged)) return prev;
             // The remote update can drop the card we're sitting on, so keep the
             // study index inside the new deck.
@@ -501,7 +554,7 @@ export default function App() {
     onGdprApplicable(applies => setGdprApplies(applies));
   }, []);
 
-  // Reveal the "Remove Ads" card only once an ad is genuinely on screen. The
+  // Let the Pro card promise no ads only once an ad is genuinely on screen. The
   // subscription is set up unconditionally rather than inside the load effect
   // above, so it is already listening whichever order the two resolve in.
   useEffect(() => {
@@ -694,7 +747,10 @@ export default function App() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) throw new Error(data.error || "Failed to start checkout");
-      window.location.href = data.url;
+      // assign() rather than `location.href = …`: identical navigation, but it
+      // reads as the call it is, which keeps the React lint from seeing a write
+      // to a value it tracks now that unlockPro() also reaches this function.
+      window.location.assign(data.url);
     } catch (e) {
       console.error("Failed to start checkout", e);
       // Surface the server's specific reason (e.g. "Payments aren't configured yet")
@@ -767,6 +823,21 @@ export default function App() {
       console.error("Restore failed", e);
       setPurchaseMsg("Couldn't restore — please try again.");
     }
+  }
+
+  // One entry point for "I want Pro", wherever it was asked from: the library
+  // switch, a locked cocktail in the Index, the quiz length picker. Which flow
+  // that is belongs to the build — Play Billing inside the Android shell, Stripe
+  // Checkout on the web — and neither is a dead end, because both surface their
+  // own failures through purchaseMsg.
+  function unlockPro() {
+    if (isPro) return;
+    if (billingReady) { buyRemoveAdsNative(); return; }
+    if (FEATURES.stripePurchase && firebaseEnabled) { startCheckout(); return; }
+    // No purchase path in this build. Say so on the menu, where the message
+    // renders, rather than swallowing the tap.
+    setPurchaseMsg("Purchases aren't available in this build.");
+    setMode("menu");
   }
 
   // Play build: reopen Google's UMP privacy form so ad consent can be changed
@@ -851,15 +922,17 @@ export default function App() {
   function grade(correct) {
     // Clamped for the same reason as the study render: a live sync from another
     // device can drop the card this index pointed at.
-    const cur = Math.min(di, st.active.length - 1);
+    const cur = Math.min(di, deck.length - 1);
     if (cur < 0) return;
+    // Graded by name, not by position: `deck` and `p.active` only line up once
+    // the out-of-pool cards have been cleared out of the stored deck.
+    const ci = deck[cur];
     upd(p => {
-      const ci = p.active[cur];
       const ns = Math.max(0, (p.scores[ci] || 0) + (correct ? 1 : -1));
       const scores = { ...p.scores, [ci]: ns };
       let active = [...p.active], learned = [...(p.learned||[])];
       const mastered = ns >= MASTERY_SCORE;
-      if (mastered) { learned.push(ci); active.splice(cur, 1); }
+      if (mastered) { learned.push(ci); active = active.filter(n => n !== ci); }
       const u = refillDeck({ ...p, scores, active, learned }, pool);
       const next = mastered ? Math.min(cur, u.active.length-1) : u.active.length > 0 ? (cur+1) % u.active.length : 0;
       setDi(Math.max(0, next)); setRevealed(false);
@@ -867,8 +940,8 @@ export default function App() {
     });
   }
 
-  function next() { setDi(i => (i+1) % st.active.length); setRevealed(false); }
-  function prev() { setDi(i => (i-1+st.active.length) % st.active.length); setRevealed(false); }
+  function next() { setDi(i => (i+1) % deck.length); setRevealed(false); }
+  function prev() { setDi(i => (i-1+deck.length) % deck.length); setRevealed(false); }
   // Build a fresh, fully-shuffled quiz order every time — quizzing always draws
   // from the whole pool in random sequence (Fisher–Yates), never the fixed pool
   // order. Shuffling before the slice is what makes a short quiz a random sample
@@ -925,34 +998,48 @@ export default function App() {
 
   // Start whichever quiz the picker was opened for.
   function startPicked(n) { if (quizKind === "86") start86Quiz(n); else startQuiz(n); }
+
+  // Switch the whole library into study and quizzes, or back to the free top 50.
+  // The library is what Pro sells, so switching it on without Pro opens the
+  // paywall instead of widening the pool.
   function toggleMaster() {
+    if (!isPro) { unlockPro(); return; }
     upd(p => {
-      const m = !p.masterMode, np = m ? ALL_200 : top50;
-      const validNames = new Set(np.map(c => c.name));
+      const m = !p.masterMode, np = poolFor({ masterMode: m }, true);
       const scores = {...p.scores};
       np.forEach(c => { if (scores[c.name] === undefined) scores[c.name] = 0; });
-      const lrn = (p.learned||[]).filter(n => validNames.has(n));
-      const act = p.active.filter(n => validNames.has(n));
-      return refillDeck({...p, scores, learned:lrn, active:act, masterMode:m}, np);
+      // `learned` is deliberately not filtered down to the pool: mastering a
+      // cocktail is progress the user earned, and switching the library off is a
+      // change of scope, not a reset. refillDeck takes the out-of-pool cards out
+      // of the deck itself, which is all that has to happen here.
+      return refillDeck({...p, scores, masterMode:m}, np);
     });
   }
   function reset() {
     if (!confirm("Reset all progress?")) return;
-    setSt(initState(st.masterMode)); setDi(0); setRevealed(false);
+    setSt(initState(masterOn)); setDi(0); setRevealed(false);
   }
   // Add or remove a cocktail from the study deck (st.active) by name. Adding a
   // cocktail also gives it a starting score and pulls it out of `learned` so it
   // reappears in study. The deck keeps its chosen size either way: an added card
   // goes to the FRONT so the size cap trims the deck's last card rather than the
   // one just added; a removed card's slot is refilled from the pool.
+  //
+  // Only cocktails in the current pool can go into a deck — the Index lists all
+  // of them, but the ones past the free top 50 are what Pro sells. Without Pro
+  // that tap opens the paywall; with it, the tap says "I want this cocktail", so
+  // the full library comes on and the cocktail lands in the deck.
   function toggleStudy(name) {
+    const needsLibrary = !poolNames.has(name);
+    if (needsLibrary && !isPro) { unlockPro(); return; }
     upd(p => {
-      const np = p.masterMode ? ALL_200 : top50;
-      if (p.active.includes(name)) return refillDeck({ ...p, active: p.active.filter(n => n !== name) }, np);
+      const masterMode = p.masterMode || needsLibrary;
+      const np = poolFor({ masterMode }, isPro);
+      if (p.active.includes(name)) return refillDeck({ ...p, masterMode, active: p.active.filter(n => n !== name) }, np);
       const scores = { ...p.scores };
       if (scores[name] === undefined) scores[name] = 0;
       const learned = (p.learned || []).filter(n => n !== name);
-      return refillDeck({ ...p, scores, learned, active: [name, ...p.active] }, np);
+      return refillDeck({ ...p, masterMode, scores, learned, active: [name, ...p.active] }, np);
     });
   }
   // Marking a drink tried is unrelated to studying it: it does not touch the
@@ -981,7 +1068,7 @@ export default function App() {
   // Change how many cards the study deck holds. Shrinking trims the extra cards
   // immediately (from the end; their scores are kept); growing refills from the pool.
   function setDeckSizeTo(n) {
-    upd(p => refillDeck({ ...p, deckSize: n }, p.masterMode ? ALL_200 : top50));
+    upd(p => refillDeck({ ...p, deckSize: n }, poolFor(p, isPro)));
     setDi(0); setRevealed(false);
   }
 
@@ -1040,9 +1127,13 @@ export default function App() {
         </div>
       )}
 
-      {FEATURES.stripePurchase && webAdsServed && firebaseEnabled && authReady && (
+      {FEATURES.stripePurchase && firebaseEnabled && authReady && !adFree && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
-          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Go Pro — remove ads with a one-time purchase</div>
+          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
+            {webAdsServed
+              ? `Go Pro — all ${ALL_CARDS.length} cocktails, and no ads`
+              : `Go Pro — study and quiz all ${ALL_CARDS.length} cocktails`}
+          </div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
             {purchasing ? "Redirecting…" : "✨ Get Pro — $4.99"}
           </button>
@@ -1054,7 +1145,7 @@ export default function App() {
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
-              {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : "Cocktail Flashcards Pro — remove ads for good"}
+              {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : `Cocktail Flashcards Pro — all ${ALL_CARDS.length} cocktails, no ads`}
             </div>
             <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
           </div>
@@ -1118,7 +1209,7 @@ export default function App() {
       )}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
-        {[["Learned",learned,"#22c55e"],["Active",st.active.length,"#3b82f6"],["Total",total,"#f59e0b"]].map(([l,v,c])=>(
+        {[["Learned",learned,"#22c55e"],["Active",deck.length,"#3b82f6"],["Total",total,"#f59e0b"]].map(([l,v,c])=>(
           <div key={l} style={frame({borderRadius:12,padding:"0.9rem",textAlign:"center"})}>
             <div style={{fontSize:"1.75rem",fontWeight:800,color:c}}>{v}</div>
             <div style={{fontSize:"0.75rem",color:"#94a3b8",marginTop:2}}>{l}</div>
@@ -1135,14 +1226,27 @@ export default function App() {
       <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn("#be123c"),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
 
-      <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"})}>
-        <div>
-          <div style={{fontWeight:700,color:"#f8fafc"}}>Master Mode</div>
-          <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>Expand pool to {ALL_200.length} cocktails</div>
+      {/* The paywall itself. Study and quizzes cover the top 50 for free; this
+          switch is what adds the rest of the book to both. Without Pro it isn't a
+          switch that refuses to move — it's the way in to the purchase. */}
+      <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem",gap:"0.75rem"})}>
+        <div style={{minWidth:0}}>
+          <div style={{fontWeight:700,color:"#f8fafc"}}>{isPro ? "" : "🔒 "}Add All {ALL_CARDS.length} Cards</div>
+          <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>
+            {isPro
+              ? `Study and quiz the whole book, not just the top ${top50.length}`
+              : `Free covers the top ${top50.length} — Pro adds the other ${master150.length}`}
+          </div>
         </div>
-        <button onClick={toggleMaster} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:st.masterMode?"#f59e0b":"#334155",transition:"background 0.3s"}}>
-          <div style={{position:"absolute",top:3,left:st.masterMode?27:3,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left 0.3s"}} />
-        </button>
+        {isPro ? (
+          <button onClick={toggleMaster} aria-pressed={masterOn} aria-label={`Add all ${ALL_CARDS.length} cards`} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",flexShrink:0,background:masterOn?"#f59e0b":"#334155",transition:"background 0.3s"}}>
+            <div style={{position:"absolute",top:3,left:masterOn?27:3,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left 0.3s"}} />
+          </button>
+        ) : (
+          <button onClick={unlockPro} disabled={purchasing} style={{background:purchasing?"#334155":"#f59e0b",color:purchasing?"#64748b":"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:purchasing?"not-allowed":"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+            {purchasing ? "…" : "✨ Unlock"}
+          </button>
+        )}
       </div>
       <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#ef4444",fontWeight:600,fontSize:"0.85rem",border:"1px solid #ef444440",cursor:"pointer"}}>Reset Progress</button>
       {/* Below every control and above the legal footer: the one band of this
@@ -1235,7 +1339,7 @@ export default function App() {
     const q = norm(search.trim());
     // Match on both the cocktail name and its ingredient list, accent-insensitively,
     // so "pina" finds "Piña Colada" and "rum" finds every drink containing rum.
-    const matches = q ? ALL_200.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_200;
+    const matches = q ? ALL_CARDS.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_CARDS;
     const triedSet = new Set(st.tried || []);
     const results = triedFilter === "all"
       ? matches
@@ -1244,7 +1348,7 @@ export default function App() {
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_200.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
         </div>
         <input
           autoFocus
@@ -1253,7 +1357,7 @@ export default function App() {
           placeholder="Search name or ingredient…"
           style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
-        <div style={{display:"flex",gap:"0.5rem",marginBottom:"1.25rem"}}>
+        <div style={{display:"flex",gap:"0.5rem",marginBottom:isPro?"1.25rem":"0.6rem"}}>
           {[["all","All"],["tried","☑ Tried"],["untried","☐ Not tried"]].map(([k,label])=>(
             <button key={k} onClick={()=>setTriedFilter(k)} aria-pressed={triedFilter===k}
               style={{flex:1,borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
@@ -1262,18 +1366,32 @@ export default function App() {
                 color: triedFilter===k ? "#fff" : "#94a3b8"}}>{label}</button>
           ))}
         </div>
+        {/* The Index is the whole book either way — the lock says which of these
+            recipes can also go into a deck, so a locked button reads as a price
+            rather than as a bug. */}
+        {!isPro && (
+          <div style={{fontSize:"0.72rem",color:"#64748b",marginBottom:"1.25rem"}}>
+            Every recipe is here to read. Study and quizzes cover the top {top50.length} — 🔒 marks the rest.
+          </div>
+        )}
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
           {results.length === 0 && (
             <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>{triedFilter === "tried" ? "No tried cocktails match." : triedFilter === "untried" ? "Nothing left untried here." : "No cocktails found."}</div>
           )}
-          {results.map(c=>(
+          {results.map(c=>{
+            // Outside the pool the cocktail is readable but not studiable: Pro
+            // buys it, and a Pro user who simply has the library switched off
+            // gets it switched on by adding one of its cocktails (toggleStudy).
+            const locked = !poolNames.has(c.name) && !isPro;
+            const inDeck = deck.includes(c.name);
+            return (
             <div key={c.name} style={frame({borderRadius:14,padding:"1rem 1.25rem"})}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.4rem",gap:"0.5rem"}}>
                 <h3 style={{fontSize:"1.1rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h3>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"0.35rem"}}>
                   {c.rank && <span style={{fontSize:"0.7rem",color:"#f59e0b",fontWeight:600,whiteSpace:"nowrap"}}>#{c.rank}</span>}
-                  <button onClick={()=>toggleStudy(c.name)} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:st.active.includes(c.name)?"none":"1px solid #3b82f680",background:st.active.includes(c.name)?"#16a34a":"transparent",color:st.active.includes(c.name)?"#fff":"#60a5fa"}}>
-                    {st.active.includes(c.name) ? "✓ In Study" : "＋ Study"}
+                  <button onClick={()=>toggleStudy(c.name)} title={locked ? `Pro adds all ${ALL_CARDS.length} cocktails to study and quizzes` : undefined} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:inDeck?"none":`1px solid ${locked?"#f59e0b60":"#3b82f680"}`,background:inDeck?"#16a34a":"transparent",color:inDeck?"#fff":locked?"#f59e0b":"#60a5fa"}}>
+                    {locked ? "🔒 Pro" : inDeck ? "✓ In Study" : "＋ Study"}
                   </button>
                   {triedChip(c.name, false)}
                 </div>
@@ -1285,7 +1403,8 @@ export default function App() {
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         {/* Outside the scroll container, not inside it: an ad that scrolled with
             the results would be re-measured on every scroll and sits among the
@@ -1297,7 +1416,7 @@ export default function App() {
   }
 
   if (mode === "study") {
-    if (st.active.length === 0) {
+    if (deck.length === 0) {
       const allMastered = learned >= total;
       return (
         <div style={{...page,justifyContent:"center"}}>
@@ -1310,21 +1429,30 @@ export default function App() {
             {!allMastered && <button onClick={()=>{setSearch("");setMode("index");}} style={btn("#0891b2",{padding:"0.75rem 1.5rem"})}>🔍 Index</button>}
             <button onClick={()=>setMode("menu")} style={btn("#3b82f6",{padding:"0.75rem 1.5rem"})}>Back to Menu</button>
           </div>
+          {/* Nothing left to study is the one moment a bigger library is
+              obviously worth something, so say so here rather than only on the
+              menu. */}
+          {allMastered && !isPro && (
+            <button onClick={unlockPro} style={{marginTop:"1rem",padding:"0.7rem 1.2rem",borderRadius:12,background:"transparent",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",border:"1px solid #f59e0b40",cursor:"pointer"}}>
+              🔒 Add the other {master150.length} with Pro
+            </button>
+          )}
         </div>
       );
     }
-    // Fall back to ALL_200 so cocktails added to the deck from the Index (which
-    // may be outside the current mode's pool) still render.
-    // Clamp here too, not just in the effect: a live sync can shrink the deck
-    // and this render happens before the effect corrects the index.
-    const cardIdx = Math.min(di, st.active.length - 1);
-    const ci = st.active[cardIdx], c = pool.find(x => x.name === ci) || ALL_200.find(x => x.name === ci), score = st.scores[ci]||0;
+    // Clamp here, not only in the effect: a live sync can shrink the deck and
+    // this render happens before the effect corrects the index. ALL_CARDS is the
+    // last resort for the lookup — `deck` is already pool-only, so it should
+    // never be needed, and a card that renders blank would be worse than one
+    // found the long way.
+    const cardIdx = Math.min(di, deck.length - 1);
+    const ci = deck[cardIdx], c = pool.find(x => x.name === ci) || ALL_CARDS.find(x => x.name === ci), score = st.scores[ci]||0;
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
           <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{learned}/{total} learned</span>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {di+1}/{st.active.length}</span>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {cardIdx+1}/{deck.length}</span>
         </div>
 
         <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
@@ -1364,9 +1492,9 @@ export default function App() {
         }
 
         <div style={{display:"flex",gap:4,marginTop:"1.25rem",flexWrap:"wrap",justifyContent:"center"}}>
-          {st.active.map((ci,i)=>(
+          {deck.map((ci,i)=>(
             <div key={i} onClick={()=>{setDi(i);setRevealed(false);}}
-              style={{width:28,height:28,borderRadius:6,background:i===di?"#3b82f6":"#1e293b",border:`2px solid ${col(st.scores[ci]||0)}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.65rem",color:"#94a3b8",fontWeight:700}}>
+              style={{width:28,height:28,borderRadius:6,background:i===cardIdx?"#3b82f6":"#1e293b",border:`2px solid ${col(st.scores[ci]||0)}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.65rem",color:"#94a3b8",fontWeight:700}}>
               {st.scores[ci]||0}
             </div>
           ))}
@@ -1378,7 +1506,7 @@ export default function App() {
             <div style={{fontSize:"0.9rem",fontWeight:800,color:"#3b82f6"}}>{deckSize >= total ? "All" : deckSize}</div>
           </div>
           <div style={{display:"flex",gap:"0.4rem"}}>
-            {[10,20,30,50].map(n=>{
+            {[10,20,30,50].filter(n=>n<total).map(n=>{
               const on = deckSize === n && deckSize < total;
               return <button key={n} onClick={()=>setDeckSizeTo(n)} style={{flex:1,padding:"0.45rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.8rem",background:on?"#3b82f6":"#1e293b",color:on?"#fff":"#94a3b8"}}>{n}</button>;
             })}
@@ -1389,10 +1517,10 @@ export default function App() {
     );
   }
 
-  // Length picker, shown on the way into a quiz. A quiz over 200 cocktails is a
+  // Length picker, shown on the way into a quiz. A quiz over the whole book is a
   // sitting few people want, so the length is asked for up front rather than
   // buried in settings. Lengths at or past the pool size are dropped — they'd be
-  // duplicate "All" buttons (in the 50-cocktail pool, "50" IS all of them).
+  // duplicate "All" buttons (in the free 50-cocktail pool, "50" IS all of them).
   if (mode === "quizlen") {
     const lengths = [10, 20, 50].filter(n => n < total);
     const opt = (label, sub, onClick, bg) => (
@@ -1417,6 +1545,15 @@ export default function App() {
         </div>
         {lengths.map(n => opt(`${n} Questions`, "", ()=>startPicked(n), quizKind === "86" ? "#be123c" : "#7c3aed"))}
         {opt("All Cocktails", `${total} questions`, ()=>startPicked(null), quizKind === "86" ? "#881337" : "#4c1d95")}
+        {/* Says what a bigger round would cost, at the moment the user is
+            picking how much to take on — not as an interruption to the quiz
+            itself. Amber whichever quiz this is: it is the Pro colour
+            everywhere else in the app. */}
+        {!isPro && (
+          <button onClick={unlockPro} style={{width:"100%",marginTop:"0.5rem",padding:"0.7rem",borderRadius:12,background:"transparent",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",border:"1px solid #f59e0b40",cursor:"pointer"}}>
+            🔒 {quizKind === "86" ? "86" : "Quiz"} all {ALL_CARDS.length} cocktails with Pro
+          </button>
+        )}
       </div></div>
     );
   }

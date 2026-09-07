@@ -108,9 +108,11 @@ at all. Reserving and then giving the space back is a deliberate layout shift:
 the alternative is either a permanent blank hole or an ad that shoves the page
 down when it lands.
 
-The "Remove Ads" card keys off the same evidence — `areAdsServing()` in
+The Pro card's *ad* promise keys off the same evidence — `areAdsServing()` in
 `src/ads.js` watches for a `data-ad-status="filled"` unit anywhere on the page —
-so a visitor who is served no ad is never offered the chance to remove one.
+so a visitor who is served no ad is never offered the chance to remove one. The
+card itself still shows: Pro also unlocks the full cocktail library, so it simply
+drops the ad half of the pitch and sells the library instead.
 
 ## Android
 
