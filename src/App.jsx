@@ -16,7 +16,7 @@ import {
   initMonetization, showBanner, hideBanner, purchaseRemoveAds, restorePurchases,
   linkRevenueCatUser, unlinkRevenueCatUser, onEntitlementChange,
   presentPaywall, presentCustomerCenter, isBillingAvailable, isUserCancelled,
-  PAYWALL_OUTCOME, getAdConsentState, showAdPrivacyOptions,
+  PAYWALL_OUTCOME, getAdConsentState, showAdPrivacyOptions, getBillingDiagnostics,
 } from './monetization';
 
 const { top50, master150 } = cocktailData;
@@ -296,6 +296,10 @@ export default function App() {
   // Android only: whether Google's UMP wants us to offer a way back into the
   // consent choice (it does in the EEA/UK once a choice has been made).
   const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(false);
+  // Why the RevenueCat link failed, if it did. Rendered in the Pro card because
+  // the Play build has no console a tester can reach: without this the only
+  // symptom is a button that says "Connecting…" for ever.
+  const [billingErr, setBillingErr] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
   // Email/password sign-in exists mainly so Play Console's App access reviewers
@@ -481,9 +485,10 @@ export default function App() {
   useEffect(() => {
     if (!FEATURES.nativePurchase || !authReady) return;
     const sync = user ? linkRevenueCatUser(user.uid) : unlinkRevenueCatUser();
-    sync.then(({ ok, active }) => {
+    sync.then(({ ok, active, error }) => {
       setLinkedUid(ok && user ? user.uid : null);
       setAdsRemovedNative(Boolean(active));
+      setBillingErr(ok ? null : (error || null));
     });
   }, [authReady, user]);
 
@@ -1151,7 +1156,8 @@ export default function App() {
       {/* Play (Capacitor) build: RevenueCat paywall + restore. Gated on
           billingReady, not FEATURES.nativePurchase — see above. */}
       {billingReady && !adFree && (
-        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",flexDirection:"column",marginBottom:"1.25rem",gap:"0.75rem"})}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"0.75rem"}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
               {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : `Cocktail Flashcards Pro — all ${ALL_CARDS.length} cocktails, no ads`}
@@ -1170,6 +1176,41 @@ export default function App() {
               </button>
             );
           })()}
+        </div>
+        {/* Stands in for the console this build has no way to reach. Shown only
+            when linking actually failed, and it names the step, the SDK's own
+            message, and the few facts that separate the causes: a missing key, a
+            key with whitespace on it, the wrong entitlement id, or no bridge. */}
+        {billingErr && (() => {
+          const d = getBillingDiagnostics();
+          const rows = [
+            ["failed at", billingErr.step],
+            ["message", billingErr.message],
+            ["code", billingErr.code || "—"],
+            ["sdk key", d.keySet ? `${d.keyPrefix}… (${d.keyLength} chars)` : "MISSING"],
+            ["key whitespace", d.keyStripped ? `${d.keyStripped} stray character(s) trimmed — fix the env var` : "none"],
+            ["entitlement", d.entitlement],
+            ["native bridge", d.bridge ? "present" : "absent"],
+          ];
+          return (
+            <div role="alert" style={{borderTop:"1px solid #33415560",paddingTop:"0.65rem"}}>
+              <div style={{color:"#f87171",fontSize:"0.75rem",fontWeight:700,marginBottom:"0.45rem"}}>
+                Couldn't link this account to the store
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:"0.15rem",fontSize:"0.68rem",userSelect:"text"}}>
+                {rows.map(([k,v]) => (
+                  <div key={k} style={{display:"flex",gap:"0.6rem"}}>
+                    <span style={{color:"#64748b",width:"7.5rem",flex:"none"}}>{k}</span>
+                    <span style={{color:"#cbd5e1",wordBreak:"break-word",minWidth:0}}>{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{color:"#64748b",fontSize:"0.68rem",marginTop:"0.5rem"}}>
+                Linking is attempted once per launch, so force-stop and reopen the app after changing anything.
+              </div>
+            </div>
+          );
+        })()}
         </div>
       )}
       {/* Already Pro in the Play build: Customer Center handles restore, refund
