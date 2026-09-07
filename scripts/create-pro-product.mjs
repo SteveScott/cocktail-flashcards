@@ -24,7 +24,7 @@
 import Stripe from "stripe";
 
 const MANAGED_PAYMENTS_API_VERSION = "2026-02-25.preview";
-const PRICE_CENTS = 499; // $4.99
+const PRICE_CENTS = 799; // $7.99
 const CURRENCY = "usd";
 
 if (!process.env.STRIPE_SECRET_KEY) {
