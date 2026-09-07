@@ -90,6 +90,7 @@ Five ideas explain most of the design:
 | `src/index.css`, `src/App.css` | Global styles and self-hosted fonts. Component styling is inline. |
 | `scripts/icons.mjs` | Draws the app mark and rasterizes every favicon, PWA icon, launcher icon, splash and store upload from it. |
 | `src/assets/store/` | The two store-listing icons. Generated — see "Store icons" under Development. |
+| `src/assets/screenshots/` | Eight feature screenshots at 1080x2400, four per colour scheme. |
 | `scripts/seo-pages.mjs` | Vite plugin that emits a static HTML page per recipe, an index, and a sitemap. |
 | `scripts/create-pro-product.mjs` | One-time Stripe product/price setup. |
 | `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
@@ -703,6 +704,14 @@ npm run icons     # redraw every icon and splash from scripts/icons.mjs
   files it writes are committed. Edit the geometry at the top of
   `scripts/icons.mjs` and re-run it; never hand-edit an output, or the browser
   tab and the Play launcher start showing different drinks.
+- **Screenshots.** `src/assets/screenshots/` holds eight shots of the major
+  features at 1080x2400 (a 360dp viewport at 3x), named
+  `<number>-<feature>-<scheme>.png` and alternating Retro and Future. They are
+  captured against a local dev server with a seeded deck — nine cocktails
+  mastered, fourteen marked tried — so the progress bar, the mastery rings and
+  the Tried filter have something to show; a fresh install photographs as a row
+  of zeroes. Recapture them when the UI changes: a screenshot set that has
+  drifted from the build is worse than none.
 - **Store icons.** `src/assets/store/` holds the two listing uploads, and they are not
   interchangeable. Play Console asks for a 512px 32-bit PNG *with* alpha; App
   Store Connect rejects an alpha channel outright, so that one is written as
