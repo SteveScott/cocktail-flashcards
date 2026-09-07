@@ -9,8 +9,16 @@ import { seoPages } from './scripts/seo-pages.mjs'
 const cocktails = createRequire(import.meta.url)('./src/cocktails.json')
 const ALL = [...cocktails.top50, ...cocktails.master150]
 
+// Stamped into the bundle so a device can say WHICH build it is running. The
+// Capacitor shell loads the deployed site and a WebView caches it, so "the fix
+// isn't working" and "the fix isn't deployed" look identical without this.
+const BUILD_TIME = new Date().toISOString()
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
+  },
   plugins: [
     react(),
     // Emits dist/cocktails/<slug>.html for every recipe (Netlify serves these

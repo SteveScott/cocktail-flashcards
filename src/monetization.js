@@ -322,7 +322,28 @@ export const hasRemovedAds = hasProAccess;
 // never purchased is ok:true, active:false — and callers about to take money
 // need the first one, since a purchase made before the link lands is recorded
 // against the previous or anonymous id and can never be mapped to the account.
-export async function linkRevenueCatUser(uid) {
+// A plugin call that never calls back is indistinguishable from one still in
+// flight, and the UI waits on it for ever. Nothing below may hang: give up,
+// report it, and let the caller show the user something.
+const LINK_TIMEOUT_MS = 20000;
+
+function withTimeout(promise, label) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(
+      () => resolve({ ok: false, active: false, error: { step: label, message: `Timed out after ${LINK_TIMEOUT_MS / 1000}s with no answer from the billing SDK.`, code: "timeout" } }),
+      LINK_TIMEOUT_MS,
+    )),
+  ]);
+}
+
+export function linkRevenueCatUser(uid) {
+  return withTimeout(linkRevenueCatUserInner(uid), "logIn").catch(e => (
+    { ok: false, active: false, error: noteBillingError("logIn", e) }
+  ));
+}
+
+async function linkRevenueCatUserInner(uid) {
   if (!uid) {
     return { ok: false, active: false, error: { step: "identity", message: "No signed-in account to link.", code: null } };
   }
