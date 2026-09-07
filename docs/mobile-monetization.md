@@ -267,10 +267,11 @@ your dev server instead: `capacitor.config.json` → `server.url` =
 3. Deploy the site to production.
 4. `npm run build && npx cap sync android`, rebuild the signed `.aab`, bump the
    version code.
-5. Complete the Play Console listing: screenshots, description, **privacy policy
-   URL** (`https://cocktailflashcards.com/privacy`), content rating, **Data
-   safety** form, and the **"contains ads"** declaration — AdMob makes that
-   mandatory.
+5. Complete the Play Console listing: screenshots, description (the copy lives
+   in [store-listing.md](store-listing.md) — paste it, don't rewrite it in the
+   console), **privacy policy URL**
+   (`https://cocktailflashcards.com/privacy`), content rating, **Data safety**
+   form, and the **"contains ads"** declaration — AdMob makes that mandatory.
 6. Promote through closed/open testing to production.
 
 **After release**, ordinary web deploys reach the app with no resubmission. You
