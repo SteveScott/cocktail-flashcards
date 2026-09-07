@@ -89,7 +89,7 @@ Five ideas explain most of the design:
 | `src/main.jsx` | Mounts the app; registers the PWA service worker. |
 | `src/index.css`, `src/App.css` | Global styles and self-hosted fonts. Component styling is inline. |
 | `scripts/seo-pages.mjs` | Vite plugin that emits a static HTML page per recipe, an index, and a sitemap. |
-| `scripts/create-remove-ads-product.mjs` | One-time Stripe product/price setup. |
+| `scripts/create-pro-product.mjs` | One-time Stripe product/price setup. |
 | `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
 | `firestore.rules` | The access-control model. Read this before touching the `users` document. |
 | `public/` | Static assets, `manifest.json`, `pwa-sw.js`, `privacy.html`, `robots.txt`, `ads.txt`. |

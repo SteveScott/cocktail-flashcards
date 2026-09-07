@@ -52,7 +52,7 @@ done.
 | Signing | ✅ upload keystore at `ignore/key` (alias `Cocktail Flashcards Key`), wired up through the gitignored `android/gradle.properties`. Cert SHA-256 `5A:8F:CA:C5:…` matches what Play has registered. |
 | Play Console | ✅ live on the closed testing (Alpha) track — store listing, app content and content rating reviewed and published 2026-08-21 |
 | In-app product | ✅ `lifetime`, one-time managed, $4.99, activated |
-| Stripe | ✅ web price also $4.99 — see the note in `scripts/create-remove-ads-product.mjs` about Prices being immutable |
+| Stripe | ✅ web price also $4.99 — see the note in `scripts/create-pro-product.mjs` about Prices being immutable |
 | RevenueCat | ⏳ Android app added with the `revenuecat-play` service account. Entitlement, offering and paywall still to configure. |
 | AdMob | ⏳ App ID is in `AndroidManifest.xml`. Banner ad unit and the GDPR consent message still to create. |
 | Netlify env | ⏳ `VITE_REVENUECAT_ANDROID_KEY` not set, so purchases are inert and the Pro card stays hidden. `VITE_ADMOB_BANNER_ID` deliberately blank so test banners serve during the closed test. |

@@ -10,7 +10,7 @@
 // actually being sold.
 //
 // Run locally with your Stripe secret key:
-//   STRIPE_SECRET_KEY=sk_test_... node scripts/create-remove-ads-product.mjs
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/create-pro-product.mjs
 //
 // This only needs to be run once per Stripe account (test mode and live mode
 // each need their own product/price, so run it once per mode).

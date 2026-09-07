@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "create-remove-ads-product": "node scripts/create-remove-ads-product.mjs"
+    "create-pro-product": "node scripts/create-pro-product.mjs"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.1.0",

@@ -34,7 +34,7 @@ export async function handler(event) {
     return { statusCode: 500, body: JSON.stringify({ error: "Payments aren't configured yet" }) };
   }
   if (!process.env.STRIPE_PRICE_ID) {
-    console.error("STRIPE_PRICE_ID is not configured (run scripts/create-remove-ads-product.mjs)");
+    console.error("STRIPE_PRICE_ID is not configured (run scripts/create-pro-product.mjs)");
     return { statusCode: 500, body: JSON.stringify({ error: "Payments aren't configured yet" }) };
   }
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
