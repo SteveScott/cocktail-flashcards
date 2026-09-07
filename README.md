@@ -88,6 +88,9 @@ Five ideas explain most of the design:
 | `src/consent.js` | Reopening Google's GDPR message; whether GDPR applies to this visitor. |
 | `src/main.jsx` | Mounts the app; registers the PWA service worker. |
 | `src/index.css`, `src/App.css` | Global styles and self-hosted fonts. Component styling is inline. |
+| `scripts/icons.mjs` | Draws the app mark and rasterizes every favicon, PWA icon, launcher icon, splash and store upload from it. |
+| `src/assets/store/` | The two store-listing icons. Generated — see "Store icons" under Development. |
+| `src/assets/screenshots/` | Eight feature screenshots at 1080x2400, four per colour scheme. |
 | `scripts/seo-pages.mjs` | Vite plugin that emits a static HTML page per recipe, an index, and a sitemap. |
 | `scripts/create-pro-product.mjs` | One-time Stripe product/price setup. |
 | `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
@@ -668,7 +671,52 @@ npm run dev       # Vite dev server on http://localhost:5173
 npm run build     # bundle + 322 static recipe pages + sitemap into dist/
 npm run preview   # serve dist/
 npm run lint      # eslint
+npm run icons     # redraw every icon and splash from scripts/icons.mjs
 ```
+
+- **Colour.** Two schemes, picked at the foot of the menu screen. **Retro** is
+  the default: hues read off the bar photograph the app is laid over
+  (`src/assets/bg-cocktails.jpg`) — walnut, whiskey and back-bar brass, set in
+  Playfair Display. **Future** is the same room after hours — cyan, magenta and
+  acid green on near-black blue, set in Orbitron and Exo 2.
+
+  Each scheme lives in two places that have to agree: an entry in the `THEMES`
+  object at the top of `src/App.jsx`, which every inline style reaches through
+  the per-render `C`, and a block of custom properties in `src/index.css`, which
+  dresses the page around the app and carries the font stacks. Both schemes
+  define the same keys, so a screen asks for `C.oxblood` and gets oxblood or hot
+  magenta without knowing which is on. Anything a scheme needs to change that
+  inline styles would otherwise win — the title's size, button lettering — rides
+  along in that entry's `ui` object.
+
+  The choice is a per-device preference in `localStorage`, deliberately not part
+  of the synced progress state: a scheme chosen on a phone should not follow you
+  to a desktop that never asked for it. `index.html` applies it to `<html>`
+  before first paint, because React mounting into the wrong scheme is a visible
+  flash of both the wrong colour and the wrong typeface. That boot script
+  duplicates the storage key and the scheme names — keep it in step with
+  `THEME_KEY` and `THEMES`.
+
+  The static pages (`public/privacy.html`, the SEO pages in
+  `scripts/seo-pages.mjs`) are Retro only, by hand: they are served without the
+  bundle and have no picker to offer.
+- **Icons.** `npm run icons` is a regeneration step, not a build step — the 35
+  files it writes are committed. Edit the geometry at the top of
+  `scripts/icons.mjs` and re-run it; never hand-edit an output, or the browser
+  tab and the Play launcher start showing different drinks.
+- **Screenshots.** `src/assets/screenshots/` holds eight shots of the major
+  features at 1080x2400 (a 360dp viewport at 3x), named
+  `<number>-<feature>-<scheme>.png` and alternating Retro and Future. They are
+  captured against a local dev server with a seeded deck — nine cocktails
+  mastered, fourteen marked tried — so the progress bar, the mastery rings and
+  the Tried filter have something to show; a fresh install photographs as a row
+  of zeroes. Recapture them when the UI changes: a screenshot set that has
+  drifted from the build is worse than none.
+- **Store icons.** `src/assets/store/` holds the two listing uploads, and they are not
+  interchangeable. Play Console asks for a 512px 32-bit PNG *with* alpha; App
+  Store Connect rejects an alpha channel outright, so that one is written as
+  24-bit RGB. Both are full-bleed squares: every storefront applies its own
+  corner mask, and a pre-rounded upload comes back rounded twice.
 
 - **Firebase is optional locally.** With no `VITE_FIREBASE_*`, `firebaseEnabled`
   is false, sign-in is disabled, and everything runs against `localStorage`.
