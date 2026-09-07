@@ -132,7 +132,7 @@
     { "name": "Caipiroska", "glass": "Rocks", "order": "as-written", "serve": "over crushed ice", "ingredients": "2 oz Vodka, 1 Lime (cut into wedges), 2 tsp Sugar — muddle" },
     { "name": "Gimlet (Classic)", "glass": "Coupe", "serve": "up", "ingredients": "2 oz Gin, 1 oz Rose's Lime Cordial" },
     { "name": "Bloody Caesar", "glass": "Highball", "serve": "on the rocks", "ingredients": "2 oz Vodka, 4 oz Clamato Juice, 2 dashes Worcestershire, 2 dashes Tabasco, Celery Salt rim" },
-    { "name": "Nico's Bloody Mary", "glass": "Highball (Collins)", "serve": "on the rocks", "ingredients": "4 oz Tomato Juice, ½ oz Olive Brine, 1 tsp Prepared Horseradish, ¼ tsp Old Bay Seasoning, Pinch Celery Salt, Pinch Black Pepper, 2 dashes Worcestershire, 3 dashes Tabasco, 3 dashes Valentina Hot Sauce, 3 oz Guinness Stout (top), Celery stalk & Olives (garnish)" },
+    { "name": "Nico's Bloody Mary", "glass": "Highball (Collins)", "serve": "on the rocks", "ingredients": "1½ oz Vodka, 3½ oz Tomato Juice, ½ oz Olive Brine, 1 tsp Prepared Horseradish, ¼ tsp Old Bay Seasoning, Pinch Celery Salt, Pinch Black Pepper, 2 dashes Worcestershire, 3 dashes Tabasco, 3 dashes Valentina Hot Sauce, 2 oz Guinness Stout (top), Celery stalk & Olives (garnish)" },
     { "name": "Grasshopper", "glass": "Coupe", "serve": "up", "ingredients": "1 oz Green Crème de Menthe, 1 oz White Crème de Cacao, 1 oz Heavy Cream" },
     { "name": "B-52", "glass": "Shot", "serve": "neat", "ingredients": "⅓ oz Coffee Liqueur, ⅓ oz Irish Cream, ⅓ oz Grand Marnier — layered" },
     { "name": "Sloe Gin Fizz", "glass": "Highball", "serve": "on the rocks", "ingredients": "1½ oz Sloe Gin, 1 oz Fresh Lemon Juice, ½ oz Simple Syrup, 2 oz Soda Water" },
