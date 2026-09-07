@@ -73,6 +73,30 @@
 
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#17100a" />
+    <!-- Applies the saved colour scheme before first paint.
+
+         Without this the document renders in Retro, React mounts a moment
+         later, and anyone who chose Future watches the entire page change
+         colour AND typeface at once. No CSS transition hides that, because the
+         flash is the first frame, not a change between two of them — so this is
+         inline and synchronous, ahead of the bundle, and deliberately not
+         imported from src/. It is the one piece of theming that has to run
+         before React exists.
+
+         The key and the two names are duplicated from src/App.jsx (THEME_KEY,
+         THEMES) and have to stay in step with it. -->
+    <script>
+      (function () {
+        var t = "retro";
+        try {
+          var saved = localStorage.getItem("cocktail_theme_v1");
+          if (saved === "future" || saved === "retro") t = saved;
+        } catch (e) { /* private mode: fall through to the default */ }
+        document.documentElement.dataset.theme = t;
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", t === "future" ? "#05070f" : "#17100a");
+      })();
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Cocktails" />
     <!-- AdSense (adsbygoogle.js) is injected dynamically from src/App.jsx so that

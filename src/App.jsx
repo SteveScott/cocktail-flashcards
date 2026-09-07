@@ -65,68 +65,178 @@ const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || "")
   .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 
 // Every screen below is styled inline rather than from a stylesheet, so the
-// palette lives here as one object and each colour is a reference into it —
-// there are no loose hex values further down. The hues are read off the bar
-// photograph the app is laid over (src/assets/bg-cocktails.jpg): walnut, whiskey
-// and back-bar brass. The cool slate scale this replaced fought that photo;
-// these sit inside it. Keep the two in step with the tokens in index.css, which
-// dress the page around this app.
-const C = {
-  ink:         "#17100a",   // darkest wood: wells, input fields, text on brass
-  walnut:      "#2b1c0d",   // quiet button faces
-  inset:       "#3a2a17",   // disabled faces
-  rule:        "#d6b46a38", // brass hairline — the deco pinstripe
-  ruleStrong:  "#d6b46a55",
-  hairline:    "#d6b46a1f", // the divider between ingredient lines
+// palette lives here and each colour is a reference into it — there are no
+// loose hex values further down.
+//
+// Two schemes. RETRO is the default: hues read off the bar photograph the app
+// is laid over (src/assets/bg-cocktails.jpg) — walnut, whiskey and back-bar
+// brass. FUTURE is the same room after hours, in cyan and magenta on near-black
+// blue. They share every key, which is the whole point — a screen asks for
+// C.oxblood and gets oxblood or hot magenta depending on which is on, and no
+// screen has to know which that is.
+//
+// Keep these in step with the tokens in src/index.css, which dress the page
+// around the app and carry the two font stacks.
+const THEMES = {
+  retro: {
+    name: "Retro",
 
-  ivory:       "#f6ecd9",   // headings
-  parchment:   "#e2d2b6",   // body copy
-  muted:       "#b09a78",   // labels and secondary text
-  faint:       "#8a7454",   // captions and footnotes
-  ghost:       "#6b5940",   // the quietest links
-  label:       "#fdf6e8",   // text on a saturated button
+    ink:         "#17100a",   // darkest wood: wells, input fields, text on brass
+    walnut:      "#2b1c0d",   // quiet button faces
+    inset:       "#3a2a17",   // disabled faces
+    rule:        "#d6b46a38", // brass hairline — the deco pinstripe
+    ruleStrong:  "#d6b46a55",
+    hairline:    "#d6b46a1f", // the divider between ingredient lines
 
-  brass:       "#d6b46a",   // Pro, ranks, the primary accent
-  brassEdge:   "#d6b46a55",
-  brassSoft:   "#d6b46a3d",
+    ivory:       "#f6ecd9",   // headings
+    parchment:   "#e2d2b6",   // body copy
+    muted:       "#b09a78",   // labels and secondary text
+    faint:       "#97815f",   // captions and footnotes, and the lowest mastery rung
+    ghost:       "#6b5940",   // the quietest links
+    label:       "#fdf6e8",   // text on a saturated button
 
-  jade:        "#5f9d6b",   // learned, correct, mastered
-  jadeDeep:    "#417a50",   // "Got It", "Check Answer"
-  jadeWash:    "#5f9d6b26",
-  jadeEdge:    "#5f9d6b80",
+    brass:       "#d6b46a",   // Pro, ranks, the primary accent
+    brassEdge:   "#d6b46a55",
+    brassSoft:   "#d6b46a3d",
 
-  oxblood:     "#9a3540",   // missed, 86 It, destructive
-  oxbloodDeep: "#6d2530",
-  oxbloodWash: "#9a354026",
-  oxbloodEdge: "#9a354066",
-  oxbloodLine: "#9a354080",
-  rust:        "#c4626a",   // destructive text on a dark ground
-  rustEdge:    "#c4626a40",
-  rustLite:    "#dda3a6",   // "IMPOSTOR" and the needs-work chips
-  ember:       "#d2848a",   // error messages
+    jade:        "#5f9d6b",   // learned, correct, mastered
+    jadeDeep:    "#417a50",   // "Got It", "Check Answer"
+    jadeWash:    "#5f9d6b26",
+    jadeEdge:    "#5f9d6b80",
 
-  peacock:     "#2f7079",   // Study mode, the active deck
-  peacockMid:  "#3d8892",   // the mid rung of the mastery scale
-  peacockLite: "#78b3ba",
-  peacockWash: "#4d949e26",
-  peacockEdge: "#4d949e80",
+    oxblood:     "#9a3540",   // missed, 86 It, destructive
+    oxbloodDeep: "#6d2530",
+    oxbloodWash: "#9a354026",
+    oxbloodEdge: "#9a354066",
+    oxbloodLine: "#9a354080",
+    rust:        "#c4626a",   // destructive text on a dark ground
+    rustEdge:    "#c4626a40",
+    rustLite:    "#dda3a6",   // "IMPOSTOR" and the needs-work chips
+    ember:       "#d2848a",   // error messages
 
-  cognac:      "#8f5f2a",   // Index
+    peacock:     "#2f7079",   // Study mode, the active deck
+    peacockMid:  "#3d8892",   // the mid rung of the mastery scale
+    peacockLite: "#78b3ba",
+    peacockWash: "#4d949e26",
+    peacockEdge: "#4d949e80",
 
-  plum:        "#7a4464",   // Self Quiz, and the tried marker
-  plumDeep:    "#4a2740",
-  // The outline and label of an unticked Tried chip. Deliberately rosier than
-  // the plum they sit against: a true tint of it comes out lilac, and one cold
-  // chip on a card is enough to pull the whole screen back toward the old
-  // scheme.
-  plumEdge:    "#9c6a7555",
-  plumLite:    "#c89aa4",
+    cognac:      "#8f5f2a",   // Index
 
-  // Both sit over the bar photo, so they are tints and not fills: the frame is
-  // the panel a card or a row is printed on, the page the wash behind them.
-  frame:       "rgba(26, 17, 9, 0.62)",
-  page:        "rgba(26, 17, 9, 0.28)",
+    plum:        "#7a4464",   // Self Quiz, and the tried marker
+    plumDeep:    "#4a2740",
+    // The outline and label of an unticked Tried chip. Deliberately rosier than
+    // the plum they sit against: a true tint of it comes out lilac, and one cold
+    // chip on a card is enough to pull the whole screen back toward the old
+    // scheme.
+    plumEdge:    "#9c6a7555",
+    plumLite:    "#c89aa4",
+
+    // Both sit over the bar photo, so they are tints and not fills: the frame is
+    // the panel a card or a row is printed on, the page the wash behind them.
+    frame:       "rgba(26, 17, 9, 0.62)",
+    page:        "rgba(26, 17, 9, 0.28)",
+    // Typographic knobs. Inline styles beat the stylesheet, so anything the
+    // scheme wants to change about a heading or a button label has to travel
+    // with the palette rather than sit in a CSS rule that never wins.
+    ui: {
+      h1: { fontSize: "1.8rem", fontWeight: 800 },
+      btn: {},
+      glow: false,
+    },
+  },
+
+  future: {
+    name: "Future",
+    ink:         "#05070f",   // near-black blue: wells, input fields, text on cyan
+    walnut:      "#0d1426",   // quiet button faces
+    inset:       "#182a4a",   // disabled faces
+    rule:        "#22d3ee3d", // cyan hairline
+    ruleStrong:  "#22d3ee5c",
+    hairline:    "#22d3ee24", // the divider between ingredient lines
+
+    ivory:       "#eafcff",   // headings
+    parchment:   "#c2e9f5",   // body copy
+    muted:       "#7fa8c4",   // labels and secondary text
+    faint:       "#5f83a2",   // captions and footnotes
+    ghost:       "#46607a",   // the quietest links
+    label:       "#f2fdff",   // text on a saturated button
+
+    brass:       "#22d3ee",   // Pro, ranks, the primary accent
+    brassEdge:   "#22d3ee5c",
+    brassSoft:   "#22d3ee40",
+
+    jade:        "#3dff92",   // learned, correct, mastered
+    jadeDeep:    "#0a7d3e",   // "Got It", "Check Answer"
+    jadeWash:    "#3dff9226",
+    jadeEdge:    "#3dff9280",
+
+    oxblood:     "#d1155e",   // missed, 86 It, destructive
+    oxbloodDeep: "#7d0d39",
+    oxbloodWash: "#ff2d7a26",
+    oxbloodEdge: "#ff2d7a66",
+    oxbloodLine: "#ff2d7a80",
+    rust:        "#ff5c96",   // destructive text on a dark ground
+    rustEdge:    "#ff5c9640",
+    rustLite:    "#ffa3c4",   // "IMPOSTOR" and the needs-work chips
+    ember:       "#ff7aad",   // error messages
+
+    peacock:     "#2f5cff",   // Study mode, the active deck
+    peacockMid:  "#4f8bff",   // the mid rung of the mastery scale
+    peacockLite: "#8fb6ff",
+    peacockWash: "#4f8bff26",
+    peacockEdge: "#4f8bff80",
+
+    cognac:      "#0e7490",   // Index — deep enough not to read as the accent
+
+    plum:        "#7b2fe0",   // Self Quiz, and the tried marker
+    plumDeep:    "#45197d",
+    plumEdge:    "#a78bfa5c",
+    plumLite:    "#c9b3ff",
+
+    frame:       "rgba(5, 9, 22, 0.66)",
+    page:        "rgba(5, 9, 22, 0.34)",
+
+    // Orbitron is a much wider face than Playfair, so the title has to come down
+    // a size or it wraps on a phone; the caps and tracking on buttons are the
+    // scheme's own voice rather than decoration, and the glow is what makes a
+    // flat fill read as lit.
+    ui: {
+      h1: { fontSize: "1.25rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" },
+      btn: { textTransform: "uppercase", letterSpacing: "0.09em", fontSize: "0.92rem" },
+      glow: true,
+    },
+  },
 };
+
+// How the scheme picker paints each choice. Literals rather than lookups into
+// THEMES, because each button advertises the scheme it SELECTS and not the one
+// currently running: a picker that restyled itself would only ever show you the
+// answer you already have. The faces are named here too — the Future button is
+// lettered in Orbitron whichever scheme is on, which is the whole point of it.
+const THEME_SWATCH = {
+  retro: {
+    label: "Retro", bg: "#8f5f2a", fg: "#fdf6e8", ring: "#d6b46a",
+    font: "'Playfair Display', Georgia, serif",
+    tracking: "0.02em", transform: "none", glow: "none",
+  },
+  future: {
+    label: "Future", bg: "#2f5cff", fg: "#eafcff", ring: "#22d3ee",
+    font: "'Orbitron', ui-sans-serif, system-ui, sans-serif",
+    tracking: "0.14em", transform: "uppercase", glow: "0 0 20px -4px #2f5cff",
+  },
+};
+
+const THEME_KEY = "cocktail_theme_v1";
+const DEFAULT_THEME = "retro";
+
+// Read back the saved scheme. index.html has already applied it to <html> before
+// first paint; this is React catching up to what the document is wearing.
+function loadTheme() {
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    return t && THEMES[t] ? t : DEFAULT_THEME;
+  } catch { return DEFAULT_THEME; }
+}
 
 const GLASS_ICONS = [
   ["champagne", "🥂"],
@@ -316,6 +426,11 @@ function Fireworks() {
 
 export default function App() {
   const [st, setSt] = useState(() => loadLocal() || initState(false));
+  // Which colour scheme is on. Deliberately NOT part of `st`: that object is
+  // study progress and it syncs to Firestore, where a scheme chosen on a phone
+  // would follow you to a desktop that never asked for it. This is a per-device
+  // preference and stays in localStorage.
+  const [theme, setTheme] = useState(loadTheme);
   const [mode, setMode] = useState("menu");
   const [di, setDi] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -982,6 +1097,17 @@ export default function App() {
 
   function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
 
+  // <html data-theme> drives index.css: the two font stacks, the page chrome and
+  // the wash over the bar photograph. The meta tag moves with it so the Android
+  // status bar and the browser's own chrome do not stay the other scheme's
+  // colour — the one piece of the theme that lives outside both stylesheets.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", THEMES[theme].ink);
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
+  }, [theme]);
+
   // The tried marker reads the same on a card and on an index row, so both use
   // this. Unchecked it asks the question, checked it states the answer.
   function triedChip(name, big) {
@@ -1166,9 +1292,21 @@ export default function App() {
     setDi(0); setRevealed(false);
   }
 
+  // The whole scheme, resolved once per render. Every C.* below is a lookup into
+  // whichever object is on, so no screen has to know which that is.
+  const C = THEMES[theme] || THEMES[DEFAULT_THEME];
+
   const wrap = { maxWidth:480, width:"100%" };
   const page = { minHeight:"100dvh", background:C.page, backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:C.ivory, display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
-  const btn = (bg, x={}) => ({ padding:"1rem", borderRadius:12, background:bg, color:C.label, fontWeight:700, fontSize:"1rem", border:"none", cursor:"pointer", ...x });
+  // `...C.ui.btn` is where a scheme sets its own lettering — Future puts button
+  // labels in tracked caps. The glow is keyed off the button's own fill so each
+  // one lights in its own colour rather than a single generic halo.
+  const btn = (bg, x={}) => ({
+    padding:"1rem", borderRadius:12, background:bg, color:C.label, fontWeight:700,
+    fontSize:"1rem", border:"none", cursor:"pointer",
+    boxShadow: C.ui.glow ? `0 0 18px -5px ${bg}` : "none",
+    ...C.ui.btn, ...x,
+  });
   const FRAME_BG = C.frame;
   const frame = (x={}) => ({ background:FRAME_BG, backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", ...x });
   // The admin form stacks in a narrow footer column, so the fields take the full
@@ -1178,7 +1316,7 @@ export default function App() {
   if (mode === "menu") return (
     <div style={page}><div style={wrap}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.15rem"}}>
-        <h1 style={{fontSize:"1.8rem",fontWeight:800,margin:0,color:C.ivory}}>🍹 Cocktail Flashcards</h1>
+        <h1 style={{...C.ui.h1,margin:0,color:C.ivory}}>🍹 Cocktail Flashcards</h1>
         <span style={{fontSize:"0.7rem",color:C.jade}}>{saved}</span>
       </div>
       <p style={{color:C.faint,fontSize:"0.72rem",marginBottom:"0.75rem"}}>Drinks International Bestselling Classics 2026</p>
@@ -1374,6 +1512,27 @@ export default function App() {
         )}
       </div>
       <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:C.rust,fontWeight:600,fontSize:"0.85rem",border:`1px solid ${C.rustEdge}`,cursor:"pointer"}}>Reset Progress</button>
+
+      <div style={{marginTop:"1.5rem"}}>
+        <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.faint,marginBottom:"0.5rem"}}>Colour scheme</div>
+        <div role="group" aria-label="Colour scheme" style={{display:"flex",gap:"0.6rem"}}>
+          {["retro","future"].map(t => {
+            const sw = THEME_SWATCH[t], on = theme === t;
+            return (
+              <button key={t} onClick={()=>setTheme(t)} aria-pressed={on}
+                style={{flex:1,padding:"0.75rem 0.5rem",borderRadius:10,cursor:"pointer",
+                  background:sw.bg, color:sw.fg, fontFamily:sw.font, fontWeight:700,
+                  fontSize:"0.95rem", letterSpacing:sw.tracking, textTransform:sw.transform,
+                  border:`2px solid ${on ? sw.ring : "transparent"}`,
+                  boxShadow:on ? sw.glow : "none",
+                  opacity:on ? 1 : 0.55,
+                  transition:"opacity 0.2s, box-shadow 0.2s"}}>
+                {sw.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       {/* Below every control and above the legal footer: the one band of this
           screen where a mis-tap costs a stray ad click rather than a reset, and
           where holding space open pushes nothing the user was aiming at. */}

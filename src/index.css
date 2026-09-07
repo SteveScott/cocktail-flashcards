@@ -44,13 +44,19 @@
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* The Future scheme's faces. Declaring them costs nothing until something on
-   the page actually asks for the family — the browser fetches a woff2 only when
-   a rule matches — so a Retro user never downloads these. Self-hosted for the
-   same two reasons as the pair above: the PWA keeps its headings offline, and
-   the app makes no third-party request that would need a consent story.
-   Orbitron ships latin only; Exo 2 has the extended set the recipe names need
-   for the accented spirits. */
+/* The Future scheme's faces. Self-hosted for the same two reasons as the pair
+   above: the PWA keeps its headings offline, and the app makes no third-party
+   request that would need its own consent story.
+
+   A woff2 is fetched only when a rule actually matches the family, which splits
+   these two. Exo 2 is the body face and 71KB across both subsets, and nothing
+   asks for it until someone switches to Future — so a Retro user never pays for
+   it. Orbitron is 12KB and everybody gets it, because the scheme picker letters
+   its Future button in Orbitron whichever scheme is running; that is the point
+   of the button, and it is the cheaper of the two to spend.
+
+   Orbitron ships latin only; Exo 2 carries the extended set the recipe names
+   need for the accented spirits. */
 @font-face {
   font-family: 'Orbitron';
   font-style: normal;

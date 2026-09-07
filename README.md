@@ -673,13 +673,32 @@ npm run lint      # eslint
 npm run icons     # redraw every icon and splash from scripts/icons.mjs
 ```
 
-- **Colour.** The palette is taken off the bar photograph the app is laid over
-  (`src/assets/bg-cocktails.jpg`) — walnut, whiskey and back-bar brass. It lives
-  in two places that have to agree: the `C` object at the top of `src/App.jsx`,
-  which every inline style references, and the custom properties in
-  `src/index.css`, which dress the page around the app. The static pages
-  (`public/privacy.html`, the SEO pages in `scripts/seo-pages.mjs`) carry the
-  same values by hand, since they are served without the bundle.
+- **Colour.** Two schemes, picked at the foot of the menu screen. **Retro** is
+  the default: hues read off the bar photograph the app is laid over
+  (`src/assets/bg-cocktails.jpg`) — walnut, whiskey and back-bar brass, set in
+  Playfair Display. **Future** is the same room after hours — cyan, magenta and
+  acid green on near-black blue, set in Orbitron and Exo 2.
+
+  Each scheme lives in two places that have to agree: an entry in the `THEMES`
+  object at the top of `src/App.jsx`, which every inline style reaches through
+  the per-render `C`, and a block of custom properties in `src/index.css`, which
+  dresses the page around the app and carries the font stacks. Both schemes
+  define the same keys, so a screen asks for `C.oxblood` and gets oxblood or hot
+  magenta without knowing which is on. Anything a scheme needs to change that
+  inline styles would otherwise win — the title's size, button lettering — rides
+  along in that entry's `ui` object.
+
+  The choice is a per-device preference in `localStorage`, deliberately not part
+  of the synced progress state: a scheme chosen on a phone should not follow you
+  to a desktop that never asked for it. `index.html` applies it to `<html>`
+  before first paint, because React mounting into the wrong scheme is a visible
+  flash of both the wrong colour and the wrong typeface. That boot script
+  duplicates the storage key and the scheme names — keep it in step with
+  `THEME_KEY` and `THEMES`.
+
+  The static pages (`public/privacy.html`, the SEO pages in
+  `scripts/seo-pages.mjs`) are Retro only, by hand: they are served without the
+  bundle and have no picker to offer.
 - **Icons.** `npm run icons` is a regeneration step, not a build step — the 35
   files it writes are committed. Edit the geometry at the top of
   `scripts/icons.mjs` and re-run it; never hand-edit an output, or the browser
