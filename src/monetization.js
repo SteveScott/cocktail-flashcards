@@ -6,16 +6,20 @@
 // isCapacitorApp — deliberately narrower than isPlayApp, which can be set by the
 // URL flag alone).
 //
-// The plugins are imported STATICALLY, on purpose. They used to be pulled in
-// with a lazy import() so their code stayed out of the web bundle, and in the
-// Play shell that import never resolved: the WebView fetched the split chunk
-// from the deployed site and neither loaded nor failed it, so every purchase
-// sat on "Connecting…" for ever — the billing diagnostics read "stopped at:
-// importing plugin" with the native plugin demonstrably present. A static
-// import costs web visitors a few kilobytes of plugin registration (each
-// package's top level is one registerPlugin() call, with its own web fallback
-// loaded lazily by Capacitor) and removes the only network fetch on the path to
-// a purchase.
+// The plugins are imported statically. Each package's top level is a single
+// registerPlugin() call whose web fallback Capacitor loads lazily, so a web
+// visitor pays a few kilobytes of registration and nothing runs.
+//
+// ONE RULE, LEARNED THE HARD WAY: never `await` a plugin object, and never
+// `return` one from an async function. A Capacitor plugin is a Proxy that turns
+// ANY property read into a native method call — @capacitor/core special-cases
+// $$typeof, toJSON and the listener methods, and nothing else. `await plugin`
+// reads `plugin.then`, gets a method wrapper back, calls it, and that is a
+// bridge call to a native method named "then" that never invokes the resolver.
+// The await hangs for ever, with no error, and every purchase on the Play build
+// sat on "Connecting…" until a timeout because loadPurchases() below used to be
+// declared `async`. Call the plugin's methods and await THOSE; hand the object
+// itself around synchronously.
 //
 // Required config. Vite inlines VITE_* at build time — and because the Capacitor
 // shell loads the deployed site (capacitor.config.json → server.url), the build
@@ -178,9 +182,9 @@ function ensureAdMob() {
   return adMobPromise;
 }
 
-// Kept as the one place the SDK object is handed out, so the call sites read as
-// they did when this was a lazy import.
-async function loadPurchases() {
+// Deliberately NOT async — see the rule at the top of this file. Returning the
+// proxy through a promise is exactly the hang.
+function loadPurchases() {
   return PurchasesPlugin;
 }
 
@@ -199,7 +203,7 @@ let configurePromise = null;
 async function configurePurchases() {
   try {
     billingStage = "loading SDK";
-    const Purchases = await loadPurchases();
+    const Purchases = loadPurchases();
     if (IS_DEV) await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
     // No appUserID here: at startup we usually don't know the Firebase uid yet.
     // linkRevenueCatUser() attaches it as soon as auth resolves.
@@ -319,7 +323,7 @@ export async function hideBanner() {
 export async function getCustomerInfo() {
   if (!(await ensureConfigured())) return null;
   try {
-    const Purchases = await loadPurchases();
+    const Purchases = loadPurchases();
     const { customerInfo } = await Purchases.getCustomerInfo();
     return customerInfo;
   } catch (e) { console.error("getCustomerInfo failed", e); return null; }
@@ -380,7 +384,7 @@ async function linkRevenueCatUserInner(uid) {
     };
   }
   try {
-    const Purchases = await loadPurchases();
+    const Purchases = loadPurchases();
     billingStage = "logging in";
     const { customerInfo } = await Purchases.logIn({ appUserID: uid });
     billingStage = "linked";
@@ -398,7 +402,7 @@ async function linkRevenueCatUserInner(uid) {
 export async function unlinkRevenueCatUser() {
   if (!(await ensureConfigured())) return { ok: false, active: false };
   try {
-    const Purchases = await loadPurchases();
+    const Purchases = loadPurchases();
     // logOut rejects when the current id is already anonymous, which is exactly
     // the state at startup before anyone signs in — and this now runs then,
     // where the old configure race used to swallow it. Nothing to detach, so
@@ -420,7 +424,7 @@ export async function unlinkRevenueCatUser() {
 export async function getCurrentOffering() {
   if (!(await ensureConfigured())) return null;
   try {
-    const Purchases = await loadPurchases();
+    const Purchases = loadPurchases();
     const offerings = await Purchases.getOfferings();
     return offerings.current || null;
   } catch (e) { console.error("getOfferings failed", e); return null; }
@@ -498,7 +502,7 @@ export async function presentCustomerCenter() {
 // distinguish cancellation from failure via isUserCancelled().
 export async function purchaseRemoveAds() {
   if (!(await ensureConfigured())) return false;
-  const Purchases = await loadPurchases();
+  const Purchases = loadPurchases();
   const offerings = await Purchases.getOfferings();
   const pkg = offerings.current?.availablePackages?.[0];
   if (!pkg) throw new Error("No RevenueCat offering configured");
@@ -510,7 +514,7 @@ export async function purchaseRemoveAds() {
 // devices must be able to get their Pro access back without paying again).
 export async function restorePurchases() {
   if (!(await ensureConfigured())) return false;
-  const Purchases = await loadPurchases();
+  const Purchases = loadPurchases();
   const { customerInfo } = await Purchases.restorePurchases();
   emit(customerInfo);
   return isActive(customerInfo);
