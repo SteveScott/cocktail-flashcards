@@ -234,8 +234,8 @@ for (const [d, legacy, adaptive] of DENSITIES) {
 // "512 px, 32-bit PNG (with alpha)", while App Store Connect rejects any icon
 // carrying an alpha channel at all. Neither will take the other's file without
 // argument, so each gets its own, named for where it goes.
-write('store/play-icon-512.png', png(icon({ ground: 'square' }), 512));
-write('store/app-store-icon-1024.png', pngOpaque(icon({ ground: 'square' }), 1024));
+write('src/assets/store/play-icon-512.png', png(icon({ ground: 'square' }), 512));
+write('src/assets/store/app-store-icon-1024.png', pngOpaque(icon({ ground: 'square' }), 1024));
 
 // Splash screens, per orientation and density, at the sizes Capacitor's
 // template shipped. drawable/ (no qualifier) is the fallback bucket.
