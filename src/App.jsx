@@ -8,7 +8,7 @@ import {
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
-import { norm, getMethod } from './recipe-meta';
+import { norm, getMethod, buildCodex, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
 import AdSlot from './AdSlot.jsx';
@@ -33,6 +33,13 @@ const billingReady = isBillingAvailable();
 // Every cocktail in the book. The free tier studies and quizzes the top 50 of
 // them; the rest is what a Pro purchase adds — see poolFor() below.
 const ALL_CARDS = [...top50, ...master150];
+
+// Every ingredient in the corpus with its frequency, for drawing impostors in
+// the 86 It quiz. Built once — the codex never changes at runtime. Deliberately
+// the whole corpus and not the player's pool: an impostor is an ingredient name,
+// not a recipe, and drawing them from 50 drinks would make the free game easier
+// rather than smaller.
+const CODEX = buildCodex(ALL_CARDS);
 
 const DECK_SIZE = 20;
 const MASTERY_SCORE = 6;
@@ -78,11 +85,22 @@ function poolFor(st, pro) {
   return pro && st?.masterMode ? ALL_CARDS : top50;
 }
 
+// Fisher–Yates on a copy. Shared by both quizzes, which each need a fresh
+// random order of the whole pool rather than its first n cocktails.
+function shuffled(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function initState(masterMode) {
   const pool = masterMode ? ALL_CARDS : top50;
   const scores = {};
   pool.forEach(c => { scores[c.name] = 0; });
-  return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], deckSize: DECK_SIZE };
+  return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], tried: [], deckSize: DECK_SIZE };
 }
 
 // Bring the study deck to exactly its chosen size, holding only cards the pool
@@ -125,12 +143,15 @@ function mergeStates(a, b, pro) {
   const scores = { ...a.scores };
   for (const k in b.scores) scores[k] = Math.max(scores[k] || 0, b.scores[k] || 0);
   const learned = Array.from(new Set([...(a.learned||[]), ...(b.learned||[])]));
+  // Tried is a union like learned: having drunk something on one device is a
+  // fact that a second device cannot un-know.
+  const tried = Array.from(new Set([...(a.tried||[]), ...(b.tried||[])]));
   const masterMode = a.masterMode || b.masterMode;
   const pool = poolFor({ masterMode }, pro);
   const lSet = new Set(learned);
   const active = Array.from(new Set([...(a.active||[]), ...(b.active||[])])).filter(n => !lSet.has(n));
   const deckSize = a.deckSize || b.deckSize || DECK_SIZE;
-  return refillDeck({ scores, learned, active, masterMode, deckSize }, pool);
+  return refillDeck({ scores, learned, tried, active, masterMode, deckSize }, pool);
 }
 
 // True when two progress states carry the same progress (identity aside).
@@ -146,6 +167,7 @@ function progressEqual(a, b) {
   if ((a.deckSize || DECK_SIZE) !== (b.deckSize || DECK_SIZE)) return false;
   const sameList = (x = [], y = []) => x.length === y.length && x.every((n, i) => n === y[i]);
   if (!sameList(a.learned, b.learned) || !sameList(a.active, b.active)) return false;
+  if (!sameList(a.tried, b.tried)) return false;
   const keys = new Set([...Object.keys(a.scores || {}), ...Object.keys(b.scores || {})]);
   for (const k of keys) if ((a.scores?.[k] || 0) !== (b.scores?.[k] || 0)) return false;
   return true;
@@ -225,8 +247,16 @@ export default function App() {
   // How many questions the last quiz was started with, so "Retry Quiz" repeats
   // the same length instead of sending you back through the picker. null = all.
   const [quizLen, setQuizLen] = useState(null);
+  // "self" (reveal and grade yourself) or "86" (uncheck what doesn't belong).
+  const [quizKind, setQuizKind] = useState("self");
+  // Per-option checked state for the current 86 It question. Everything starts
+  // checked; the player's job is to take things away.
+  const [kept, setKept] = useState([]);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
+  // "all" | "tried" | "untried" — index-only, deliberately not persisted: it is a
+  // way of looking at the list, not progress worth syncing between devices.
+  const [triedFilter, setTriedFilter] = useState("all");
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(!firebaseEnabled);
   const [adWhitelisted, setAdWhitelisted] = useState(false);
@@ -391,6 +421,9 @@ export default function App() {
               const sameUser = prev.uid && prev.uid === u.uid;
               const hasLocalProgress =
                 (prev.learned && prev.learned.length > 0) ||
+                // Drinks marked tried before signing in are progress too, and
+                // without this they are discarded by the branch below.
+                (prev.tried && prev.tried.length > 0) ||
                 Object.values(prev.scores || {}).some(v => v > 0);
               const anonymousWithProgress = !prev.uid && hasLocalProgress;
               const resolved = (sameUser || anonymousWithProgress)
@@ -465,7 +498,7 @@ export default function App() {
             const snap = await getDoc(doc(db, "users", u.uid));
             if (snap.exists() && snap.data().adsRemoved) {
               setAdsRemovedCloud(true);
-              setPurchaseMsg("Ads removed. Thanks for your support!");
+              setPurchaseMsg("You're Pro. Thanks for your support!");
               return;
             }
           } catch (e) { console.error("Failed to confirm purchase", e); }
@@ -703,7 +736,7 @@ export default function App() {
   }
 
   async function startCheckout() {
-    if (!user) { alert("Sign in first to unlock Pro."); return; }
+    if (!user) { alert("Sign in first to get Pro."); return; }
     setPurchasing(true);
     setPurchaseMsg("");
     try {
@@ -855,6 +888,26 @@ export default function App() {
 
   function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
 
+  // The tried marker reads the same on a card and on an index row, so both use
+  // this. Unchecked it asks the question, checked it states the answer.
+  function triedChip(name, big) {
+    const on = (st.tried || []).includes(name);
+    return (
+      <button
+        onClick={()=>toggleTried(name)}
+        aria-pressed={on}
+        title={on ? "Marked as tried — click to unmark" : "Mark as tried"}
+        style={{whiteSpace:"nowrap",borderRadius:8,cursor:"pointer",fontWeight:700,
+          padding: big ? "0.35rem 0.7rem" : "0.3rem 0.6rem",
+          fontSize: big ? "0.8rem" : "0.72rem",
+          border: on ? "none" : "1px solid #a855f780",
+          background: on ? "#7e22ce" : "transparent",
+          color: on ? "#fff" : "#c084fc"}}>
+        {on ? "☑ Tried" : "☐ Tried?"}
+      </button>
+    );
+  }
+
   function glassIcon(glass) {
     if (!glass) return "🥃";
     const g = glass.toLowerCase();
@@ -894,11 +947,7 @@ export default function App() {
   // order. Shuffling before the slice is what makes a short quiz a random sample
   // of the pool rather than its first n cocktails. n = null takes everything.
   function startQuiz(n) {
-    const q = [...pool];
-    for (let i = q.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [q[i], q[j]] = [q[j], q[i]];
-    }
+    const q = shuffled(pool);
     setQuizLen(n ?? null);
     setQuizPool(n ? q.slice(0, n) : q);
     setQa([]); setQi(0); setQr(false); setMode("quiz");
@@ -909,6 +958,47 @@ export default function App() {
     if (qi+1 >= quizPool.length) setMode("results");
     else { setQi(i=>i+1); setQr(false); }
   }
+
+  // 86 It. Same shuffle-then-slice as startQuiz, so a short round is a random
+  // sample of the pool rather than its first n drinks, but each question also
+  // carries the options it will offer. They are generated up front, once: built
+  // during render they would redraw their impostors on every keystroke.
+  function start86Quiz(n) {
+    // `pool` already honours master mode; eligibility drops the one drink that
+    // cannot make a question.
+    const eligible = shuffled(pool.filter(eightySixEligible));
+    const chosen = (n ? eligible.slice(0, n) : eligible)
+      .map(c => buildEightySixQuestion(c, CODEX));
+    setQuizKind("86");
+    setQuizLen(n ?? null);
+    setQuizPool(chosen);
+    setKept(chosen[0] ? chosen[0].options.map(() => true) : []);
+    setQa([]); setQi(0); setQr(false); setMode("quiz");
+  }
+
+  // Right only when every real ingredient is still checked AND every impostor
+  // is gone. Leaving an impostor in is the same mistake as taking a real
+  // ingredient out, so both cost the question.
+  function check86() {
+    const q = quizPool[qi];
+    setQa(a => [...a, q.options.every((o, i) => kept[i] === o.real)]);
+    setQr(true);
+  }
+
+  function next86() {
+    if (qi + 1 >= quizPool.length) { setMode("results"); return; }
+    setKept(quizPool[qi + 1].options.map(() => true));
+    setQi(i => i + 1);
+    setQr(false);
+  }
+
+  function toggleKept(i) {
+    setKept(k => k.map((v, j) => j === i ? !v : v));
+  }
+
+  // Start whichever quiz the picker was opened for.
+  function startPicked(n) { if (quizKind === "86") start86Quiz(n); else startQuiz(n); }
+
   // Switch the whole library into study and quizzes, or back to the free top 50.
   // The library is what Pro sells, so switching it on without Pro opens the
   // paywall instead of widening the pool.
@@ -952,6 +1042,17 @@ export default function App() {
       return refillDeck({ ...p, masterMode, scores, learned, active: [name, ...p.active] }, np);
     });
   }
+  // Marking a drink tried is unrelated to studying it: it does not touch the
+  // deck, the scores or the learned list, and a drink can be tried without ever
+  // having been studied.
+  function toggleTried(name) {
+    upd(p => {
+      const tried = new Set(p.tried || []);
+      if (tried.has(name)) tried.delete(name); else tried.add(name);
+      return { ...p, tried: Array.from(tried) };
+    });
+  }
+
   // Randomize the order of the study deck (Fisher–Yates) and jump to the first card.
   function shuffleActive() {
     upd(p => {
@@ -1030,11 +1131,11 @@ export default function App() {
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
             {webAdsServed
-              ? `Cocktail Flashcards Pro — all ${ALL_CARDS.length} cocktails, and no ads`
-              : `Cocktail Flashcards Pro — study and quiz all ${ALL_CARDS.length} cocktails`}
+              ? `Go Pro — all ${ALL_CARDS.length} cocktails, and no ads`
+              : `Go Pro — study and quiz all ${ALL_CARDS.length} cocktails`}
           </div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
-            {purchasing ? "Redirecting…" : "✨ Go Pro — $4.99"}
+            {purchasing ? "Redirecting…" : "✨ Get Pro — $4.99"}
           </button>
         </div>
       )}
@@ -1121,7 +1222,8 @@ export default function App() {
       </div>
 
       <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn("#3b82f6"),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
-      <button onClick={()=>setMode("quizlen")} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — Test Yourself</button>
+      <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
+      <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn("#be123c"),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
 
       {/* The paywall itself. Study and quizzes cover the top 50 for free; this
@@ -1193,7 +1295,7 @@ export default function App() {
             <div style={{maxWidth:300,margin:"0.6rem auto 0"}}>
               <div style={{fontSize:"0.75rem",color:"#cbd5e1",marginBottom:"0.5rem"}}>
                 Permanently delete your account and synced progress? This cannot be undone
-                {adFree ? ", and your ad-free status will be removed from this account" : ""}.
+                {adFree ? ", and your Pro access will be removed from this account" : ""}.
                 {adFree && billingReady ? " You can get it back with Restore purchase." : ""}
               </div>
               <div style={{display:"flex",gap:"0.4rem",alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
@@ -1237,20 +1339,33 @@ export default function App() {
     const q = norm(search.trim());
     // Match on both the cocktail name and its ingredient list, accent-insensitively,
     // so "pina" finds "Piña Colada" and "rum" finds every drink containing rum.
-    const results = q ? ALL_CARDS.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_CARDS;
+    const matches = q ? ALL_CARDS.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_CARDS;
+    const triedSet = new Set(st.tried || []);
+    const results = triedFilter === "all"
+      ? matches
+      : matches.filter(c => triedSet.has(c.name) === (triedFilter === "tried"));
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}</span>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
         </div>
         <input
           autoFocus
           value={search}
           onChange={e=>setSearch(e.target.value)}
           placeholder="Search name or ingredient…"
-          style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:isPro?"1.25rem":"0.6rem",outline:"none"})}
+          style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
+        <div style={{display:"flex",gap:"0.5rem",marginBottom:isPro?"1.25rem":"0.6rem"}}>
+          {[["all","All"],["tried","☑ Tried"],["untried","☐ Not tried"]].map(([k,label])=>(
+            <button key={k} onClick={()=>setTriedFilter(k)} aria-pressed={triedFilter===k}
+              style={{flex:1,borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
+                border: triedFilter===k ? "none" : "1px solid #33415580",
+                background: triedFilter===k ? "#7e22ce" : "transparent",
+                color: triedFilter===k ? "#fff" : "#94a3b8"}}>{label}</button>
+          ))}
+        </div>
         {/* The Index is the whole book either way — the lock says which of these
             recipes can also go into a deck, so a locked button reads as a price
             rather than as a bug. */}
@@ -1261,7 +1376,7 @@ export default function App() {
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
           {results.length === 0 && (
-            <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>No cocktails found.</div>
+            <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>{triedFilter === "tried" ? "No tried cocktails match." : triedFilter === "untried" ? "Nothing left untried here." : "No cocktails found."}</div>
           )}
           {results.map(c=>{
             // Outside the pool the cocktail is readable but not studiable: Pro
@@ -1278,10 +1393,11 @@ export default function App() {
                   <button onClick={()=>toggleStudy(c.name)} title={locked ? `Pro adds all ${ALL_CARDS.length} cocktails to study and quizzes` : undefined} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:inDeck?"none":`1px solid ${locked?"#f59e0b60":"#3b82f680"}`,background:inDeck?"#16a34a":"transparent",color:inDeck?"#fff":locked?"#f59e0b":"#60a5fa"}}>
                     {locked ? "🔒 Pro" : inDeck ? "✓ In Study" : "＋ Study"}
                   </button>
+                  {triedChip(c.name, false)}
                 </div>
               </div>
               <div style={{color:"#cbd5e1",lineHeight:1.7,fontSize:"0.85rem"}}>
-                {c.glass && <div style={{padding:"0.05rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}</div>}
+                {c.glass && <div style={{padding:"0.05rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
                 {c.ingredients.split(", ").map((g,i,a)=>(
                   <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
                 ))}
@@ -1345,13 +1461,16 @@ export default function App() {
               <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0,lineHeight:1.2}}>{c.name}</h2>
               {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2026</div>}
             </div>
-            <div style={{background:col(score),color:"#fff",borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap",marginLeft:"0.75rem"}}>{score}/{MASTERY_SCORE}</div>
+            <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginLeft:"0.75rem"}}>
+              {triedChip(c.name, true)}
+              <div style={{background:col(score),color:"#fff",borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap"}}>{score}/{MASTERY_SCORE}</div>
+            </div>
           </div>
           <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem 0"}}>
             {!revealed
               ? <button onClick={()=>setRevealed(true)} style={btn("#334155",{color:"#cbd5e1",fontSize:"0.95rem"})}>Reveal Ingredients</button>
               : <div style={{color:"#cbd5e1",lineHeight:1.85,fontSize:"0.9rem"}}>
-                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}</div>}
+                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
                   {c.ingredients.split(", ").map((g,i,a)=>(
                     <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
                   ))}
@@ -1416,19 +1535,80 @@ export default function App() {
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
         </div>
         <div style={{textAlign:"center",marginBottom:"1.75rem"}}>
-          <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>🎯</div>
+          <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>{quizKind === "86" ? "🍸" : "🎯"}</div>
           <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
-          <p style={{color:"#94a3b8",fontSize:"0.85rem",margin:0}}>Cocktails are drawn at random from all {total}.</p>
+          <p style={{color:"#94a3b8",fontSize:"0.85rem",margin:0}}>
+            {quizKind === "86"
+              ? "86 It — drawn at random from all " + total + "."
+              : "Cocktails are drawn at random from all " + total + "."}
+          </p>
         </div>
-        {lengths.map(n => opt(`${n} Questions`, "", ()=>startQuiz(n), "#7c3aed"))}
-        {opt("All Cocktails", `${total} questions`, ()=>startQuiz(null), "#4c1d95")}
-        {/* Says what a bigger quiz would cost, at the moment the user is picking
-            how much to take on — not as an interruption to the quiz itself. */}
+        {lengths.map(n => opt(`${n} Questions`, "", ()=>startPicked(n), quizKind === "86" ? "#be123c" : "#7c3aed"))}
+        {opt("All Cocktails", `${total} questions`, ()=>startPicked(null), quizKind === "86" ? "#881337" : "#4c1d95")}
+        {/* Says what a bigger round would cost, at the moment the user is
+            picking how much to take on — not as an interruption to the quiz
+            itself. Amber whichever quiz this is: it is the Pro colour
+            everywhere else in the app. */}
         {!isPro && (
           <button onClick={unlockPro} style={{width:"100%",marginTop:"0.5rem",padding:"0.7rem",borderRadius:12,background:"transparent",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",border:"1px solid #f59e0b40",cursor:"pointer"}}>
-            🔒 Quiz all {ALL_CARDS.length} cocktails with Pro
+            🔒 {quizKind === "86" ? "86" : "Quiz"} all {ALL_CARDS.length} cocktails with Pro
           </button>
         )}
+      </div></div>
+    );
+  }
+
+  // 86 It play screen. Everything starts checked; unchecking is the answer.
+  // After Check Answer the same list is marked up rather than replaced, so the
+  // drink is read twice — once as you believed it, once as it is.
+  if (mode === "quiz" && quizKind === "86") {
+    const c = quizPool[qi];
+    if (!c) return <div style={page}><div style={wrap}>No cocktails available.</div></div>;
+    const gotIt = qr && c.options.every((o, i) => kept[i] === o.real);
+    return (
+      <div style={page}><div style={wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {quizPool.length}</span>
+          <span style={{color:"#22c55e",fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
+        </div>
+        <div style={frame({borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"})}>
+          <div style={{background:"#be123c",height:"100%",width:`${(qi/quizPool.length)*100}%`,transition:"width 0.3s"}} />
+        </div>
+
+        <div style={frame({borderRadius:20,padding:"1.5rem",marginBottom:"1.25rem"})}>
+          <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:"0 0 0.25rem"}}>{c.name}</h2>
+          <div style={{color:"#94a3b8",fontSize:"0.8rem",marginBottom:"1rem"}}>
+            {qr ? (gotIt ? "✓ Correct" : "✗ Not quite") : "Uncheck anything that doesn't belong."}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:"0.5rem"}}>
+            {c.options.map((o,i)=>{
+              const on = kept[i];
+              // Before answering, the box just reflects the player. After, it
+              // says what was true: green where they agreed with the recipe,
+              // red where they did not.
+              const right = qr && on === o.real;
+              const bg = qr ? (right ? "#16a34a20" : "#dc262620") : (on ? "#3b82f620" : "transparent");
+              const bd = qr ? (right ? "#16a34a80" : "#dc262680") : (on ? "#3b82f680" : "#33415580");
+              return (
+                <button key={o.label+i} onClick={()=>{ if (!qr) toggleKept(i); }} disabled={qr}
+                  style={{display:"flex",alignItems:"center",gap:"0.6rem",textAlign:"left",width:"100%",
+                    background:bg,border:`1px solid ${bd}`,borderRadius:10,padding:"0.6rem 0.75rem",
+                    cursor:qr?"default":"pointer",color:on?"#f1f5f9":"#64748b",
+                    fontSize:"0.9rem",fontWeight:600,
+                    textDecoration:!on&&!qr?"line-through":"none"}}>
+                  <span style={{fontSize:"1.05rem"}}>{on ? "☑" : "☐"}</span>
+                  <span style={{flex:1}}>{o.label}</span>
+                  {qr && !o.real && <span style={{fontSize:"0.7rem",fontWeight:800,color:"#fca5a5",whiteSpace:"nowrap"}}>IMPOSTOR</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {qr
+          ? <button onClick={next86} style={{...btn("#be123c"),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
+          : <button onClick={check86} style={{...btn("#16a34a"),width:"100%"}}>Check Answer</button>}
       </div></div>
     );
   }
@@ -1454,7 +1634,7 @@ export default function App() {
             {!qr
               ? <button onClick={()=>setQr(true)} style={btn("#334155",{color:"#cbd5e1",fontSize:"0.95rem"})}>Reveal Ingredients</button>
               : <div style={{color:"#cbd5e1",lineHeight:1.85,fontSize:"0.9rem"}}>
-                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}</div>}
+                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
                   {c.ingredients.split(", ").map((g,i,a)=>(
                     <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
                   ))}
@@ -1502,7 +1682,7 @@ export default function App() {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
           {/* Retries reshuffle at the length you already picked — the common case
               is another round of the same size, not another trip to the picker. */}
-          <button onClick={()=>startQuiz(quizLen)} style={btn("#7c3aed")}>Retry Quiz</button>
+          <button onClick={()=>startPicked(quizLen)} style={btn(quizKind === "86" ? "#be123c" : "#7c3aed")}>Retry Quiz</button>
           <button onClick={()=>setMode("menu")} style={btn("#1e293b")}>Menu</button>
         </div>
         <button onClick={()=>setMode("quizlen")} style={{width:"100%",marginTop:"0.75rem",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#94a3b8",fontWeight:600,fontSize:"0.85rem",border:"none",cursor:"pointer",textDecoration:"underline"}}>Change quiz length</button>
