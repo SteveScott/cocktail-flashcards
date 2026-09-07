@@ -28,7 +28,7 @@ const BUILT_MIXERS = /\bsoda\b|tonic|ginger beer|ginger ale|coca-cola|\bcola\b|t
 // Which mixers actually carry bubbles. Narrower than BUILT_MIXERS, which
 // includes tequila blanco so that a Ranch Water reads as a build — true of the
 // method, but there is no carbonation in the tequila to protect.
-const CARBONATED = /\bsoda\b|tonic|ginger beer|ginger ale|coca-cola|\bcola\b|sparkling|seltzer|topo chico|beer|champagne|prosecco|lemonade|cider/i;
+const CARBONATED = /\bsoda\b|tonic|ginger beer|ginger ale|coca-cola|\bcola\b|sparkling|seltzer|topo chico|beer|stout|champagne|prosecco|lemonade|cider/i;
 
 const SHAKE_TRIGGERS = /fresh (lime|lemon|grapefruit|orange|pineapple) juice|(lime|lemon|grapefruit|orange|pineapple|cranberry|tomato|passion ?fruit) juice|sour mix|egg white|egg\b|heavy cream|cream of coconut|coconut cream|purée|puree|half-and-half|espresso/;
 

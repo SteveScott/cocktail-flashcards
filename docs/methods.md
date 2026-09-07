@@ -52,6 +52,14 @@ is assembled in the glass it is served in.
 | Seven & Seven | A two-ingredient highball, built over ice |
 | True Blood | Built in the glass and topped with wine. `BUILT_MIXERS` does not list wine, so inference falls through to Shaken on the cranberry juice — which would shake the wine through the drink instead of leaving it on top. Adding wine to that list would reclassify Sangria as a side effect, so this is an override rather than a rule change. |
 
+A build's last step reads the narrower `CARBONATED` list to decide whether
+stirring costs you bubbles. `stout` was added to it for Nico's Bloody Mary: a
+stout is carbonated, and the head is the point of pouring one over a tomato
+base, but the list only named `beer` — which "Guinness Stout" does not contain —
+so the drink was being told to stir briefly rather than gently. It changes the
+generated steps of no other recipe; every other stout in the deck (Black Velvet,
+Snakebite, Baby Guinness) is `Layered` and never reaches that branch.
+
 ## Layered
 
 Poured over the back of a spoon so the layers hold.
