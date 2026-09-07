@@ -30,6 +30,15 @@ const { top50, master150 } = cocktailData;
 // possible answer is "purchases aren't available in this build".
 const billingReady = isBillingAvailable();
 
+// What the web checkout charges, for display only — Stripe is the authority on
+// what is actually taken. It lives here as one constant so the label cannot
+// drift from itself, but it CANNOT keep the storefronts in step: the real price
+// lives in a Stripe Price object and in the Play `lifetime` product, and both
+// are edited in their own dashboards. Change the price in all three, together.
+// The Play build never reads this — RevenueCat's paywall shows Google's own
+// localised price, which is why only the web needs a hardcoded string at all.
+const PRO_PRICE = "$7.99";
+
 // Every cocktail in the book. The free tier studies and quizzes the top 50 of
 // them; the rest is what a Pro purchase adds — see poolFor() below.
 const ALL_CARDS = [...top50, ...master150];
@@ -1135,7 +1144,7 @@ export default function App() {
               : `Go Pro — study and quiz all ${ALL_CARDS.length} cocktails`}
           </div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
-            {purchasing ? "Redirecting…" : "✨ Get Pro — $4.99"}
+            {purchasing ? "Redirecting…" : `✨ Get Pro — ${PRO_PRICE}`}
           </button>
         </div>
       )}

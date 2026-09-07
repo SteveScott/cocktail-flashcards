@@ -526,7 +526,7 @@ platforms. See [docs/mobile-google-signin.md](docs/mobile-google-signin.md).
 
 ## Monetization, entitlements and consent
 
-One purchase, **Cocktail Flashcards Pro** ($4.99, one-time), carrying two things:
+One purchase, **Cocktail Flashcards Pro** ($7.99, one-time), carrying two things:
 
 - **The library.** Study and both quizzes cover the top 50 for free; the "Add All
   Cards" switch on the menu adds the other 271 to both, and that switch is the
@@ -568,7 +568,7 @@ all along. Nothing server-side changed when the library was added to the product
   (`areAdsServing` watches for `data-ad-status="filled"` for 30 s). Offering to
   remove ads that are not there reads as a broken button; the card drops that
   half of the pitch instead of hiding.
-- Purchase is **Stripe Checkout** ($4.99, one-time), reached from anywhere the
+- Purchase is **Stripe Checkout** ($7.99, one-time), reached from anywhere the
   paywall is met — the library switch, a locked index row, the quiz length
   picker — through one `unlockPro()` entry point that picks the flow the build
   supports. The function verifies the
