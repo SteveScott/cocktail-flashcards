@@ -4,8 +4,18 @@
 //
 // Everything here is a no-op unless the Capacitor plugin bridge is present (see
 // isCapacitorApp — deliberately narrower than isPlayApp, which can be set by the
-// URL flag alone). Plugins are dynamically imported so their native-only code
-// never loads for web visitors.
+// URL flag alone).
+//
+// The plugins are imported STATICALLY, on purpose. They used to be pulled in
+// with a lazy import() so their code stayed out of the web bundle, and in the
+// Play shell that import never resolved: the WebView fetched the split chunk
+// from the deployed site and neither loaded nor failed it, so every purchase
+// sat on "Connecting…" for ever — the billing diagnostics read "stopped at:
+// importing plugin" with the native plugin demonstrably present. A static
+// import costs web visitors a few kilobytes of plugin registration (each
+// package's top level is one registerPlugin() call, with its own web fallback
+// loaded lazily by Capacitor) and removes the only network fetch on the path to
+// a purchase.
 //
 // Required config. Vite inlines VITE_* at build time — and because the Capacitor
 // shell loads the deployed site (capacitor.config.json → server.url), the build
@@ -16,6 +26,9 @@
 //   VITE_REVENUECAT_TEST_KEY     RevenueCat Test Store key (test_…), dev only
 //   VITE_REVENUECAT_ENTITLEMENT  Entitlement identifier (default cocktail_flashcards_pro)
 import { isCapacitorApp } from "./platform";
+import { AdMob, AdmobConsentStatus, AdmobConsentDebugGeography, BannerAdPosition, BannerAdSize } from "@capacitor-community/admob";
+import { Purchases as PurchasesPlugin, LOG_LEVEL, PAYWALL_RESULT } from "@revenuecat/purchases-capacitor";
+import { RevenueCatUI } from "@revenuecat/purchases-capacitor-ui";
 
 // Google's official TEST banner id — safe to ship as a fallback; it only serves
 // test ads. Replace via VITE_ADMOB_BANNER_ID for the real release.
@@ -107,8 +120,6 @@ export function getAdConsentState() {
 // request ads at all, and Google's guidance is to gather it first.
 async function gatherAdConsent(AdMob) {
   try {
-    const { AdmobConsentStatus, AdmobConsentDebugGeography } = await import("@capacitor-community/admob");
-
     // In development, force the EEA geography and add the current test device id
     // so we can see the consent form even if the production dashboard isn't
     // fully configured yet; production requests consent without these overrides.
@@ -140,7 +151,6 @@ async function gatherAdConsent(AdMob) {
 export async function showAdPrivacyOptions() {
   if (!isCapacitorApp) return;
   try {
-    const { AdMob } = await import("@capacitor-community/admob");
     await AdMob.showPrivacyOptionsForm();
     // The choice may have changed whether we can serve ads at all.
     await gatherAdConsent(AdMob);
@@ -152,7 +162,6 @@ function ensureAdMob() {
   if (!adMobPromise) {
     adMobPromise = (async () => {
       try {
-        const { AdMob } = await import("@capacitor-community/admob");
         await gatherAdConsent(AdMob);
         await AdMob.initialize({});
         return true;
@@ -169,9 +178,10 @@ function ensureAdMob() {
   return adMobPromise;
 }
 
+// Kept as the one place the SDK object is handed out, so the call sites read as
+// they did when this was a lazy import.
 async function loadPurchases() {
-  const { Purchases } = await import("@revenuecat/purchases-capacitor");
-  return Purchases;
+  return PurchasesPlugin;
 }
 
 // The single in-flight (then settled) configuration attempt. Every entry point
@@ -188,12 +198,9 @@ let configurePromise = null;
 
 async function configurePurchases() {
   try {
-    billingStage = "importing plugin";
+    billingStage = "loading SDK";
     const Purchases = await loadPurchases();
-    if (IS_DEV) {
-      const { LOG_LEVEL } = await import("@revenuecat/purchases-capacitor");
-      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-    }
+    if (IS_DEV) await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
     // No appUserID here: at startup we usually don't know the Firebase uid yet.
     // linkRevenueCatUser() attaches it as soon as auth resolves.
     billingStage = "configuring SDK";
@@ -290,7 +297,6 @@ export async function showBanner() {
   // Showing one anyway would breach both the consent and Google's ad policy.
   if (!canRequestAds) return;
   try {
-    const { AdMob, BannerAdPosition, BannerAdSize } = await import("@capacitor-community/admob");
     await AdMob.showBanner({
       adId: ADMOB_BANNER_ID,
       adSize: BannerAdSize.ADAPTIVE_BANNER,
@@ -303,7 +309,6 @@ export async function showBanner() {
 export async function hideBanner() {
   if (!(await ensureAdMob())) return;
   try {
-    const { AdMob } = await import("@capacitor-community/admob");
     await AdMob.removeBanner();
   } catch (e) { console.error("hideBanner failed", e); }
 }
@@ -444,8 +449,6 @@ export const PAYWALL_OUTCOME = {
 // purchase button.
 export async function presentPaywall() {
   if (!(await ensureConfigured())) return PAYWALL_OUTCOME.UNAVAILABLE;
-  const { RevenueCatUI } = await import("@revenuecat/purchases-capacitor-ui");
-  const { PAYWALL_RESULT } = await import("@revenuecat/purchases-capacitor");
   const { result } = await RevenueCatUI.presentPaywall();
   switch (result) {
     case PAYWALL_RESULT.PURCHASED:
@@ -467,8 +470,6 @@ export async function presentPaywall() {
 // the right call for gating a Pro feature at the point of use.
 export async function presentPaywallIfNeeded() {
   if (!(await ensureConfigured())) return false;
-  const { RevenueCatUI } = await import("@revenuecat/purchases-capacitor-ui");
-  const { PAYWALL_RESULT } = await import("@revenuecat/purchases-capacitor");
   const { result } = await RevenueCatUI.presentPaywallIfNeeded({
     requiredEntitlementIdentifier: ENTITLEMENT,
   });
@@ -484,7 +485,6 @@ export async function presentPaywallIfNeeded() {
 export async function presentCustomerCenter() {
   if (!(await ensureConfigured())) return false;
   try {
-    const { RevenueCatUI } = await import("@revenuecat/purchases-capacitor-ui");
     await RevenueCatUI.presentCustomerCenter();
     // The sheet can change entitlement state (restore, refund) without telling
     // us directly — re-read so the UI settles on the truth. The CustomerInfo
