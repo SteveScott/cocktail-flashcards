@@ -50,14 +50,20 @@ function fan(cx, cy, r, n, duty, fill) {
   }).join('');
 }
 
-// The mark itself, without any ground. The bowl is a plain triangle: at tab
-// size any interior detail silts up, and the fan is already carrying the
-// period. The base is two bars rather than one — the step is the cheapest
-// Deco signal there is, and it costs four points of height.
+// The mark itself, without any ground. The bowl carries no interior detail: at
+// tab size banding and a chevroned rim both silt up, and the fan is already
+// carrying the period. The base is two bars rather than one — the step is the
+// cheapest Deco signal there is, and it costs four points of height.
+//
+// The bowl is a truncated V, not a triangle, and the stem runs up inside it.
+// A full triangle meeting a narrower stem pinches to a point at the join, and
+// the two then read as separate shapes touching rather than one glass; ending
+// the bowl on the stem's own width makes the stem a continuation of it. The 2
+// units of overlap are there so no rasterizer can open a hairline at the seam.
 const MARK = [
   fan(50, 36, 22, 7, 0.66, DIM),
-  `<path d="M21 36 L79 36 L50 66 Z" fill="${BRASS}"/>`,
-  `<rect x="46.5" y="65" width="7" height="14" fill="${BRASS}"/>`,
+  `<path d="M21 36 L79 36 L54.5 62 L45.5 62 Z" fill="${BRASS}"/>`,
+  `<rect x="45.5" y="60" width="9" height="19" fill="${BRASS}"/>`,
   `<rect x="35" y="79" width="30" height="4.5" fill="${BRASS}"/>`,
   `<rect x="28" y="84" width="44" height="5.5" rx="1" fill="${BRASS}"/>`,
 ].join('\n  ');
