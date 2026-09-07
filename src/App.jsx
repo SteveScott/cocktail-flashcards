@@ -247,7 +247,12 @@ function progressEqual(a, b) {
   return true;
 }
 
-const FIREWORK_COLORS = ["#f2dca6", C.brass, "#c9803a", C.jade, C.label, C.rustLite];
+// Deliberately NOT drawn from C. Everything else on screen is walnut and brass
+// because it is furniture in a dark room, but these are pyrotechnics and real
+// ones are saturated — sodium gold, strontium red, barium green, copper blue,
+// magnesium white. Toning them down to match the panelling is how a celebration
+// stops reading as one, and they only ever appear over a 100% result.
+const FIREWORK_COLORS = ["#ffc21a", "#ff3355", "#2bff85", "#22c8ff", "#b44cff", "#fff4d6"];
 const FIREWORK_SPARKS = 12;
 const BURST_MS = 2400;   // must match the .fw-spark / .fw-fall animation duration
 const LAUNCH_MS = 520;   // gap between launches; ~5 bursts alive at any moment
