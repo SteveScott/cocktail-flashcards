@@ -8,7 +8,7 @@ import {
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
-import { norm, getMethod } from './recipe-meta';
+import { norm, getMethod, buildCodex, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
 import AdSlot from './AdSlot.jsx';
@@ -32,6 +32,9 @@ const billingReady = isBillingAvailable();
 
 const ALL_200 = [...top50, ...master150];
 
+// Every ingredient in the corpus with its frequency, for drawing impostors in
+// the 86 It quiz. Built once — the codex never changes at runtime.
+const CODEX = buildCodex(ALL_200);
 const DECK_SIZE = 20;
 const MASTERY_SCORE = 6;
 const STORAGE_KEY = "cocktail_state_v4";
@@ -66,6 +69,17 @@ const GLASS_ICONS = [
   ["sling", "🥤"],
   ["zombie", "🥤"],
 ];
+
+// Fisher–Yates on a copy. Shared by both quizzes, which each need a fresh
+// random order of the whole pool rather than its first n cocktails.
+function shuffled(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 function initState(masterMode) {
   const pool = masterMode ? ALL_200 : top50;
@@ -207,6 +221,11 @@ export default function App() {
   // How many questions the last quiz was started with, so "Retry Quiz" repeats
   // the same length instead of sending you back through the picker. null = all.
   const [quizLen, setQuizLen] = useState(null);
+  // "self" (reveal and grade yourself) or "86" (uncheck what doesn't belong).
+  const [quizKind, setQuizKind] = useState("self");
+  // Per-option checked state for the current 86 It question. Everything starts
+  // checked; the player's job is to take things away.
+  const [kept, setKept] = useState([]);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
   const [user, setUser] = useState(null);
@@ -416,7 +435,7 @@ export default function App() {
             const snap = await getDoc(doc(db, "users", u.uid));
             if (snap.exists() && snap.data().adsRemoved) {
               setAdsRemovedCloud(true);
-              setPurchaseMsg("Ads removed. Thanks for your support!");
+              setPurchaseMsg("You're Pro. Thanks for your support!");
               return;
             }
           } catch (e) { console.error("Failed to confirm purchase", e); }
@@ -654,7 +673,7 @@ export default function App() {
   }
 
   async function startCheckout() {
-    if (!user) { alert("Sign in first to remove ads."); return; }
+    if (!user) { alert("Sign in first to get Pro."); return; }
     setPurchasing(true);
     setPurchaseMsg("");
     try {
@@ -825,11 +844,7 @@ export default function App() {
   // order. Shuffling before the slice is what makes a short quiz a random sample
   // of the pool rather than its first n cocktails. n = null takes everything.
   function startQuiz(n) {
-    const q = [...pool];
-    for (let i = q.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [q[i], q[j]] = [q[j], q[i]];
-    }
+    const q = shuffled(pool);
     setQuizLen(n ?? null);
     setQuizPool(n ? q.slice(0, n) : q);
     setQa([]); setQi(0); setQr(false); setMode("quiz");
@@ -840,6 +855,46 @@ export default function App() {
     if (qi+1 >= quizPool.length) setMode("results");
     else { setQi(i=>i+1); setQr(false); }
   }
+
+  // 86 It. Same shuffle-then-slice as startQuiz, so a short round is a random
+  // sample of the pool rather than its first n drinks, but each question also
+  // carries the options it will offer. They are generated up front, once: built
+  // during render they would redraw their impostors on every keystroke.
+  function start86Quiz(n) {
+    // `pool` already honours master mode; eligibility drops the one drink that
+    // cannot make a question.
+    const eligible = shuffled(pool.filter(eightySixEligible));
+    const chosen = (n ? eligible.slice(0, n) : eligible)
+      .map(c => buildEightySixQuestion(c, CODEX));
+    setQuizKind("86");
+    setQuizLen(n ?? null);
+    setQuizPool(chosen);
+    setKept(chosen[0] ? chosen[0].options.map(() => true) : []);
+    setQa([]); setQi(0); setQr(false); setMode("quiz");
+  }
+
+  // Right only when every real ingredient is still checked AND every impostor
+  // is gone. Leaving an impostor in is the same mistake as taking a real
+  // ingredient out, so both cost the question.
+  function check86() {
+    const q = quizPool[qi];
+    setQa(a => [...a, q.options.every((o, i) => kept[i] === o.real)]);
+    setQr(true);
+  }
+
+  function next86() {
+    if (qi + 1 >= quizPool.length) { setMode("results"); return; }
+    setKept(quizPool[qi + 1].options.map(() => true));
+    setQi(i => i + 1);
+    setQr(false);
+  }
+
+  function toggleKept(i) {
+    setKept(k => k.map((v, j) => j === i ? !v : v));
+  }
+
+  // Start whichever quiz the picker was opened for.
+  function startPicked(n) { if (quizKind === "86") start86Quiz(n); else startQuiz(n); }
   function toggleMaster() {
     upd(p => {
       const m = !p.masterMode, np = m ? ALL_200 : top50;
@@ -946,9 +1001,9 @@ export default function App() {
 
       {FEATURES.stripePurchase && webAdsServed && firebaseEnabled && authReady && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
-          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Remove ads with a one-time purchase</div>
+          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>Go Pro — remove ads with a one-time purchase</div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
-            {purchasing ? "Redirecting…" : "🚫 Remove Ads — $4.99"}
+            {purchasing ? "Redirecting…" : "✨ Get Pro — $4.99"}
           </button>
         </div>
       )}
@@ -1035,7 +1090,8 @@ export default function App() {
       </div>
 
       <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn("#3b82f6"),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
-      <button onClick={()=>setMode("quizlen")} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Quiz — Test Yourself</button>
+      <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
+      <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn("#be123c"),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
 
       <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem"})}>
@@ -1094,7 +1150,7 @@ export default function App() {
             <div style={{maxWidth:300,margin:"0.6rem auto 0"}}>
               <div style={{fontSize:"0.75rem",color:"#cbd5e1",marginBottom:"0.5rem"}}>
                 Permanently delete your account and synced progress? This cannot be undone
-                {adFree ? ", and your ad-free status will be removed from this account" : ""}.
+                {adFree ? ", and your Pro access will be removed from this account" : ""}.
                 {adFree && billingReady ? " You can get it back with Restore purchase." : ""}
               </div>
               <div style={{display:"flex",gap:"0.4rem",alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
@@ -1293,12 +1349,71 @@ export default function App() {
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
         </div>
         <div style={{textAlign:"center",marginBottom:"1.75rem"}}>
-          <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>🎯</div>
+          <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>{quizKind === "86" ? "🍸" : "🎯"}</div>
           <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
-          <p style={{color:"#94a3b8",fontSize:"0.85rem",margin:0}}>Cocktails are drawn at random from all {total}.</p>
+          <p style={{color:"#94a3b8",fontSize:"0.85rem",margin:0}}>
+            {quizKind === "86"
+              ? "86 It — drawn at random from all " + total + "."
+              : "Cocktails are drawn at random from all " + total + "."}
+          </p>
         </div>
-        {lengths.map(n => opt(`${n} Questions`, "", ()=>startQuiz(n), "#7c3aed"))}
-        {opt("All Cocktails", `${total} questions`, ()=>startQuiz(null), "#4c1d95")}
+        {lengths.map(n => opt(`${n} Questions`, "", ()=>startPicked(n), quizKind === "86" ? "#be123c" : "#7c3aed"))}
+        {opt("All Cocktails", `${total} questions`, ()=>startPicked(null), quizKind === "86" ? "#881337" : "#4c1d95")}
+      </div></div>
+    );
+  }
+
+  // 86 It play screen. Everything starts checked; unchecking is the answer.
+  // After Check Answer the same list is marked up rather than replaced, so the
+  // drink is read twice — once as you believed it, once as it is.
+  if (mode === "quiz" && quizKind === "86") {
+    const c = quizPool[qi];
+    if (!c) return <div style={page}><div style={wrap}>No cocktails available.</div></div>;
+    const gotIt = qr && c.options.every((o, i) => kept[i] === o.real);
+    return (
+      <div style={page}><div style={wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
+          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {quizPool.length}</span>
+          <span style={{color:"#22c55e",fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
+        </div>
+        <div style={frame({borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"})}>
+          <div style={{background:"#be123c",height:"100%",width:`${(qi/quizPool.length)*100}%`,transition:"width 0.3s"}} />
+        </div>
+
+        <div style={frame({borderRadius:20,padding:"1.5rem",marginBottom:"1.25rem"})}>
+          <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:"0 0 0.25rem"}}>{c.name}</h2>
+          <div style={{color:"#94a3b8",fontSize:"0.8rem",marginBottom:"1rem"}}>
+            {qr ? (gotIt ? "✓ Correct" : "✗ Not quite") : "Uncheck anything that doesn't belong."}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:"0.5rem"}}>
+            {c.options.map((o,i)=>{
+              const on = kept[i];
+              // Before answering, the box just reflects the player. After, it
+              // says what was true: green where they agreed with the recipe,
+              // red where they did not.
+              const right = qr && on === o.real;
+              const bg = qr ? (right ? "#16a34a20" : "#dc262620") : (on ? "#3b82f620" : "transparent");
+              const bd = qr ? (right ? "#16a34a80" : "#dc262680") : (on ? "#3b82f680" : "#33415580");
+              return (
+                <button key={o.label+i} onClick={()=>{ if (!qr) toggleKept(i); }} disabled={qr}
+                  style={{display:"flex",alignItems:"center",gap:"0.6rem",textAlign:"left",width:"100%",
+                    background:bg,border:`1px solid ${bd}`,borderRadius:10,padding:"0.6rem 0.75rem",
+                    cursor:qr?"default":"pointer",color:on?"#f1f5f9":"#64748b",
+                    fontSize:"0.9rem",fontWeight:600,
+                    textDecoration:!on&&!qr?"line-through":"none"}}>
+                  <span style={{fontSize:"1.05rem"}}>{on ? "☑" : "☐"}</span>
+                  <span style={{flex:1}}>{o.label}</span>
+                  {qr && !o.real && <span style={{fontSize:"0.7rem",fontWeight:800,color:"#fca5a5",whiteSpace:"nowrap"}}>IMPOSTOR</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {qr
+          ? <button onClick={next86} style={{...btn("#be123c"),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
+          : <button onClick={check86} style={{...btn("#16a34a"),width:"100%"}}>Check Answer</button>}
       </div></div>
     );
   }
@@ -1372,7 +1487,7 @@ export default function App() {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
           {/* Retries reshuffle at the length you already picked — the common case
               is another round of the same size, not another trip to the picker. */}
-          <button onClick={()=>startQuiz(quizLen)} style={btn("#7c3aed")}>Retry Quiz</button>
+          <button onClick={()=>startPicked(quizLen)} style={btn(quizKind === "86" ? "#be123c" : "#7c3aed")}>Retry Quiz</button>
           <button onClick={()=>setMode("menu")} style={btn("#1e293b")}>Menu</button>
         </div>
         <button onClick={()=>setMode("quizlen")} style={{width:"100%",marginTop:"0.75rem",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#94a3b8",fontWeight:600,fontSize:"0.85rem",border:"none",cursor:"pointer",textDecoration:"underline"}}>Change quiz length</button>

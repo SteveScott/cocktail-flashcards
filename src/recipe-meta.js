@@ -400,3 +400,99 @@ export function summarize(c) {
   const named = components.slice(0, 3).map(x => x.item.replace(/\s*\([^)]*\)/g, "")).join(", ");
   return `A ${method} cocktail made with ${named}, served in ${glassPhrase(c.glass)}.`;
 }
+
+// ── The codex: every ingredient the corpus knows, and how often ─────────────
+//
+// Used to draw plausible wrong answers for the "86 It" quiz. Frequency is the
+// whole point: an ingredient in 73 recipes is a far better impostor than one
+// that appears once, because the question worth asking is "does this belong in
+// THIS drink", not "have you ever heard of this". Half of all ingredient
+// mentions come from the top 21 items, so weighting keeps the game hard.
+
+// An impostor has to read as an ingredient on its own. These do not: stated
+// alternatives ("Bourbon or Rye"), and entries carrying an instruction
+// ("Sugar — muddle lime and sugar").
+const NOT_AN_INGREDIENT = /\bor\b|—/;
+
+// Trailing qualifiers are display detail rather than part of the name. Dropping
+// them is what lets a real ingredient and an impostor read in the same voice:
+// if only the real ones ever said "(optional)" or "(float)", the game would
+// give itself away without the player knowing a thing about the drink.
+export function ingredientLabel(item) {
+  return (item || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
+// The ingredient names of one recipe, cleaned and de-duplicated. Two entries
+// can clean to the same label — a recipe listing both "Angostura Bitters" and
+// "Angostura Bitters (float)" means one ingredient, not two checkboxes.
+export function ingredientLabels(c) {
+  const seen = [];
+  for (const x of parseIngredients(c.ingredients).components) {
+    const label = ingredientLabel(x.item);
+    if (label && !seen.includes(label)) seen.push(label);
+  }
+  return seen;
+}
+
+export function buildCodex(recipes) {
+  const freq = new Map();
+  for (const c of recipes) {
+    for (const label of ingredientLabels(c)) {
+      if (NOT_AN_INGREDIENT.test(label)) continue;
+      freq.set(label, (freq.get(label) || 0) + 1);
+    }
+  }
+  return [...freq].map(([label, count]) => ({ label, count }));
+}
+
+// Two names clash when either contains the other. "Gin" cannot be an impostor
+// in a Sloe Gin drink and "Angostura Bitters" cannot be one where the recipe
+// says "Angostura": both would be defensibly correct answers, and a quiz that
+// marks a right answer wrong is worse than no quiz at all.
+function clashes(a, b) {
+  const x = a.toLowerCase(), y = b.toLowerCase();
+  return x.includes(y) || y.includes(x);
+}
+
+// Draw n impostors, weighted by how common each is in the codex. Anything that
+// clashes with a real ingredient — or with an impostor already drawn — is out
+// of the pool before the draw, so a question can never offer the same thing
+// twice under two names.
+export function drawImpostors(codex, realLabels, n, rand = Math.random) {
+  const out = [];
+  let pool = codex.filter(e => !realLabels.some(r => clashes(e.label, r)));
+  for (let i = 0; i < n && pool.length > 0; i++) {
+    const total = pool.reduce((s, e) => s + e.count, 0);
+    let r = rand() * total;
+    let pick = pool[pool.length - 1];
+    for (const e of pool) { r -= e.count; if (r <= 0) { pick = e; break; } }
+    out.push(pick.label);
+    pool = pool.filter(e => !clashes(e.label, pick.label));
+  }
+  return out;
+}
+
+// A drink needs at least two ingredients to be worth asking about. One recipe
+// fails this: the Miami Vice, whose entire ingredient line is prose describing
+// two other drinks, so it parses to no measured components at all.
+export function eightySixEligible(c) {
+  return ingredientLabels(c).length >= 2;
+}
+
+// One question: the drink's real ingredients plus one, two or three impostors
+// (equally likely), shuffled together. The cocktail is spread in so callers can
+// keep treating a question as a recipe — `name` and `rank` still read.
+export function buildEightySixQuestion(c, codex, rand = Math.random) {
+  const real = ingredientLabels(c);
+  const impostors = drawImpostors(codex, real, 1 + Math.floor(rand() * 3), rand);
+  const options = [
+    ...real.map(label => ({ label, real: true })),
+    ...impostors.map(label => ({ label, real: false })),
+  ];
+  // Fisher–Yates, or every impostor sits at the bottom of the list.
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return { ...c, options };
+}
