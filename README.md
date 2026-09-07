@@ -679,10 +679,15 @@ npm run icons     # redraw every icon and splash from scripts/icons.mjs
   `src/index.css`, which dress the page around the app. The static pages
   (`public/privacy.html`, the SEO pages in `scripts/seo-pages.mjs`) carry the
   same values by hand, since they are served without the bundle.
-- **Icons.** `npm run icons` is a regeneration step, not a build step — the 33
+- **Icons.** `npm run icons` is a regeneration step, not a build step — the 35
   files it writes are committed. Edit the geometry at the top of
   `scripts/icons.mjs` and re-run it; never hand-edit an output, or the browser
   tab and the Play launcher start showing different drinks.
+- **Store icons.** `store/` holds the two listing uploads, and they are not
+  interchangeable. Play Console asks for a 512px 32-bit PNG *with* alpha; App
+  Store Connect rejects an alpha channel outright, so that one is written as
+  24-bit RGB. Both are full-bleed squares: every storefront applies its own
+  corner mask, and a pre-rounded upload comes back rounded twice.
 
 - **Firebase is optional locally.** With no `VITE_FIREBASE_*`, `firebaseEnabled`
   is false, sign-in is disabled, and everything runs against `localStorage`.

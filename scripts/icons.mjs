@@ -16,6 +16,7 @@
 
 import { Resvg } from '@resvg/resvg-js';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { crc32, deflateSync } from 'node:zlib';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -91,6 +92,56 @@ const png = (svg, px) =>
   new Resvg(svg, { fitTo: { mode: 'width', value: px }, font: { loadSystemFonts: false } })
     .render()
     .asPng();
+
+// The same render written as a truecolour PNG — 8-bit RGB, no alpha channel.
+// resvg only ever emits RGBA, and a store icon carrying an alpha channel is one
+// of the commonest submission rejections: App Store Connect refuses it outright
+// and Play's own rounding mask can bleed through wherever it is not fully
+// opaque. The store grounds are opaque in every pixel, so the channel is dead
+// weight; this drops it rather than trusting a reviewer not to look.
+function pngOpaque(svg, px) {
+  const img = new Resvg(svg, {
+    fitTo: { mode: 'width', value: px },
+    font: { loadSystemFonts: false },
+  }).render();
+  const { width: w, height: h, pixels } = img;
+
+  // Scanlines, each prefixed with filter type 0 (None), alpha dropped.
+  const raw = Buffer.alloc(h * (1 + w * 3));
+  for (let y = 0; y < h; y++) {
+    const row = y * (1 + w * 3);
+    raw[row] = 0;
+    for (let x = 0; x < w; x++) {
+      const src = (y * w + x) * 4;
+      const dst = row + 1 + x * 3;
+      raw[dst] = pixels[src];
+      raw[dst + 1] = pixels[src + 1];
+      raw[dst + 2] = pixels[src + 2];
+    }
+  }
+
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // colour type 2 = truecolour, no alpha
+  // bytes 10-12 stay 0: deflate, adaptive filtering, no interlace
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 // A splash is the mark small and centred on the ground, at whatever aspect
 // ratio the density bucket asks for — not the icon stretched to fill it.
@@ -168,6 +219,17 @@ for (const [d, legacy, adaptive] of DENSITIES) {
   write(`${base}/ic_launcher_round.png`, png(icon({ ground: 'circle', scale: 0.86 }), legacy));
   write(`${base}/ic_launcher_foreground.png`, png(icon({ ground: 'none', scale: 0.62 }), adaptive));
 }
+
+// Store listings. Every storefront applies its own corner mask to what you
+// upload, so these are full-bleed squares — a pre-rounded upload gets rounded a
+// second time and the ground shows through the corners as a dark rind.
+//
+// Two files because the two specs contradict each other: Play Console asks for
+// "512 px, 32-bit PNG (with alpha)", while App Store Connect rejects any icon
+// carrying an alpha channel at all. Neither will take the other's file without
+// argument, so each gets its own, named for where it goes.
+write('store/play-icon-512.png', png(icon({ ground: 'square' }), 512));
+write('store/app-store-icon-1024.png', pngOpaque(icon({ ground: 'square' }), 1024));
 
 // Splash screens, per orientation and density, at the sizes Capacitor's
 // template shipped. drawable/ (no qualifier) is the fallback bucket.
