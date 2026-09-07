@@ -44,19 +44,25 @@
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* The palette is taken from the bar photograph behind the app (assets/
+   bg-cocktails.jpg): walnut bar top, whiskey, and the brass of the back-bar
+   lights. Nothing here is a cool grey — a slate UI floating over a warm
+   photograph reads as two designs stacked, which is what this replaced. The
+   same names are mirrored as a JS object in App.jsx (see PALETTE there), since
+   the app screens are styled inline rather than from this sheet. */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --bg-overlay: rgba(255, 255, 255, 0.88);
+  --text: #5c4a35;
+  --text-h: #1c1208;
+  --bg: #fdf8ef;
+  --border: #e6dccb;
+  --code-bg: #f4efe3;
+  --accent: #8a6a24;
+  --accent-bg: rgba(138, 106, 36, 0.1);
+  --accent-border: rgba(138, 106, 36, 0.5);
+  --social-bg: rgba(244, 239, 227, 0.5);
+  --bg-overlay: rgba(253, 248, 239, 0.88);
   --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+    rgba(23, 16, 10, 0.14) 0 10px 15px -3px, rgba(23, 16, 10, 0.07) 0 4px 6px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   /* Both faces are loaded above while we settle on one — swap the first name to
@@ -82,18 +88,18 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --bg-overlay: rgba(22, 23, 29, 0.86);
+    --text: #b09a78;
+    --text-h: #f6ecd9;
+    --bg: #1b1209;
+    --border: #3a2a17;
+    --code-bg: #241708;
+    --accent: #d6b46a;
+    --accent-bg: rgba(214, 180, 106, 0.15);
+    --accent-border: rgba(214, 180, 106, 0.5);
+    --social-bg: rgba(58, 42, 23, 0.5);
+    --bg-overlay: rgba(27, 18, 9, 0.86);
     --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+      rgba(0, 0, 0, 0.45) 0 10px 15px -3px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
   }
 
   #social .button-icon {
@@ -117,9 +123,10 @@ body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  /* Slight navy tint that lets the bar photo (body background) show through,
-     rather than the near-opaque slate overlay. */
-  background: rgba(15, 23, 42, 0.4);
+  /* A walnut tint that lets the bar photo (body background) show through. It is
+     the photo's own shadow colour, so the column reads as a darker part of the
+     same room rather than a panel laid on top of it. */
+  background: rgba(26, 17, 9, 0.42);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   box-shadow: var(--shadow);

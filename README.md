@@ -88,6 +88,7 @@ Five ideas explain most of the design:
 | `src/consent.js` | Reopening Google's GDPR message; whether GDPR applies to this visitor. |
 | `src/main.jsx` | Mounts the app; registers the PWA service worker. |
 | `src/index.css`, `src/App.css` | Global styles and self-hosted fonts. Component styling is inline. |
+| `scripts/icons.mjs` | Draws the app mark and rasterizes every favicon, PWA icon, launcher icon and splash from it. |
 | `scripts/seo-pages.mjs` | Vite plugin that emits a static HTML page per recipe, an index, and a sitemap. |
 | `scripts/create-pro-product.mjs` | One-time Stripe product/price setup. |
 | `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
@@ -668,7 +669,20 @@ npm run dev       # Vite dev server on http://localhost:5173
 npm run build     # bundle + 321 static recipe pages + sitemap into dist/
 npm run preview   # serve dist/
 npm run lint      # eslint
+npm run icons     # redraw every icon and splash from scripts/icons.mjs
 ```
+
+- **Colour.** The palette is taken off the bar photograph the app is laid over
+  (`src/assets/bg-cocktails.jpg`) — walnut, whiskey and back-bar brass. It lives
+  in two places that have to agree: the `C` object at the top of `src/App.jsx`,
+  which every inline style references, and the custom properties in
+  `src/index.css`, which dress the page around the app. The static pages
+  (`public/privacy.html`, the SEO pages in `scripts/seo-pages.mjs`) carry the
+  same values by hand, since they are served without the bundle.
+- **Icons.** `npm run icons` is a regeneration step, not a build step — the 33
+  files it writes are committed. Edit the geometry at the top of
+  `scripts/icons.mjs` and re-run it; never hand-edit an output, or the browser
+  tab and the Play launcher start showing different drinks.
 
 - **Firebase is optional locally.** With no `VITE_FIREBASE_*`, `firebaseEnabled`
   is false, sign-in is disabled, and everything runs against `localStorage`.

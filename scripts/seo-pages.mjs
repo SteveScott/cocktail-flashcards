@@ -43,41 +43,41 @@ const jsonld = (o) => JSON.stringify(o, null, 2).replace(/</g, "\\u003c");
 const STYLE = `
 :root{color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;padding:0;background:#0f172a;color:#cbd5e1;
+body{margin:0;padding:0;background:#17100a;color:#e2d2b6;
   font:16px/1.7 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-a{color:#60a5fa}
+a{color:#d6b46a}
 .wrap{max-width:44rem;margin:0 auto;padding:1.5rem 1.25rem 4rem}
-nav.crumb{font-size:.85rem;color:#64748b;margin-bottom:1.5rem}
-nav.crumb a{color:#94a3b8;text-decoration:none}
+nav.crumb{font-size:.85rem;color:#8a7454;margin-bottom:1.5rem}
+nav.crumb a{color:#b09a78;text-decoration:none}
 nav.crumb a:hover{text-decoration:underline}
-h1{color:#f8fafc;font-size:2rem;line-height:1.15;margin:0 0 .5rem}
-.lede{font-size:1.05rem;color:#94a3b8;margin:0 0 1.5rem}
+h1{color:#f6ecd9;font-size:2rem;line-height:1.15;margin:0 0 .5rem}
+.lede{font-size:1.05rem;color:#b09a78;margin:0 0 1.5rem}
 .facts{display:flex;flex-wrap:wrap;gap:.5rem;margin:0 0 2rem;padding:0;list-style:none}
-.facts li{background:#1e293b;border:1px solid #334155;border-radius:999px;
-  padding:.25rem .75rem;font-size:.82rem;color:#e2e8f0}
-h2{color:#f8fafc;font-size:1.2rem;margin:2.5rem 0 .75rem}
+.facts li{background:#2b1c0d;border:1px solid #3a2a17;border-radius:999px;
+  padding:.25rem .75rem;font-size:.82rem;color:#e2d2b6}
+h2{color:#f6ecd9;font-size:1.2rem;margin:2.5rem 0 .75rem}
 ul.ing{list-style:none;padding:0;margin:0}
-ul.ing li{padding:.5rem 0;border-bottom:1px solid #ffffff0d;display:flex;gap:.75rem}
-ul.ing .m{color:#f8fafc;font-weight:700;min-width:5.5rem;flex-shrink:0}
+ul.ing li{padding:.5rem 0;border-bottom:1px solid #d6b46a1f;display:flex;gap:.75rem}
+ul.ing .m{color:#f6ecd9;font-weight:700;min-width:5.5rem;flex-shrink:0}
 ol.steps{padding-left:1.25rem;margin:0}
 ol.steps li{margin:.6rem 0}
 .rel{display:flex;flex-wrap:wrap;gap:.5rem;padding:0;margin:0;list-style:none}
-.rel a{display:inline-block;background:#1e293b;border:1px solid #334155;
-  border-radius:.5rem;padding:.4rem .7rem;font-size:.9rem;text-decoration:none;color:#e2e8f0}
-.rel a:hover{border-color:#60a5fa;color:#fff}
-.cta{display:block;margin:2.5rem 0 0;background:#1e293b;border:1px solid #334155;
-  border-left:3px solid #60a5fa;border-radius:.5rem;padding:1rem 1.25rem;
-  text-decoration:none;color:#cbd5e1}
-.cta:hover{border-color:#60a5fa}
-.cta strong{color:#f8fafc;display:block;margin-bottom:.2rem}
-footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid #1e293b;
-  font-size:.85rem;color:#64748b}
+.rel a{display:inline-block;background:#2b1c0d;border:1px solid #3a2a17;
+  border-radius:.5rem;padding:.4rem .7rem;font-size:.9rem;text-decoration:none;color:#e2d2b6}
+.rel a:hover{border-color:#d6b46a;color:#f6ecd9}
+.cta{display:block;margin:2.5rem 0 0;background:#2b1c0d;border:1px solid #3a2a17;
+  border-left:3px solid #d6b46a;border-radius:.5rem;padding:1rem 1.25rem;
+  text-decoration:none;color:#e2d2b6}
+.cta:hover{border-color:#d6b46a}
+.cta strong{color:#f6ecd9;display:block;margin-bottom:.2rem}
+footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid #2b1c0d;
+  font-size:.85rem;color:#8a7454}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.5rem;
   padding:0;margin:0;list-style:none}
-.grid a{display:block;background:#1e293b;border:1px solid #334155;border-radius:.5rem;
-  padding:.6rem .8rem;text-decoration:none;color:#e2e8f0;font-size:.92rem}
-.grid a:hover{border-color:#60a5fa;color:#fff}
-.grid .sub{display:block;color:#64748b;font-size:.78rem;margin-top:.15rem}
+.grid a{display:block;background:#2b1c0d;border:1px solid #3a2a17;border-radius:.5rem;
+  padding:.6rem .8rem;text-decoration:none;color:#e2d2b6;font-size:.92rem}
+.grid a:hover{border-color:#d6b46a;color:#f6ecd9}
+.grid .sub{display:block;color:#8a7454;font-size:.78rem;margin-top:.15rem}
 `.trim();
 
 function shell({ title, description, canonical, body, ld }) {
@@ -90,7 +90,7 @@ function shell({ title, description, canonical, body, ld }) {
 <meta name="description" content="${esc(description)}" />
 <link rel="canonical" href="${esc(canonical)}" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<meta name="theme-color" content="#0f172a" />
+<meta name="theme-color" content="#17100a" />
 <meta property="og:type" content="article" />
 <meta property="og:title" content="${esc(title)}" />
 <meta property="og:description" content="${esc(description)}" />
@@ -195,7 +195,7 @@ function indexPage(groups, total) {
 <p class="lede">Every recipe in the Cocktail Flashcards deck, grouped by base spirit.
 Each one lists ingredients, measurements, glassware and step-by-step method.</p>
 ${[...groups.entries()].map(([spirit, list]) => `
-<h2>${esc(spirit)} <span style="color:#64748b;font-weight:400;font-size:.9rem">(${list.length})</span></h2>
+<h2>${esc(spirit)} <span style="color:#8a7454;font-weight:400;font-size:.9rem">(${list.length})</span></h2>
 <ul class="grid">
 ${list.map(c => `  <li><a href="/cocktails/${slugify(c.name)}">${esc(c.name)}<span class="sub">${esc(getMethod(c))} &middot; ${esc(c.glass || "")}</span></a></li>`).join("\n")}
 </ul>`).join("\n")}
