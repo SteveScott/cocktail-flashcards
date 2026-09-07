@@ -672,8 +672,12 @@ npm run lint      # eslint
 
 - **Firebase is optional locally.** With no `VITE_FIREBASE_*`, `firebaseEnabled`
   is false, sign-in is disabled, and everything runs against `localStorage`.
-- **Lint.** The source has five findings, all in `App.jsx`: three
-  `react-hooks/set-state-in-effect`, one `react-hooks/purity`, one `no-empty`.
+- **Lint.** The source has four findings, all in `App.jsx`: three
+  `react-hooks/set-state-in-effect` (lines 371, 491 and 529) and one `no-empty`
+  (line 134). This said five until it was re-counted against the lockfile's
+  `eslint-plugin-react-hooks` 7.1.1 — the `react-hooks/purity` finding it also
+  listed no longer fires. The rule is still in the plugin, so a lockfile bump
+  that brings it back makes the count five again, and that is not a regression.
   On a machine that has run a Capacitor sync or a Gradle build, `npm run lint`
   reports around 829 instead — `eslint.config.js` ignores only `dist/`, so the
   untracked, gitignored bundle copies and intermediates under `android/` are
