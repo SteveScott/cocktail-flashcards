@@ -1193,6 +1193,9 @@ export default function App() {
             ["key whitespace", d.keyStripped ? `${d.keyStripped} stray character(s) trimmed — fix the env var` : "none"],
             ["entitlement", d.entitlement],
             ["native bridge", d.bridge ? "present" : "absent"],
+            ["stopped at", d.stage],
+            ["purchases plugin", d.purchasesPlugin ? "in this build" : "MISSING from this build"],
+            ["plugins present", d.pluginList],
             ["build", typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown"],
           ];
           return (

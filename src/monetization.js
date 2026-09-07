@@ -63,6 +63,13 @@ const REVENUECAT_API_KEY = resolveApiKey();
 // this through getBillingDiagnostics(); nothing else depends on it.
 let lastBillingError = null;
 
+// How far the billing handshake got. A timeout reports that nothing answered,
+// which is only half an answer: importing the plugin, configuring the SDK and
+// logging in fail for different reasons, and a stalled call cannot say which one
+// it was. This is set as each step is entered, so the last value is the step
+// that never came back.
+let billingStage = "not started";
+
 function noteBillingError(step, e) {
   const message = (e && (e.message || e.errorMessage)) || String(e || "unknown error");
   const code = e && (e.code !== undefined ? e.code : e.errorCode);
@@ -181,6 +188,7 @@ let configurePromise = null;
 
 async function configurePurchases() {
   try {
+    billingStage = "importing plugin";
     const Purchases = await loadPurchases();
     if (IS_DEV) {
       const { LOG_LEVEL } = await import("@revenuecat/purchases-capacitor");
@@ -188,8 +196,11 @@ async function configurePurchases() {
     }
     // No appUserID here: at startup we usually don't know the Firebase uid yet.
     // linkRevenueCatUser() attaches it as soon as auth resolves.
+    billingStage = "configuring SDK";
     await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    billingStage = "attaching listener";
     await Purchases.addCustomerInfoUpdateListener((customerInfo) => emit(customerInfo));
+    billingStage = "configured";
     return true;
   } catch (e) {
     noteBillingError("configure", e);
@@ -221,7 +232,15 @@ export function isBillingAvailable() {
 // reported — and the length is the point: a key that reads correctly in the
 // dashboard but arrives one character long has whitespace on the end.
 export function getBillingDiagnostics() {
+  // The JS arrives from the deployed site, but the NATIVE half of each plugin
+  // ships inside the APK. When they disagree — a bundle calling a plugin the
+  // installed build does not carry — a call can wait for a bridge reply that is
+  // never coming, which is exactly what a 20s timeout with no error looks like.
+  const plugins = (typeof window !== "undefined" && window.Capacitor && window.Capacitor.Plugins) || {};
   return {
+    stage: billingStage,
+    purchasesPlugin: Boolean(plugins.Purchases),
+    pluginList: Object.keys(plugins).sort().join(", ") || "none",
     bridge: isCapacitorApp,
     keySet: Boolean(REVENUECAT_API_KEY),
     keyPrefix: REVENUECAT_API_KEY ? REVENUECAT_API_KEY.slice(0, 8) : "",
@@ -357,7 +376,9 @@ async function linkRevenueCatUserInner(uid) {
   }
   try {
     const Purchases = await loadPurchases();
+    billingStage = "logging in";
     const { customerInfo } = await Purchases.logIn({ appUserID: uid });
+    billingStage = "linked";
     lastBillingError = null;
     emit(customerInfo);
     return { ok: true, active: isActive(customerInfo) };
