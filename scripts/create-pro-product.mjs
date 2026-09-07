@@ -1,8 +1,16 @@
 // One-time setup script: creates the Stripe Product + one-time Price for the
-// "Remove Ads" purchase and prints the price ID to store in STRIPE_PRICE_ID.
+// "Cocktail Flashcards Pro" purchase and prints the price ID to store in
+// STRIPE_PRICE_ID. Pro is one purchase carrying two things: the whole cocktail
+// library in study and quizzes (the free tier covers the top 50), and no ads.
+//
+// RENAMING AN EXISTING PRODUCT: a product already created by this script keeps
+// the name Stripe has on file, and that is the name buyers read on the Checkout
+// page. Editing the strings below does not reach it — rename it in the Stripe
+// dashboard (test mode and live mode both) so the page describes what is
+// actually being sold.
 //
 // Run locally with your Stripe secret key:
-//   STRIPE_SECRET_KEY=sk_test_... node scripts/create-remove-ads-product.mjs
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/create-pro-product.mjs
 //
 // This only needs to be run once per Stripe account (test mode and live mode
 // each need their own product/price, so run it once per mode).
@@ -28,8 +36,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const product = await stripe.products.create(
   {
-    name: "Cocktail Flashcards — Remove Ads (one-time)",
-    description: "Removes ads from the Cocktail Flashcards app, permanently, for this account.",
+    name: "Cocktail Flashcards Pro (one-time)",
+    description: "Unlocks every cocktail for study and quizzes, and removes ads, permanently, for this account.",
     // SaaS delivered electronically (an app feature unlock), for personal use.
     tax_code: "txcd_10103100",
     default_price_data: {

@@ -3,7 +3,7 @@
 The Play Store build is a **Capacitor** app: it loads the live site — so
 web/content changes still carry over without resubmitting — but adds a native
 layer for **AdMob** banner ads and **Google Play Billing** (via **RevenueCat**)
-for the one-time "remove ads" purchase.
+for the one-time **Cocktail Flashcards Pro** purchase.
 
 The web path is separate: on the web the app uses **Google AdSense** (`src/ads.js`)
 plus Stripe. The native path only activates when the Capacitor plugin bridge is
@@ -13,6 +13,29 @@ gate plugin calls on it.)
 
 **Part 1 is the release walkthrough** — do it in order. **Part 2 is reference** —
 how the machinery works once it's running.
+
+## What Pro sells
+
+One purchase, two things:
+
+- **The library.** Study and quizzes cover the **top 50** cocktails for free. The
+  "Add All Cards" switch on the menu adds the rest of the book to both, and that
+  switch is the paywall. The Index still lists every cocktail to read, whether or
+  not it has been bought — a locked one just can't be put into a deck (`🔒 Pro`
+  in place of `＋ Study`).
+- **No ads.** As before.
+
+Both halves read the same entitlement, so **`adsRemoved` in Firestore now means
+"is Pro"** — the field kept its name to avoid a migration, but it is no longer
+only about ads. Same for `adsRemovedStripe` / `adsRemovedPlay`
+(`netlify/functions/_entitlements.mjs`) and for the RevenueCat entitlement, whose
+display name has been **Cocktail Flashcards Pro** all along. Nothing on the
+server or in the store had to change for the library half: the app reads the one
+flag and widens its pool (`poolFor()` in `src/App.jsx`).
+
+The one thing that does need a hand: the **Stripe product name** buyers see on
+the Checkout page still says "Remove Ads" if it was created before this — rename
+it in the dashboard, in test and live mode both.
 
 ## Where things stand
 
@@ -29,7 +52,7 @@ done.
 | Signing | ✅ upload keystore at `ignore/key` (alias `Cocktail Flashcards Key`), wired up through the gitignored `android/gradle.properties`. Cert SHA-256 `5A:8F:CA:C5:…` matches what Play has registered. |
 | Play Console | ✅ live on the closed testing (Alpha) track — store listing, app content and content rating reviewed and published 2026-08-21 |
 | In-app product | ✅ `lifetime`, one-time managed, $4.99, activated |
-| Stripe | ✅ web price also $4.99 — see the note in `scripts/create-remove-ads-product.mjs` about Prices being immutable |
+| Stripe | ✅ web price also $4.99 — see the note in `scripts/create-pro-product.mjs` about Prices being immutable |
 | RevenueCat | ⏳ Android app added with the `revenuecat-play` service account. Entitlement, offering and paywall still to configure. |
 | AdMob | ⏳ App ID is in `AndroidManifest.xml`. Banner ad unit and the GDPR consent message still to create. |
 | Netlify env | ⏳ `VITE_REVENUECAT_ANDROID_KEY` not set, so purchases are inert and the Pro card stays hidden. `VITE_ADMOB_BANNER_ID` deliberately blank so test banners serve during the closed test. |
@@ -259,8 +282,8 @@ target SDK bumps.
 - `src/monetization.js` — AdMob init/consent/banner + RevenueCat
   purchase/restore/entitlement.
 - `src/App.jsx` — initializes monetization, shows/hides the banner based on
-  ad-free status, and renders a "Remove Ads" + "Restore purchase" block in the
-  Play build.
+  ad-free status, renders a "Go Pro" + "Restore purchase" block in the Play
+  build, and gates the cocktail library on the same entitlement.
 
 ## What the app does with the SDK
 
