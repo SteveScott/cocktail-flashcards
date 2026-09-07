@@ -64,6 +64,180 @@ const FACEBOOK_LOGIN_ENABLED = false;
 const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || "")
   .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 
+// Every screen below is styled inline rather than from a stylesheet, so the
+// palette lives here and each colour is a reference into it — there are no
+// loose hex values further down.
+//
+// Two schemes. RETRO is the default: hues read off the bar photograph the app
+// is laid over (src/assets/bg-cocktails.jpg) — walnut, whiskey and back-bar
+// brass. FUTURE is the same room after hours, in cyan and magenta on near-black
+// blue. They share every key, which is the whole point — a screen asks for
+// C.oxblood and gets oxblood or hot magenta depending on which is on, and no
+// screen has to know which that is.
+//
+// Keep these in step with the tokens in src/index.css, which dress the page
+// around the app and carry the two font stacks.
+const THEMES = {
+  retro: {
+    name: "Retro",
+
+    ink:         "#17100a",   // darkest wood: wells, input fields, text on brass
+    walnut:      "#2b1c0d",   // quiet button faces
+    inset:       "#3a2a17",   // disabled faces
+    rule:        "#d6b46a38", // brass hairline — the deco pinstripe
+    ruleStrong:  "#d6b46a55",
+    hairline:    "#d6b46a1f", // the divider between ingredient lines
+
+    ivory:       "#f6ecd9",   // headings
+    parchment:   "#e2d2b6",   // body copy
+    muted:       "#b09a78",   // labels and secondary text
+    faint:       "#97815f",   // captions and footnotes, and the lowest mastery rung
+    ghost:       "#6b5940",   // the quietest links
+    label:       "#fdf6e8",   // text on a saturated button
+
+    brass:       "#d6b46a",   // Pro, ranks, the primary accent
+    brassEdge:   "#d6b46a55",
+    brassSoft:   "#d6b46a3d",
+
+    jade:        "#5f9d6b",   // learned, correct, mastered
+    jadeDeep:    "#417a50",   // "Got It", "Check Answer"
+    jadeWash:    "#5f9d6b26",
+    jadeEdge:    "#5f9d6b80",
+
+    oxblood:     "#9a3540",   // missed, 86 It, destructive
+    oxbloodDeep: "#6d2530",
+    oxbloodWash: "#9a354026",
+    oxbloodEdge: "#9a354066",
+    oxbloodLine: "#9a354080",
+    rust:        "#c4626a",   // destructive text on a dark ground
+    rustEdge:    "#c4626a40",
+    rustLite:    "#dda3a6",   // "IMPOSTOR" and the needs-work chips
+    ember:       "#d2848a",   // error messages
+
+    peacock:     "#2f7079",   // Study mode, the active deck
+    peacockMid:  "#3d8892",   // the mid rung of the mastery scale
+    peacockLite: "#78b3ba",
+    peacockWash: "#4d949e26",
+    peacockEdge: "#4d949e80",
+
+    cognac:      "#8f5f2a",   // Index
+
+    plum:        "#7a4464",   // Self Quiz, and the tried marker
+    plumDeep:    "#4a2740",
+    // The outline and label of an unticked Tried chip. Deliberately rosier than
+    // the plum they sit against: a true tint of it comes out lilac, and one cold
+    // chip on a card is enough to pull the whole screen back toward the old
+    // scheme.
+    plumEdge:    "#9c6a7555",
+    plumLite:    "#c89aa4",
+
+    // Both sit over the bar photo, so they are tints and not fills: the frame is
+    // the panel a card or a row is printed on, the page the wash behind them.
+    frame:       "rgba(26, 17, 9, 0.62)",
+    page:        "rgba(26, 17, 9, 0.28)",
+    // Typographic knobs. Inline styles beat the stylesheet, so anything the
+    // scheme wants to change about a heading or a button label has to travel
+    // with the palette rather than sit in a CSS rule that never wins.
+    ui: {
+      h1: { fontSize: "1.8rem", fontWeight: 800 },
+      btn: {},
+      glow: false,
+    },
+  },
+
+  future: {
+    name: "Future",
+    ink:         "#05070f",   // near-black blue: wells, input fields, text on cyan
+    walnut:      "#0d1426",   // quiet button faces
+    inset:       "#182a4a",   // disabled faces
+    rule:        "#22d3ee3d", // cyan hairline
+    ruleStrong:  "#22d3ee5c",
+    hairline:    "#22d3ee24", // the divider between ingredient lines
+
+    ivory:       "#eafcff",   // headings
+    parchment:   "#c2e9f5",   // body copy
+    muted:       "#7fa8c4",   // labels and secondary text
+    faint:       "#5f83a2",   // captions and footnotes
+    ghost:       "#46607a",   // the quietest links
+    label:       "#f2fdff",   // text on a saturated button
+
+    brass:       "#22d3ee",   // Pro, ranks, the primary accent
+    brassEdge:   "#22d3ee5c",
+    brassSoft:   "#22d3ee40",
+
+    jade:        "#3dff92",   // learned, correct, mastered
+    jadeDeep:    "#0a7d3e",   // "Got It", "Check Answer"
+    jadeWash:    "#3dff9226",
+    jadeEdge:    "#3dff9280",
+
+    oxblood:     "#d1155e",   // missed, 86 It, destructive
+    oxbloodDeep: "#7d0d39",
+    oxbloodWash: "#ff2d7a26",
+    oxbloodEdge: "#ff2d7a66",
+    oxbloodLine: "#ff2d7a80",
+    rust:        "#ff5c96",   // destructive text on a dark ground
+    rustEdge:    "#ff5c9640",
+    rustLite:    "#ffa3c4",   // "IMPOSTOR" and the needs-work chips
+    ember:       "#ff7aad",   // error messages
+
+    peacock:     "#2f5cff",   // Study mode, the active deck
+    peacockMid:  "#4f8bff",   // the mid rung of the mastery scale
+    peacockLite: "#8fb6ff",
+    peacockWash: "#4f8bff26",
+    peacockEdge: "#4f8bff80",
+
+    cognac:      "#0e7490",   // Index — deep enough not to read as the accent
+
+    plum:        "#7b2fe0",   // Self Quiz, and the tried marker
+    plumDeep:    "#45197d",
+    plumEdge:    "#a78bfa5c",
+    plumLite:    "#c9b3ff",
+
+    frame:       "rgba(5, 9, 22, 0.66)",
+    page:        "rgba(5, 9, 22, 0.34)",
+
+    // Orbitron is a much wider face than Playfair, so the title has to come down
+    // a size or it wraps on a phone; the caps and tracking on buttons are the
+    // scheme's own voice rather than decoration, and the glow is what makes a
+    // flat fill read as lit.
+    ui: {
+      h1: { fontSize: "1.25rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" },
+      btn: { textTransform: "uppercase", letterSpacing: "0.09em", fontSize: "0.92rem" },
+      glow: true,
+    },
+  },
+};
+
+// How the scheme picker paints each choice. Literals rather than lookups into
+// THEMES, because each button advertises the scheme it SELECTS and not the one
+// currently running: a picker that restyled itself would only ever show you the
+// answer you already have. The faces are named here too — the Future button is
+// lettered in Orbitron whichever scheme is on, which is the whole point of it.
+const THEME_SWATCH = {
+  retro: {
+    label: "Retro", bg: "#8f5f2a", fg: "#fdf6e8", ring: "#d6b46a",
+    font: "'Playfair Display', Georgia, serif",
+    tracking: "0.02em", transform: "none", glow: "none",
+  },
+  future: {
+    label: "Future", bg: "#2f5cff", fg: "#eafcff", ring: "#22d3ee",
+    font: "'Orbitron', ui-sans-serif, system-ui, sans-serif",
+    tracking: "0.14em", transform: "uppercase", glow: "0 0 20px -4px #2f5cff",
+  },
+};
+
+const THEME_KEY = "cocktail_theme_v1";
+const DEFAULT_THEME = "retro";
+
+// Read back the saved scheme. index.html has already applied it to <html> before
+// first paint; this is React catching up to what the document is wearing.
+function loadTheme() {
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    return t && THEMES[t] ? t : DEFAULT_THEME;
+  } catch { return DEFAULT_THEME; }
+}
+
 const GLASS_ICONS = [
   ["champagne", "🥂"],
   ["martini", "🍸"],
@@ -183,7 +357,12 @@ function progressEqual(a, b) {
   return true;
 }
 
-const FIREWORK_COLORS = ["#fbbf24", "#f472b6", "#38bdf8", "#4ade80", "#c084fc", "#fb7185"];
+// Deliberately NOT drawn from C. Everything else on screen is walnut and brass
+// because it is furniture in a dark room, but these are pyrotechnics and real
+// ones are saturated — sodium gold, strontium red, barium green, copper blue,
+// magnesium white. Toning them down to match the panelling is how a celebration
+// stops reading as one, and they only ever appear over a 100% result.
+const FIREWORK_COLORS = ["#ffc21a", "#ff3355", "#2bff85", "#22c8ff", "#b44cff", "#fff4d6"];
 const FIREWORK_SPARKS = 12;
 const BURST_MS = 2400;   // must match the .fw-spark / .fw-fall animation duration
 const LAUNCH_MS = 520;   // gap between launches; ~5 bursts alive at any moment
@@ -247,6 +426,11 @@ function Fireworks() {
 
 export default function App() {
   const [st, setSt] = useState(() => loadLocal() || initState(false));
+  // Which colour scheme is on. Deliberately NOT part of `st`: that object is
+  // study progress and it syncs to Firestore, where a scheme chosen on a phone
+  // would follow you to a desktop that never asked for it. This is a per-device
+  // preference and stays in localStorage.
+  const [theme, setTheme] = useState(loadTheme);
   const [mode, setMode] = useState("menu");
   const [di, setDi] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -909,9 +1093,20 @@ export default function App() {
     } catch (e) { console.error("Failed to remove from ad whitelist", e); }
   }
 
-  const col = s => s >= MASTERY_SCORE ? "#22c55e" : s >= 4 ? "#f59e0b" : s >= 2 ? "#3b82f6" : "#6b7280";
+  const col = s => s >= MASTERY_SCORE ? C.jade : s >= 4 ? C.brass : s >= 2 ? C.peacockMid : C.faint;
 
   function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
+
+  // <html data-theme> drives index.css: the two font stacks, the page chrome and
+  // the wash over the bar photograph. The meta tag moves with it so the Android
+  // status bar and the browser's own chrome do not stay the other scheme's
+  // colour — the one piece of the theme that lives outside both stylesheets.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", THEMES[theme].ink);
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
+  }, [theme]);
 
   // The tried marker reads the same on a card and on an index row, so both use
   // this. Unchecked it asks the question, checked it states the answer.
@@ -925,9 +1120,9 @@ export default function App() {
         style={{whiteSpace:"nowrap",borderRadius:8,cursor:"pointer",fontWeight:700,
           padding: big ? "0.35rem 0.7rem" : "0.3rem 0.6rem",
           fontSize: big ? "0.8rem" : "0.72rem",
-          border: on ? "none" : "1px solid #a855f780",
-          background: on ? "#7e22ce" : "transparent",
-          color: on ? "#fff" : "#c084fc"}}>
+          border: on ? "none" : `1px solid ${C.plumEdge}`,
+          background: on ? C.plum : "transparent",
+          color: on ? C.label : C.plumLite}}>
         {on ? "☑ Tried" : "☐ Tried?"}
       </button>
     );
@@ -1097,22 +1292,34 @@ export default function App() {
     setDi(0); setRevealed(false);
   }
 
+  // The whole scheme, resolved once per render. Every C.* below is a lookup into
+  // whichever object is on, so no screen has to know which that is.
+  const C = THEMES[theme] || THEMES[DEFAULT_THEME];
+
   const wrap = { maxWidth:480, width:"100%" };
-  const page = { minHeight:"100dvh", background:"rgba(15, 23, 42, 0.2)", backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:"#f1f5f9", display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
-  const btn = (bg, x={}) => ({ padding:"1rem", borderRadius:12, background:bg, color:"#fff", fontWeight:700, fontSize:"1rem", border:"none", cursor:"pointer", ...x });
-  const FRAME_BG = "rgba(15, 23, 42, 0.55)";
+  const page = { minHeight:"100dvh", background:C.page, backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:C.ivory, display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
+  // `...C.ui.btn` is where a scheme sets its own lettering — Future puts button
+  // labels in tracked caps. The glow is keyed off the button's own fill so each
+  // one lights in its own colour rather than a single generic halo.
+  const btn = (bg, x={}) => ({
+    padding:"1rem", borderRadius:12, background:bg, color:C.label, fontWeight:700,
+    fontSize:"1rem", border:"none", cursor:"pointer",
+    boxShadow: C.ui.glow ? `0 0 18px -5px ${bg}` : "none",
+    ...C.ui.btn, ...x,
+  });
+  const FRAME_BG = C.frame;
   const frame = (x={}) => ({ background:FRAME_BG, backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", ...x });
   // The admin form stacks in a narrow footer column, so the fields take the full
   // width rather than the flex-basis pairing they used inside the account card.
-  const stackedField = { width:"100%", boxSizing:"border-box", background:"#0f172a", border:"1px solid #33415560", borderRadius:8, padding:"0.4rem 0.6rem", fontSize:"0.8rem", color:"#e2e8f0" };
+  const stackedField = { width:"100%", boxSizing:"border-box", background:C.ink, border:`1px solid ${C.rule}`, borderRadius:8, padding:"0.4rem 0.6rem", fontSize:"0.8rem", color:C.parchment };
 
   if (mode === "menu") return (
     <div style={page}><div style={wrap}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.15rem"}}>
-        <h1 style={{fontSize:"1.8rem",fontWeight:800,margin:0,color:"#f8fafc"}}>🍹 Cocktail Flashcards</h1>
-        <span style={{fontSize:"0.7rem",color:"#22c55e"}}>{saved}</span>
+        <h1 style={{...C.ui.h1,margin:0,color:C.ivory}}>🍹 Cocktail Flashcards</h1>
+        <span style={{fontSize:"0.7rem",color:C.jade}}>{saved}</span>
       </div>
-      <p style={{color:"#64748b",fontSize:"0.72rem",marginBottom:"0.75rem"}}>Drinks International Bestselling Classics 2026</p>
+      <p style={{color:C.faint,fontSize:"0.72rem",marginBottom:"0.75rem"}}>Drinks International Bestselling Classics 2026</p>
 
       {authReady && (
         <div style={frame({borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",flexWrap:"wrap",rowGap:"0.6rem"})}>
@@ -1120,30 +1327,30 @@ export default function App() {
             <>
               <div style={{display:"flex",alignItems:"center",gap:"0.6rem",minWidth:0}}>
                 {user.photoURL && <img src={user.photoURL} alt="" style={{width:28,height:28,borderRadius:"50%"}} />}
-                <div style={{fontSize:"0.8rem",color:"#cbd5e1",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.displayName || user.email}</div>
+                <div style={{fontSize:"0.8rem",color:C.parchment,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.displayName || user.email}</div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:"0.6rem"}}>
-                <button onClick={signOutUser} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.75rem",cursor:"pointer"}}>Sign out</button>
+                <button onClick={signOutUser} style={{background:"transparent",border:`1px solid ${C.rule}`,color:C.muted,borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.75rem",cursor:"pointer"}}>Sign out</button>
               </div>
               {/* "Delete account" used to sit next to Sign out, one mis-tap away from
                   wiping an account. It now lives in the footer — see below. */}
             </>
           ) : (
             <>
-              <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>{firebaseEnabled ? "Sign in to sync progress" : "Cloud sync not configured"}</div>
+              <div style={{fontSize:"0.8rem",color:C.muted}}>{firebaseEnabled ? "Sign in to sync progress" : "Cloud sync not configured"}</div>
               <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
-                <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":"#334155",color:firebaseEnabled?"#1f2937":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
+                <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":C.inset,color:firebaseEnabled?C.ink:C.faint,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
                 {googleErr && (
-                  <div role="alert" style={{color:"#f87171",fontSize:"0.7rem"}}>
+                  <div role="alert" style={{color:C.ember,fontSize:"0.7rem"}}>
                     {googleErr}
                     {googleErrDetail && (
-                      <div style={{color:"#64748b",fontSize:"0.65rem",marginTop:"0.25rem",wordBreak:"break-word",userSelect:"text"}}>
+                      <div style={{color:C.faint,fontSize:"0.65rem",marginTop:"0.25rem",wordBreak:"break-word",userSelect:"text"}}>
                         {googleErrDetail}
                       </div>
                     )}
                   </div>
                 )}
-                {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":"#334155",color:firebaseEnabled?"#ffffff":"#64748b",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
+                {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":C.inset,color:firebaseEnabled?"#ffffff":C.faint,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
               </div>
               {/* The password form used to sit here as "Use email instead". It now
                   lives in the footer as "Admin login" — see below. */}
@@ -1154,12 +1361,12 @@ export default function App() {
 
       {FEATURES.stripePurchase && firebaseEnabled && authReady && !adFree && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
-          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
+          <div style={{fontSize:"0.8rem",color:C.muted}}>
             {webAdsServed
               ? `Go Pro — all ${ALL_CARDS.length} cocktails, and no ads`
               : `Go Pro — study and quiz all ${ALL_CARDS.length} cocktails`}
           </div>
-          <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?"#22c55e":"#334155",color:user?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
+          <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?C.jade:C.inset,color:user?C.ink:C.faint,border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
             {purchasing ? "Redirecting…" : `✨ Get Pro — ${PRO_PRICE}`}
           </button>
         </div>
@@ -1170,12 +1377,12 @@ export default function App() {
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",flexDirection:"column",marginBottom:"1.25rem",gap:"0.75rem"})}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"0.75rem"}}>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>
+            <div style={{fontSize:"0.8rem",color:C.muted}}>
               {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : `Cocktail Flashcards Pro — all ${ALL_CARDS.length} cocktails, no ads`}
             </div>
-            <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
+            <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:C.faint,fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
           </div>
-          <button onClick={buyRemoveAdsNative} disabled={purchasing || awaitingIdentity} style={{background:(purchasing||awaitingIdentity)?"#334155":"#22c55e",color:(purchasing||awaitingIdentity)?"#64748b":"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:(purchasing||awaitingIdentity)?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+          <button onClick={buyRemoveAdsNative} disabled={purchasing || awaitingIdentity} style={{background:(purchasing||awaitingIdentity)?C.inset:C.jade,color:(purchasing||awaitingIdentity)?C.faint:C.ink,border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:(purchasing||awaitingIdentity)?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
             {purchasing ? "Processing…" : awaitingIdentity ? "Connecting…" : "✨ Go Pro"}
           </button>
         </div>
@@ -1199,19 +1406,19 @@ export default function App() {
             ["build", typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown"],
           ];
           return (
-            <div role="alert" style={{borderTop:"1px solid #33415560",paddingTop:"0.65rem"}}>
-              <div style={{color:billingErr?"#f87171":"#f59e0b",fontSize:"0.75rem",fontWeight:700,marginBottom:"0.45rem"}}>
+            <div role="alert" style={{borderTop:`1px solid ${C.rule}`,paddingTop:"0.65rem"}}>
+              <div style={{color:billingErr?C.ember:C.brass,fontSize:"0.75rem",fontWeight:700,marginBottom:"0.45rem"}}>
                 {billingErr ? "Couldn't link this account to the store" : "Still connecting to the store"}
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:"0.15rem",fontSize:"0.68rem",userSelect:"text"}}>
                 {rows.map(([k,v]) => (
                   <div key={k} style={{display:"flex",gap:"0.6rem"}}>
-                    <span style={{color:"#64748b",width:"7.5rem",flex:"none"}}>{k}</span>
-                    <span style={{color:"#cbd5e1",wordBreak:"break-word",minWidth:0}}>{String(v)}</span>
+                    <span style={{color:C.faint,width:"7.5rem",flex:"none"}}>{k}</span>
+                    <span style={{color:C.parchment,wordBreak:"break-word",minWidth:0}}>{String(v)}</span>
                   </div>
                 ))}
               </div>
-              <div style={{color:"#64748b",fontSize:"0.68rem",marginTop:"0.5rem"}}>
+              <div style={{color:C.faint,fontSize:"0.68rem",marginTop:"0.5rem"}}>
                 Linking is attempted once per launch, so force-stop and reopen the app after changing anything.
               </div>
             </div>
@@ -1223,19 +1430,19 @@ export default function App() {
           requests, and subscription management without a support email. */}
       {billingReady && adFree && adsRemovedNative && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
-          <div style={{fontSize:"0.8rem",color:"#94a3b8"}}>✨ Cocktail Flashcards Pro is active</div>
-          <button onClick={openCustomerCenter} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+          <div style={{fontSize:"0.8rem",color:C.muted}}>✨ Cocktail Flashcards Pro is active</div>
+          <button onClick={openCustomerCenter} style={{background:"transparent",border:`1px solid ${C.rule}`,color:C.muted,borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
             Manage purchase
           </button>
         </div>
       )}
       {purchaseMsg && (
-        <div style={{fontSize:"0.75rem",color:"#94a3b8",marginBottom:"1rem",marginTop:"-0.75rem"}}>{purchaseMsg}</div>
+        <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:"1rem",marginTop:"-0.75rem"}}>{purchaseMsg}</div>
       )}
 
       {isAdmin && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
-          <button onClick={()=>setShowAdAdmin(s=>!s)} style={{background:"transparent",border:"none",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
+          <button onClick={()=>setShowAdAdmin(s=>!s)} style={{background:"transparent",border:"none",color:C.brass,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
             🛡️ Ad Whitelist (admin) {showAdAdmin ? "▲" : "▼"}
           </button>
           {showAdAdmin && (
@@ -1245,17 +1452,17 @@ export default function App() {
                   value={whitelistInput}
                   onChange={e=>setWhitelistInput(e.target.value)}
                   placeholder="user@gmail.com"
-                  style={{flex:1,padding:"0.5rem 0.75rem",borderRadius:8,background:"#0f172a",border:"1px solid #334155",color:"#f1f5f9",fontSize:"0.85rem",outline:"none"}}
+                  style={{flex:1,padding:"0.5rem 0.75rem",borderRadius:8,background:C.ink,border:`1px solid ${C.rule}`,color:C.ivory,fontSize:"0.85rem",outline:"none"}}
                 />
-                <button onClick={addToWhitelist} style={{...btn("#f59e0b"),padding:"0.5rem 0.9rem",fontSize:"0.8rem"}}>Add</button>
+                <button onClick={addToWhitelist} style={{...btn(C.brass),color:C.ink,padding:"0.5rem 0.9rem",fontSize:"0.8rem"}}>Add</button>
               </div>
-              {whitelistMsg && <div style={{fontSize:"0.75rem",color:"#94a3b8",marginBottom:"0.5rem"}}>{whitelistMsg}</div>}
+              {whitelistMsg && <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:"0.5rem"}}>{whitelistMsg}</div>}
               <div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:160,overflowY:"auto"}}>
-                {whitelist.length === 0 && <div style={{color:"#64748b",fontSize:"0.8rem"}}>No whitelisted users yet.</div>}
+                {whitelist.length === 0 && <div style={{color:C.faint,fontSize:"0.8rem"}}>No whitelisted users yet.</div>}
                 {whitelist.map(w => (
-                  <div key={w.email} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0f172a",borderRadius:8,padding:"0.4rem 0.6rem"}}>
-                    <span style={{fontSize:"0.8rem",color:"#cbd5e1"}}>{w.email}</span>
-                    <button onClick={()=>removeFromWhitelist(w.email)} style={{background:"transparent",border:"none",color:"#ef4444",cursor:"pointer",fontSize:"0.75rem"}}>Remove</button>
+                  <div key={w.email} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.ink,borderRadius:8,padding:"0.4rem 0.6rem"}}>
+                    <span style={{fontSize:"0.8rem",color:C.parchment}}>{w.email}</span>
+                    <button onClick={()=>removeFromWhitelist(w.email)} style={{background:"transparent",border:"none",color:C.rust,cursor:"pointer",fontSize:"0.75rem"}}>Remove</button>
                   </div>
                 ))}
               </div>
@@ -1265,72 +1472,93 @@ export default function App() {
       )}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
-        {[["Learned",learned,"#22c55e"],["Active",deck.length,"#3b82f6"],["Total",total,"#f59e0b"]].map(([l,v,c])=>(
+        {[["Learned",learned,C.jade],["Active",deck.length,C.peacock],["Total",total,C.brass]].map(([l,v,c])=>(
           <div key={l} style={frame({borderRadius:12,padding:"0.9rem",textAlign:"center"})}>
             <div style={{fontSize:"1.75rem",fontWeight:800,color:c}}>{v}</div>
-            <div style={{fontSize:"0.75rem",color:"#94a3b8",marginTop:2}}>{l}</div>
+            <div style={{fontSize:"0.75rem",color:C.muted,marginTop:2}}>{l}</div>
           </div>
         ))}
       </div>
 
       <div style={frame({borderRadius:99,height:8,marginBottom:"1.75rem",overflow:"hidden"})}>
-        <div style={{background:"#22c55e",height:"100%",width:`${(learned/total)*100}%`,transition:"width 0.5s"}} />
+        <div style={{background:C.jade,height:"100%",width:`${(learned/total)*100}%`,transition:"width 0.5s"}} />
       </div>
 
-      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn("#3b82f6"),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
-      <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn("#7c3aed"),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
-      <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn("#be123c"),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
-      <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn("#0891b2"),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
+      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn(C.peacock),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
+      <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn(C.plum),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
+      <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn(C.oxblood),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
+      <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn(C.cognac),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
 
       {/* The paywall itself. Study and quizzes cover the top 50 for free; this
           switch is what adds the rest of the book to both. Without Pro it isn't a
           switch that refuses to move — it's the way in to the purchase. */}
       <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem",gap:"0.75rem"})}>
         <div style={{minWidth:0}}>
-          <div style={{fontWeight:700,color:"#f8fafc"}}>{isPro ? "" : "🔒 "}Add All {ALL_CARDS.length} Cards</div>
-          <div style={{fontSize:"0.75rem",color:"#94a3b8"}}>
+          <div style={{fontWeight:700,color:C.ivory}}>{isPro ? "" : "🔒 "}Add All {ALL_CARDS.length} Cards</div>
+          <div style={{fontSize:"0.75rem",color:C.muted}}>
             {isPro
               ? `Study and quiz the whole book, not just the top ${top50.length}`
               : `Free covers the top ${top50.length} — Pro adds the other ${master150.length}`}
           </div>
         </div>
         {isPro ? (
-          <button onClick={toggleMaster} aria-pressed={masterOn} aria-label={`Add all ${ALL_CARDS.length} cards`} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",flexShrink:0,background:masterOn?"#f59e0b":"#334155",transition:"background 0.3s"}}>
-            <div style={{position:"absolute",top:3,left:masterOn?27:3,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left 0.3s"}} />
+          <button onClick={toggleMaster} aria-pressed={masterOn} aria-label={`Add all ${ALL_CARDS.length} cards`} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",flexShrink:0,background:masterOn?C.brass:C.inset,transition:"background 0.3s"}}>
+            <div style={{position:"absolute",top:3,left:masterOn?27:3,width:22,height:22,borderRadius:"50%",background:C.label,transition:"left 0.3s"}} />
           </button>
         ) : (
-          <button onClick={unlockPro} disabled={purchasing} style={{background:purchasing?"#334155":"#f59e0b",color:purchasing?"#64748b":"#0f172a",border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:purchasing?"not-allowed":"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+          <button onClick={unlockPro} disabled={purchasing} style={{background:purchasing?C.inset:C.brass,color:purchasing?C.faint:C.ink,border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:purchasing?"not-allowed":"pointer",whiteSpace:"nowrap",flexShrink:0}}>
             {purchasing ? "…" : "✨ Unlock"}
           </button>
         )}
       </div>
-      <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#ef4444",fontWeight:600,fontSize:"0.85rem",border:"1px solid #ef444440",cursor:"pointer"}}>Reset Progress</button>
+      <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:C.rust,fontWeight:600,fontSize:"0.85rem",border:`1px solid ${C.rustEdge}`,cursor:"pointer"}}>Reset Progress</button>
+
+      <div style={{marginTop:"1.5rem"}}>
+        <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.faint,marginBottom:"0.5rem"}}>Colour scheme</div>
+        <div role="group" aria-label="Colour scheme" style={{display:"flex",gap:"0.6rem"}}>
+          {["retro","future"].map(t => {
+            const sw = THEME_SWATCH[t], on = theme === t;
+            return (
+              <button key={t} onClick={()=>setTheme(t)} aria-pressed={on}
+                style={{flex:1,padding:"0.75rem 0.5rem",borderRadius:10,cursor:"pointer",
+                  background:sw.bg, color:sw.fg, fontFamily:sw.font, fontWeight:700,
+                  fontSize:"0.95rem", letterSpacing:sw.tracking, textTransform:sw.transform,
+                  border:`2px solid ${on ? sw.ring : "transparent"}`,
+                  boxShadow:on ? sw.glow : "none",
+                  opacity:on ? 1 : 0.55,
+                  transition:"opacity 0.2s, box-shadow 0.2s"}}>
+                {sw.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       {/* Below every control and above the legal footer: the one band of this
           screen where a mis-tap costs a stray ad click rather than a reset, and
           where holding space open pushes nothing the user was aiming at. */}
       {webAdsEligible && <AdSlot placement="menu" />}
       {/* Reference material for adults, not an invitation to drink — states the
           age expectation the store content rating is filed under. */}
-      <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.75rem",color:"#64748b"}}>
+      <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.75rem",color:C.faint}}>
         Intended for ages 21+. Please drink responsibly.
       </div>
-      <div style={{textAlign:"center",marginTop:"0.75rem",fontSize:"0.75rem",color:"#64748b"}}>
-        Questions or feedback? <a href="mailto:steve@cocktailflashcards.com" style={{color:"#94a3b8"}}>steve@cocktailflashcards.com</a>
+      <div style={{textAlign:"center",marginTop:"0.75rem",fontSize:"0.75rem",color:C.faint}}>
+        Questions or feedback? <a href="mailto:steve@cocktailflashcards.com" style={{color:C.muted}}>steve@cocktailflashcards.com</a>
       </div>
       {/* Play requires the policy to be reachable from inside the app, not just
           from the store listing. Served as a static page, so it renders even if
           the app bundle fails. Withdrawing consent must be as easy as giving it,
           hence the second link — on Android it opens Google's own UMP privacy
           form instead, since that's where the choice was made. */}
-      <div style={{textAlign:"center",marginTop:"0.5rem",fontSize:"0.75rem",color:"#64748b",display:"flex",gap:"0.75rem",justifyContent:"center",flexWrap:"wrap"}}>
-        <a href="/privacy" style={{color:"#64748b"}}>Privacy Policy</a>
+      <div style={{textAlign:"center",marginTop:"0.5rem",fontSize:"0.75rem",color:C.faint,display:"flex",gap:"0.75rem",justifyContent:"center",flexWrap:"wrap"}}>
+        <a href="/privacy" style={{color:C.faint}}>Privacy Policy</a>
         {FEATURES.ads && gdprApplies && (
-          <button onClick={openPrivacySettings} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+          <button onClick={openPrivacySettings} style={{background:"transparent",border:"none",color:C.faint,fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
             Privacy &amp; cookie settings
           </button>
         )}
         {FEATURES.nativeAds && privacyOptionsRequired && (
-          <button onClick={openAdPrivacyOptions} style={{background:"transparent",border:"none",color:"#64748b",fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+          <button onClick={openAdPrivacyOptions} style={{background:"transparent",border:"none",color:C.faint,fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
             Ad privacy options
           </button>
         )}
@@ -1344,23 +1572,23 @@ export default function App() {
           until "Yes, delete everything". Shown only when signed in. */}
       {firebaseEnabled && authReady && user && (
         <div style={{textAlign:"center",marginTop:"0.5rem"}}>
-          <button onClick={() => { setDeleteConfirm(v => !v); setDeleteErr(""); }} aria-expanded={deleteConfirm} style={{background:"transparent",border:"none",color:"#475569",fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+          <button onClick={() => { setDeleteConfirm(v => !v); setDeleteErr(""); }} aria-expanded={deleteConfirm} style={{background:"transparent",border:"none",color:C.ghost,fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
             {deleteConfirm ? "Cancel" : "Delete account"}
           </button>
           {deleteConfirm && (
             <div style={{maxWidth:300,margin:"0.6rem auto 0"}}>
-              <div style={{fontSize:"0.75rem",color:"#cbd5e1",marginBottom:"0.5rem"}}>
+              <div style={{fontSize:"0.75rem",color:C.parchment,marginBottom:"0.5rem"}}>
                 Permanently delete your account and synced progress? This cannot be undone
                 {adFree ? ", and your Pro access will be removed from this account" : ""}.
                 {adFree && billingReady ? " You can get it back with Restore purchase." : ""}
               </div>
               <div style={{display:"flex",gap:"0.4rem",alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
-                <button onClick={deleteAccount} disabled={deleteBusy} style={{background:deleteBusy?"#334155":"#b91c1c",color:deleteBusy?"#64748b":"#fef2f2",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.78rem",fontWeight:600,cursor:deleteBusy?"not-allowed":"pointer"}}>
+                <button onClick={deleteAccount} disabled={deleteBusy} style={{background:deleteBusy?C.inset:C.oxbloodDeep,color:deleteBusy?C.faint:C.label,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.78rem",fontWeight:600,cursor:deleteBusy?"not-allowed":"pointer"}}>
                   {deleteBusy ? "Deleting…" : "Yes, delete everything"}
                 </button>
-                <button onClick={() => { setDeleteConfirm(false); setDeleteErr(""); }} disabled={deleteBusy} style={{background:"transparent",border:"1px solid #33415560",color:"#94a3b8",borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.78rem",cursor:deleteBusy?"not-allowed":"pointer"}}>Cancel</button>
+                <button onClick={() => { setDeleteConfirm(false); setDeleteErr(""); }} disabled={deleteBusy} style={{background:"transparent",border:`1px solid ${C.rule}`,color:C.muted,borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.78rem",cursor:deleteBusy?"not-allowed":"pointer"}}>Cancel</button>
               </div>
-              {deleteErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem",marginTop:"0.4rem"}}>{deleteErr}</div>}
+              {deleteErr && <div role="alert" style={{color:C.ember,fontSize:"0.7rem",marginTop:"0.4rem"}}>{deleteErr}</div>}
             </div>
           )}
         </div>
@@ -1373,17 +1601,17 @@ export default function App() {
           need to name this link. Hidden once anyone is signed in. */}
       {firebaseEnabled && authReady && !user && (
         <div style={{textAlign:"center",marginTop:"0.5rem"}}>
-          <button onClick={() => { setShowEmailForm(v => !v); setEmailErr(""); }} aria-expanded={showEmailForm} style={{background:"transparent",border:"none",color:"#475569",fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+          <button onClick={() => { setShowEmailForm(v => !v); setEmailErr(""); }} aria-expanded={showEmailForm} style={{background:"transparent",border:"none",color:C.ghost,fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
             {showEmailForm ? "Cancel" : "Admin login"}
           </button>
           {showEmailForm && (
             <form onSubmit={signInEmail} style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxWidth:260,margin:"0.6rem auto 0"}}>
               <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} placeholder="Email" required autoComplete="username" style={stackedField} />
               <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} placeholder="Password" required autoComplete="current-password" style={stackedField} />
-              <button type="submit" disabled={emailBusy} style={{background:emailBusy?"#334155":"#475569",color:emailBusy?"#64748b":"#e2e8f0",border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:emailBusy?"not-allowed":"pointer"}}>
+              <button type="submit" disabled={emailBusy} style={{background:emailBusy?C.inset:C.ghost,color:emailBusy?C.faint:C.parchment,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:emailBusy?"not-allowed":"pointer"}}>
                 {emailBusy ? "Signing in…" : "Sign in"}
               </button>
-              {emailErr && <div role="alert" style={{color:"#f87171",fontSize:"0.7rem"}}>{emailErr}</div>}
+              {emailErr && <div role="alert" style={{color:C.ember,fontSize:"0.7rem"}}>{emailErr}</div>}
             </form>
           )}
         </div>
@@ -1403,36 +1631,36 @@ export default function App() {
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
-          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer"}}>← Menu</button>
+          <span style={{color:C.muted,fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
         </div>
         <input
           autoFocus
           value={search}
           onChange={e=>setSearch(e.target.value)}
           placeholder="Search name or ingredient…"
-          style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:"1px solid #334155",color:"#f1f5f9",fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
+          style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:`1px solid ${C.rule}`,color:C.ivory,fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
         <div style={{display:"flex",gap:"0.5rem",marginBottom:isPro?"1.25rem":"0.6rem"}}>
           {[["all","All"],["tried","☑ Tried"],["untried","☐ Not tried"]].map(([k,label])=>(
             <button key={k} onClick={()=>setTriedFilter(k)} aria-pressed={triedFilter===k}
               style={{flex:1,borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
-                border: triedFilter===k ? "none" : "1px solid #33415580",
-                background: triedFilter===k ? "#7e22ce" : "transparent",
-                color: triedFilter===k ? "#fff" : "#94a3b8"}}>{label}</button>
+                border: triedFilter===k ? "none" : `1px solid ${C.ruleStrong}`,
+                background: triedFilter===k ? C.plum : "transparent",
+                color: triedFilter===k ? C.label : C.muted}}>{label}</button>
           ))}
         </div>
         {/* The Index is the whole book either way — the lock says which of these
             recipes can also go into a deck, so a locked button reads as a price
             rather than as a bug. */}
         {!isPro && (
-          <div style={{fontSize:"0.72rem",color:"#64748b",marginBottom:"1.25rem"}}>
+          <div style={{fontSize:"0.72rem",color:C.faint,marginBottom:"1.25rem"}}>
             Every recipe is here to read. Study and quizzes cover the top {top50.length} — 🔒 marks the rest.
           </div>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
           {results.length === 0 && (
-            <div style={{color:"#64748b",textAlign:"center",padding:"2rem 0"}}>{triedFilter === "tried" ? "No tried cocktails match." : triedFilter === "untried" ? "Nothing left untried here." : "No cocktails found."}</div>
+            <div style={{color:C.faint,textAlign:"center",padding:"2rem 0"}}>{triedFilter === "tried" ? "No tried cocktails match." : triedFilter === "untried" ? "Nothing left untried here." : "No cocktails found."}</div>
           )}
           {results.map(c=>{
             // Outside the pool the cocktail is readable but not studiable: Pro
@@ -1443,19 +1671,19 @@ export default function App() {
             return (
             <div key={c.name} style={frame({borderRadius:14,padding:"1rem 1.25rem"})}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.4rem",gap:"0.5rem"}}>
-                <h3 style={{fontSize:"1.1rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h3>
+                <h3 style={{fontSize:"1.1rem",fontWeight:800,color:C.ivory,margin:0}}>{c.name}</h3>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"0.35rem"}}>
-                  {c.rank && <span style={{fontSize:"0.7rem",color:"#f59e0b",fontWeight:600,whiteSpace:"nowrap"}}>#{c.rank}</span>}
-                  <button onClick={()=>toggleStudy(c.name)} title={locked ? `Pro adds all ${ALL_CARDS.length} cocktails to study and quizzes` : undefined} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:inDeck?"none":`1px solid ${locked?"#f59e0b60":"#3b82f680"}`,background:inDeck?"#16a34a":"transparent",color:inDeck?"#fff":locked?"#f59e0b":"#60a5fa"}}>
+                  {c.rank && <span style={{fontSize:"0.7rem",color:C.brass,fontWeight:600,whiteSpace:"nowrap"}}>#{c.rank}</span>}
+                  <button onClick={()=>toggleStudy(c.name)} title={locked ? `Pro adds all ${ALL_CARDS.length} cocktails to study and quizzes` : undefined} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:inDeck?"none":`1px solid ${locked?C.brassEdge:C.peacockEdge}`,background:inDeck?C.jadeDeep:"transparent",color:inDeck?C.label:locked?C.brass:C.peacockLite}}>
                     {locked ? "🔒 Pro" : inDeck ? "✓ In Study" : "＋ Study"}
                   </button>
                   {triedChip(c.name, false)}
                 </div>
               </div>
-              <div style={{color:"#cbd5e1",lineHeight:1.7,fontSize:"0.85rem"}}>
-                {c.glass && <div style={{padding:"0.05rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
+              <div style={{color:C.parchment,lineHeight:1.7,fontSize:"0.85rem"}}>
+                {c.glass && <div style={{padding:"0.05rem 0",borderBottom:`1px solid ${C.hairline}`,color:C.muted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
                 {c.ingredients.split(", ").map((g,i,a)=>(
-                  <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
+                  <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?`1px solid ${C.hairline}`:"none"}}>{g}</div>
                 ))}
               </div>
             </div>
@@ -1478,18 +1706,18 @@ export default function App() {
         <div style={{...page,justifyContent:"center"}}>
           <div style={{fontSize:"3rem",marginBottom:"1rem"}}>{allMastered ? "🏆" : "🃏"}</div>
           <h2 style={{fontWeight:800,marginBottom:"0.5rem"}}>{allMastered ? "All Mastered!" : "Your deck is empty"}</h2>
-          <p style={{color:"#94a3b8",marginBottom:"2rem",textAlign:"center"}}>
+          <p style={{color:C.muted,marginBottom:"2rem",textAlign:"center"}}>
             {allMastered ? `You've learned all ${total} cocktails.` : "Add some cocktails from the Index to start studying."}
           </p>
           <div style={{display:"flex",gap:"0.75rem"}}>
-            {!allMastered && <button onClick={()=>{setSearch("");setMode("index");}} style={btn("#0891b2",{padding:"0.75rem 1.5rem"})}>🔍 Index</button>}
-            <button onClick={()=>setMode("menu")} style={btn("#3b82f6",{padding:"0.75rem 1.5rem"})}>Back to Menu</button>
+            {!allMastered && <button onClick={()=>{setSearch("");setMode("index");}} style={btn(C.cognac,{padding:"0.75rem 1.5rem"})}>🔍 Index</button>}
+            <button onClick={()=>setMode("menu")} style={btn(C.peacock,{padding:"0.75rem 1.5rem"})}>Back to Menu</button>
           </div>
           {/* Nothing left to study is the one moment a bigger library is
               obviously worth something, so say so here rather than only on the
               menu. */}
           {allMastered && !isPro && (
-            <button onClick={unlockPro} style={{marginTop:"1rem",padding:"0.7rem 1.2rem",borderRadius:12,background:"transparent",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",border:"1px solid #f59e0b40",cursor:"pointer"}}>
+            <button onClick={unlockPro} style={{marginTop:"1rem",padding:"0.7rem 1.2rem",borderRadius:12,background:"transparent",color:C.brass,fontWeight:700,fontSize:"0.85rem",border:`1px solid ${C.brassSoft}`,cursor:"pointer"}}>
               🔒 Add the other {master150.length} with Pro
             </button>
           )}
@@ -1506,29 +1734,29 @@ export default function App() {
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
-          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{learned}/{total} learned</span>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>Card {cardIdx+1}/{deck.length}</span>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer"}}>← Menu</button>
+          <span style={{color:C.muted,fontSize:"0.85rem"}}>{learned}/{total} learned</span>
+          <span style={{color:C.muted,fontSize:"0.85rem"}}>Card {cardIdx+1}/{deck.length}</span>
         </div>
 
         <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div>
-              <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0,lineHeight:1.2}}>{c.name}</h2>
-              {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2026</div>}
+              <h2 style={{fontSize:"1.5rem",fontWeight:800,color:C.ivory,margin:0,lineHeight:1.2}}>{c.name}</h2>
+              {c.rank && <div style={{fontSize:"0.7rem",color:C.brass,marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2026</div>}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginLeft:"0.75rem"}}>
               {triedChip(c.name, true)}
-              <div style={{background:col(score),color:"#fff",borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap"}}>{score}/{MASTERY_SCORE}</div>
+              <div style={{background:col(score),color:C.ink,borderRadius:99,padding:"0.2rem 0.6rem",fontSize:"0.85rem",fontWeight:700,whiteSpace:"nowrap"}}>{score}/{MASTERY_SCORE}</div>
             </div>
           </div>
           <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem 0"}}>
             {!revealed
-              ? <button onClick={()=>setRevealed(true)} style={btn("#334155",{color:"#cbd5e1",fontSize:"0.95rem"})}>Reveal Ingredients</button>
-              : <div style={{color:"#cbd5e1",lineHeight:1.85,fontSize:"0.9rem"}}>
-                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
+              ? <button onClick={()=>setRevealed(true)} style={btn(C.walnut,{color:C.parchment,fontSize:"0.95rem"})}>Reveal Ingredients</button>
+              : <div style={{color:C.parchment,lineHeight:1.85,fontSize:"0.9rem"}}>
+                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:`1px solid ${C.hairline}`,color:C.muted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
                   {c.ingredients.split(", ").map((g,i,a)=>(
-                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
+                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.hairline}`:"none"}}>{g}</div>
                   ))}
                 </div>
             }
@@ -1537,20 +1765,20 @@ export default function App() {
 
         {revealed
           ? <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"1rem"}}>
-              <button onClick={()=>grade(true)} style={btn("#16a34a")}>✓ Got It</button>
-              <button onClick={()=>grade(false)} style={btn("#dc2626")}>✗ Missed It</button>
+              <button onClick={()=>grade(true)} style={btn(C.jadeDeep)}>✓ Got It</button>
+              <button onClick={()=>grade(false)} style={btn(C.oxblood)}>✗ Missed It</button>
             </div>
           : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem"}}>
-              <button onClick={prev} style={btn("#1e293b",{color:"#94a3b8"})}>← Prev</button>
-              <button onClick={shuffleActive} style={btn("#1e293b",{color:"#94a3b8"})}>🔀 Shuffle</button>
-              <button onClick={next} style={btn("#1e293b",{color:"#94a3b8"})}>Next →</button>
+              <button onClick={prev} style={btn(C.walnut,{color:C.muted})}>← Prev</button>
+              <button onClick={shuffleActive} style={btn(C.walnut,{color:C.muted})}>🔀 Shuffle</button>
+              <button onClick={next} style={btn(C.walnut,{color:C.muted})}>Next →</button>
             </div>
         }
 
         <div style={{display:"flex",gap:4,marginTop:"1.25rem",flexWrap:"wrap",justifyContent:"center"}}>
           {deck.map((ci,i)=>(
             <div key={i} onClick={()=>{setDi(i);setRevealed(false);}}
-              style={{width:28,height:28,borderRadius:6,background:i===cardIdx?"#3b82f6":"#1e293b",border:`2px solid ${col(st.scores[ci]||0)}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.65rem",color:"#94a3b8",fontWeight:700}}>
+              style={{width:28,height:28,borderRadius:6,background:i===cardIdx?C.peacock:C.walnut,border:`2px solid ${col(st.scores[ci]||0)}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.65rem",color:C.muted,fontWeight:700}}>
               {st.scores[ci]||0}
             </div>
           ))}
@@ -1558,15 +1786,15 @@ export default function App() {
 
         <div style={frame({borderRadius:12,padding:"0.85rem 1rem",marginTop:"1.25rem"})}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.5rem"}}>
-            <div style={{fontSize:"0.8rem",fontWeight:700,color:"#cbd5e1"}}>Deck Size</div>
-            <div style={{fontSize:"0.9rem",fontWeight:800,color:"#3b82f6"}}>{deckSize >= total ? "All" : deckSize}</div>
+            <div style={{fontSize:"0.8rem",fontWeight:700,color:C.parchment}}>Deck Size</div>
+            <div style={{fontSize:"0.9rem",fontWeight:800,color:C.peacock}}>{deckSize >= total ? "All" : deckSize}</div>
           </div>
           <div style={{display:"flex",gap:"0.4rem"}}>
             {[10,20,30,50].filter(n=>n<total).map(n=>{
               const on = deckSize === n && deckSize < total;
-              return <button key={n} onClick={()=>setDeckSizeTo(n)} style={{flex:1,padding:"0.45rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.8rem",background:on?"#3b82f6":"#1e293b",color:on?"#fff":"#94a3b8"}}>{n}</button>;
+              return <button key={n} onClick={()=>setDeckSizeTo(n)} style={{flex:1,padding:"0.45rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.8rem",background:on?C.peacock:C.walnut,color:on?C.label:C.muted}}>{n}</button>;
             })}
-            <button onClick={()=>setDeckSizeTo(total)} style={{flex:1,padding:"0.45rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.8rem",background:deckSize>=total?"#3b82f6":"#1e293b",color:deckSize>=total?"#fff":"#94a3b8"}}>All</button>
+            <button onClick={()=>setDeckSizeTo(total)} style={{flex:1,padding:"0.45rem",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.8rem",background:deckSize>=total?C.peacock:C.walnut,color:deckSize>=total?C.label:C.muted}}>All</button>
           </div>
         </div>
       </div></div>
@@ -1588,25 +1816,25 @@ export default function App() {
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.75rem"}}>
-          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer"}}>← Menu</button>
         </div>
         <div style={{textAlign:"center",marginBottom:"1.75rem"}}>
           <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>{quizKind === "86" ? "🍸" : "🎯"}</div>
           <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
-          <p style={{color:"#94a3b8",fontSize:"0.85rem",margin:0}}>
+          <p style={{color:C.muted,fontSize:"0.85rem",margin:0}}>
             {quizKind === "86"
               ? "86 It — drawn at random from all " + total + "."
               : "Cocktails are drawn at random from all " + total + "."}
           </p>
         </div>
-        {lengths.map(n => opt(`${n} Questions`, "", ()=>startPicked(n), quizKind === "86" ? "#be123c" : "#7c3aed"))}
-        {opt("All Cocktails", `${total} questions`, ()=>startPicked(null), quizKind === "86" ? "#881337" : "#4c1d95")}
+        {lengths.map(n => opt(`${n} Questions`, "", ()=>startPicked(n), quizKind === "86" ? C.oxblood : C.plum))}
+        {opt("All Cocktails", `${total} questions`, ()=>startPicked(null), quizKind === "86" ? C.oxbloodDeep : C.plumDeep)}
         {/* Says what a bigger round would cost, at the moment the user is
             picking how much to take on — not as an interruption to the quiz
             itself. Amber whichever quiz this is: it is the Pro colour
             everywhere else in the app. */}
         {!isPro && (
-          <button onClick={unlockPro} style={{width:"100%",marginTop:"0.5rem",padding:"0.7rem",borderRadius:12,background:"transparent",color:"#f59e0b",fontWeight:700,fontSize:"0.85rem",border:"1px solid #f59e0b40",cursor:"pointer"}}>
+          <button onClick={unlockPro} style={{width:"100%",marginTop:"0.5rem",padding:"0.7rem",borderRadius:12,background:"transparent",color:C.brass,fontWeight:700,fontSize:"0.85rem",border:`1px solid ${C.brassSoft}`,cursor:"pointer"}}>
             🔒 {quizKind === "86" ? "86" : "Quiz"} all {ALL_CARDS.length} cocktails with Pro
           </button>
         )}
@@ -1624,17 +1852,17 @@ export default function App() {
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
-          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {quizPool.length}</span>
-          <span style={{color:"#22c55e",fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer"}}>← Menu</button>
+          <span style={{color:C.muted,fontSize:"0.85rem"}}>{qi+1} / {quizPool.length}</span>
+          <span style={{color:C.jade,fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
         </div>
         <div style={frame({borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"})}>
-          <div style={{background:"#be123c",height:"100%",width:`${(qi/quizPool.length)*100}%`,transition:"width 0.3s"}} />
+          <div style={{background:C.oxblood,height:"100%",width:`${(qi/quizPool.length)*100}%`,transition:"width 0.3s"}} />
         </div>
 
         <div style={frame({borderRadius:20,padding:"1.5rem",marginBottom:"1.25rem"})}>
-          <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:"0 0 0.25rem"}}>{c.name}</h2>
-          <div style={{color:"#94a3b8",fontSize:"0.8rem",marginBottom:"1rem"}}>
+          <h2 style={{fontSize:"1.5rem",fontWeight:800,color:C.ivory,margin:"0 0 0.25rem"}}>{c.name}</h2>
+          <div style={{color:C.muted,fontSize:"0.8rem",marginBottom:"1rem"}}>
             {qr ? (gotIt ? "✓ Correct" : "✗ Not quite") : "Uncheck anything that doesn't belong."}
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:"0.5rem"}}>
@@ -1644,18 +1872,18 @@ export default function App() {
               // says what was true: green where they agreed with the recipe,
               // red where they did not.
               const right = qr && on === o.real;
-              const bg = qr ? (right ? "#16a34a20" : "#dc262620") : (on ? "#3b82f620" : "transparent");
-              const bd = qr ? (right ? "#16a34a80" : "#dc262680") : (on ? "#3b82f680" : "#33415580");
+              const bg = qr ? (right ? C.jadeWash : C.oxbloodWash) : (on ? C.peacockWash : "transparent");
+              const bd = qr ? (right ? C.jadeEdge : C.oxbloodLine) : (on ? C.peacockEdge : C.ruleStrong);
               return (
                 <button key={o.label+i} onClick={()=>{ if (!qr) toggleKept(i); }} disabled={qr}
                   style={{display:"flex",alignItems:"center",gap:"0.6rem",textAlign:"left",width:"100%",
                     background:bg,border:`1px solid ${bd}`,borderRadius:10,padding:"0.6rem 0.75rem",
-                    cursor:qr?"default":"pointer",color:on?"#f1f5f9":"#64748b",
+                    cursor:qr?"default":"pointer",color:on?C.ivory:C.faint,
                     fontSize:"0.9rem",fontWeight:600,
                     textDecoration:!on&&!qr?"line-through":"none"}}>
                   <span style={{fontSize:"1.05rem"}}>{on ? "☑" : "☐"}</span>
                   <span style={{flex:1}}>{o.label}</span>
-                  {qr && !o.real && <span style={{fontSize:"0.7rem",fontWeight:800,color:"#fca5a5",whiteSpace:"nowrap"}}>IMPOSTOR</span>}
+                  {qr && !o.real && <span style={{fontSize:"0.7rem",fontWeight:800,color:C.rustLite,whiteSpace:"nowrap"}}>IMPOSTOR</span>}
                 </button>
               );
             })}
@@ -1663,8 +1891,8 @@ export default function App() {
         </div>
 
         {qr
-          ? <button onClick={next86} style={{...btn("#be123c"),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
-          : <button onClick={check86} style={{...btn("#16a34a"),width:"100%"}}>Check Answer</button>}
+          ? <button onClick={next86} style={{...btn(C.oxblood),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
+          : <button onClick={check86} style={{...btn(C.jadeDeep),width:"100%"}}>Check Answer</button>}
       </div></div>
     );
   }
@@ -1674,25 +1902,25 @@ export default function App() {
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
-          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer"}}>← Menu</button>
-          <span style={{color:"#94a3b8",fontSize:"0.85rem"}}>{qi+1} / {quizPool.length}</span>
-          <span style={{color:"#22c55e",fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
+          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer"}}>← Menu</button>
+          <span style={{color:C.muted,fontSize:"0.85rem"}}>{qi+1} / {quizPool.length}</span>
+          <span style={{color:C.jade,fontWeight:700}}>{qa.filter(Boolean).length} ✓</span>
         </div>
         <div style={frame({borderRadius:99,height:6,marginBottom:"1.5rem",overflow:"hidden"})}>
-          <div style={{background:"#7c3aed",height:"100%",width:`${(qi/quizPool.length)*100}%`,transition:"width 0.3s"}} />
+          <div style={{background:C.plum,height:"100%",width:`${(qi/quizPool.length)*100}%`,transition:"width 0.3s"}} />
         </div>
         <div style={frame({borderRadius:20,padding:"2rem",marginBottom:"1.25rem",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"space-between"})}>
           <div>
-            <h2 style={{fontSize:"1.5rem",fontWeight:800,color:"#f8fafc",margin:0}}>{c.name}</h2>
-            {c.rank && <div style={{fontSize:"0.7rem",color:"#f59e0b",marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2026</div>}
+            <h2 style={{fontSize:"1.5rem",fontWeight:800,color:C.ivory,margin:0}}>{c.name}</h2>
+            {c.rank && <div style={{fontSize:"0.7rem",color:C.brass,marginTop:"0.25rem",fontWeight:600}}>#{c.rank} DI 2026</div>}
           </div>
           <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem 0"}}>
             {!qr
-              ? <button onClick={()=>setQr(true)} style={btn("#334155",{color:"#cbd5e1",fontSize:"0.95rem"})}>Reveal Ingredients</button>
-              : <div style={{color:"#cbd5e1",lineHeight:1.85,fontSize:"0.9rem"}}>
-                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:"1px solid #ffffff0d",color:"#94a3b8"}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
+              ? <button onClick={()=>setQr(true)} style={btn(C.walnut,{color:C.parchment,fontSize:"0.95rem"})}>Reveal Ingredients</button>
+              : <div style={{color:C.parchment,lineHeight:1.85,fontSize:"0.9rem"}}>
+                  {c.glass && <div style={{padding:"0.1rem 0",borderBottom:`1px solid ${C.hairline}`,color:C.muted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
                   {c.ingredients.split(", ").map((g,i,a)=>(
-                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?"1px solid #ffffff0d":"none"}}>{g}</div>
+                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.hairline}`:"none"}}>{g}</div>
                   ))}
                 </div>
             }
@@ -1700,8 +1928,8 @@ export default function App() {
         </div>
         {qr && (
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
-            <button onClick={()=>qGrade(true)} style={btn("#16a34a")}>✓ Knew It</button>
-            <button onClick={()=>qGrade(false)} style={btn("#dc2626")}>✗ Didn't Know</button>
+            <button onClick={()=>qGrade(true)} style={btn(C.jadeDeep)}>✓ Knew It</button>
+            <button onClick={()=>qGrade(false)} style={btn(C.oxblood)}>✗ Didn't Know</button>
           </div>
         )}
       </div></div>
@@ -1714,7 +1942,7 @@ export default function App() {
     const missed = quizPool.filter((_,i)=>qa[i]===false);
     // Score color reuses the deck's own green/amber ramp (see `col`) so a good
     // quiz reads the same color as a mastered card.
-    const pctColor = pct >= 90 ? "#22c55e" : pct >= 70 ? "#f59e0b" : "#fa5252";
+    const pctColor = pct >= 90 ? C.jade : pct >= 70 ? C.brass : C.rust;
     // Tested against the raw count, not `pct`: a 199/200 quiz rounds to 100% and
     // must not get the fireworks. Only a genuine clean sweep does.
     const perfect = quizPool.length > 0 && knew === quizPool.length;
@@ -1723,14 +1951,14 @@ export default function App() {
         {perfect && <Fireworks />}
         <div style={{textAlign:"center",marginBottom:"2rem"}}>
           <h2 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem",color:pctColor}}>{pct}%</h2>
-          <p style={{color:"#94a3b8"}}>You knew {knew} out of {quizPool.length} cocktails</p>
+          <p style={{color:C.muted}}>You knew {knew} out of {quizPool.length} cocktails</p>
         </div>
         {missed.length > 0 && (
           <div style={frame({borderRadius:16,padding:"1.25rem",marginBottom:"1.5rem",maxHeight:280,overflowY:"auto"})}>
-            <h3 style={{fontWeight:700,marginTop:0,color:"#f87171",fontSize:"0.9rem",textTransform:"uppercase",letterSpacing:"0.05em"}}>Needs Work ({missed.length})</h3>
+            <h3 style={{fontWeight:700,marginTop:0,color:C.ember,fontSize:"0.9rem",textTransform:"uppercase",letterSpacing:"0.05em"}}>Needs Work ({missed.length})</h3>
             <div style={{display:"flex",flexWrap:"wrap",gap:"0.4rem"}}>
               {missed.map(c=>(
-                <span key={c.name} style={{background:"#dc262620",border:"1px solid #dc262660",color:"#fca5a5",borderRadius:6,padding:"0.2rem 0.5rem",fontSize:"0.8rem"}}>{c.name}</span>
+                <span key={c.name} style={{background:C.oxbloodWash,border:`1px solid ${C.oxbloodEdge}`,color:C.rustLite,borderRadius:6,padding:"0.2rem 0.5rem",fontSize:"0.8rem"}}>{c.name}</span>
               ))}
             </div>
           </div>
@@ -1738,10 +1966,10 @@ export default function App() {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
           {/* Retries reshuffle at the length you already picked — the common case
               is another round of the same size, not another trip to the picker. */}
-          <button onClick={()=>startPicked(quizLen)} style={btn(quizKind === "86" ? "#be123c" : "#7c3aed")}>Retry Quiz</button>
-          <button onClick={()=>setMode("menu")} style={btn("#1e293b")}>Menu</button>
+          <button onClick={()=>startPicked(quizLen)} style={btn(quizKind === "86" ? C.oxblood : C.plum)}>Retry Quiz</button>
+          <button onClick={()=>setMode("menu")} style={btn(C.walnut)}>Menu</button>
         </div>
-        <button onClick={()=>setMode("quizlen")} style={{width:"100%",marginTop:"0.75rem",padding:"0.6rem",borderRadius:8,background:"transparent",color:"#94a3b8",fontWeight:600,fontSize:"0.85rem",border:"none",cursor:"pointer",textDecoration:"underline"}}>Change quiz length</button>
+        <button onClick={()=>setMode("quizlen")} style={{width:"100%",marginTop:"0.75rem",padding:"0.6rem",borderRadius:8,background:"transparent",color:C.muted,fontWeight:600,fontSize:"0.85rem",border:"none",cursor:"pointer",textDecoration:"underline"}}>Change quiz length</button>
       </div></div>
     );
   }
