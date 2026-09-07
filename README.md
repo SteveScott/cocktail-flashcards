@@ -529,7 +529,7 @@ platforms. See [docs/mobile-google-signin.md](docs/mobile-google-signin.md).
 One purchase, **Cocktail Flashcards Pro** ($4.99, one-time), carrying two things:
 
 - **The library.** Study and both quizzes cover the top 50 for free; the "Add All
-  Cards" switch on the menu adds the other 271 to both, and that switch is the
+  Cards" switch on the menu adds the other 272 to both, and that switch is the
   paywall. The index still lists every recipe to read either way — a locked one
   simply cannot enter a deck. Marking a drink **tried** is never gated: it is a
   fact about the drinker, not study content.
