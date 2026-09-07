@@ -33,9 +33,18 @@ display name has been **Cocktail Flashcards Pro** all along. Nothing on the
 server or in the store had to change for the library half: the app reads the one
 flag and widens its pool (`poolFor()` in `src/App.jsx`).
 
-The one thing that does need a hand: the **Stripe product name** buyers see on
-the Checkout page still says "Remove Ads" if it was created before this — rename
-it in the dashboard, in test and live mode both.
+### Keeping the two storefronts in step
+
+The price exists in three places and no code can reconcile them:
+
+| Where | What | Changed by |
+|---|---|---|
+| Stripe | a **Price** object, immutable — a new amount is always a new Price, then `STRIPE_PRICE_ID` in Netlify and a redeploy | dashboard |
+| Play | the `lifetime` in-app product, editable in place, same product id | Play Console |
+| The app | `PRO_PRICE` in `src/App.jsx`, web label only — the Play build shows Google's own localised price through the RevenueCat paywall | this repo |
+
+Change all three together. The two storefronts selling the same thing at
+different prices is how refund requests start.
 
 ## Where things stand
 
@@ -51,8 +60,8 @@ done.
 | `android/` native project | ✅ generated and checked in, currently versionCode 4 / versionName 1.2.1 |
 | Signing | ✅ upload keystore at `ignore/key` (alias `Cocktail Flashcards Key`), wired up through the gitignored `android/gradle.properties`. Cert SHA-256 `5A:8F:CA:C5:…` matches what Play has registered. |
 | Play Console | ✅ live on the closed testing (Alpha) track — store listing, app content and content rating reviewed and published 2026-08-21 |
-| In-app product | ✅ `lifetime`, one-time managed, $4.99, activated |
-| Stripe | ✅ web price also $4.99 — see the note in `scripts/create-pro-product.mjs` about Prices being immutable |
+| In-app product | ⏳ `lifetime`, one-time managed, activated — still priced $4.99 and needs to move to $7.99 to match the web |
+| Stripe | ✅ live at $7.99 on a new Price, product renamed to Cocktail Flashcards Pro — see the note in `scripts/create-pro-product.mjs` about Prices being immutable |
 | RevenueCat | ⏳ Android app added with the `revenuecat-play` service account. Entitlement, offering and paywall still to configure. |
 | AdMob | ⏳ App ID is in `AndroidManifest.xml`. Banner ad unit and the GDPR consent message still to create. |
 | Netlify env | ⏳ `VITE_REVENUECAT_ANDROID_KEY` not set, so purchases are inert and the Pro card stays hidden. `VITE_ADMOB_BANNER_ID` deliberately blank so test banners serve during the closed test. |

@@ -21,8 +21,14 @@ import { isCapacitorApp } from "./platform";
 // test ads. Replace via VITE_ADMOB_BANNER_ID for the real release.
 const ADMOB_BANNER_ID = import.meta.env.VITE_ADMOB_BANNER_ID || "ca-app-pub-3940256099942544/6300978111";
 
-const PROD_KEY = import.meta.env.VITE_REVENUECAT_ANDROID_KEY || "";
-const TEST_KEY = import.meta.env.VITE_REVENUECAT_TEST_KEY || "";
+// Trimmed on the way in. A key pasted into Netlify carrying a trailing newline
+// looks identical in the dashboard and is rejected by RevenueCat — one of the
+// hardest "Connecting…" failures to see. Trimming fixes it here;
+// getBillingDiagnostics() still reports that it happened, so the environment
+// variable itself gets corrected rather than silently papered over.
+const RAW_PROD_KEY = import.meta.env.VITE_REVENUECAT_ANDROID_KEY || "";
+const PROD_KEY = RAW_PROD_KEY.trim();
+const TEST_KEY = (import.meta.env.VITE_REVENUECAT_TEST_KEY || "").trim();
 // VITE_REMOVE_ADS_ENTITLEMENT is the pre-Pro name for this setting — still read
 // so an existing .env keeps working.
 export const ENTITLEMENT =
@@ -49,6 +55,21 @@ function resolveApiKey() {
   return PROD_KEY;
 }
 const REVENUECAT_API_KEY = resolveApiKey();
+
+// The last failure inside the billing SDK, kept so the UI can show it.
+// Purchasing breaks on a handset with no console attached — chrome://inspect
+// wants a desktop, a cable and a Chromium browser — so unless the failure is
+// readable from the phone itself it is not diagnosable at all. The UI renders
+// this through getBillingDiagnostics(); nothing else depends on it.
+let lastBillingError = null;
+
+function noteBillingError(step, e) {
+  const message = (e && (e.message || e.errorMessage)) || String(e || "unknown error");
+  const code = e && (e.code !== undefined ? e.code : e.errorCode);
+  lastBillingError = { step, message, code: code === undefined || code === null ? null : String(code) };
+  console.error(`RevenueCat ${step} failed`, e);
+  return lastBillingError;
+}
 
 // Fanned out to React on every CustomerInfo change (see configurePurchases).
 const entitlementListeners = new Set();
@@ -171,7 +192,7 @@ async function configurePurchases() {
     await Purchases.addCustomerInfoUpdateListener((customerInfo) => emit(customerInfo));
     return true;
   } catch (e) {
-    console.error("RevenueCat configure failed", e);
+    noteBillingError("configure", e);
     return false;
   }
 }
@@ -193,6 +214,22 @@ function ensureConfigured() {
 // RevenueCat is available (Play build, configured with a usable key).
 export function isBillingAvailable() {
   return isCapacitorApp && Boolean(REVENUECAT_API_KEY);
+}
+
+// Everything needed to tell the "Connecting…" failures apart from the handset.
+// The SDK key is a PUBLIC client key, but only its prefix and length are
+// reported — and the length is the point: a key that reads correctly in the
+// dashboard but arrives one character long has whitespace on the end.
+export function getBillingDiagnostics() {
+  return {
+    bridge: isCapacitorApp,
+    keySet: Boolean(REVENUECAT_API_KEY),
+    keyPrefix: REVENUECAT_API_KEY ? REVENUECAT_API_KEY.slice(0, 8) : "",
+    keyLength: REVENUECAT_API_KEY.length,
+    keyStripped: RAW_PROD_KEY.length - PROD_KEY.length,
+    entitlement: ENTITLEMENT,
+    error: lastBillingError,
+  };
 }
 
 function isActive(customerInfo) {
@@ -286,15 +323,25 @@ export const hasRemovedAds = hasProAccess;
 // need the first one, since a purchase made before the link lands is recorded
 // against the previous or anonymous id and can never be mapped to the account.
 export async function linkRevenueCatUser(uid) {
-  if (!uid || !(await ensureConfigured())) return { ok: false, active: false };
+  if (!uid) {
+    return { ok: false, active: false, error: { step: "identity", message: "No signed-in account to link.", code: null } };
+  }
+  if (!(await ensureConfigured())) {
+    // configurePurchases already recorded why; fall back to a description of the
+    // only other way to get here, which is a build with no usable key.
+    return {
+      ok: false, active: false,
+      error: lastBillingError || { step: "configure", message: "Billing is not available in this build.", code: null },
+    };
+  }
   try {
     const Purchases = await loadPurchases();
     const { customerInfo } = await Purchases.logIn({ appUserID: uid });
+    lastBillingError = null;
     emit(customerInfo);
     return { ok: true, active: isActive(customerInfo) };
   } catch (e) {
-    console.error("RevenueCat logIn failed", e);
-    return { ok: false, active: false };
+    return { ok: false, active: false, error: noteBillingError("logIn", e) };
   }
 }
 
