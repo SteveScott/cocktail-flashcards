@@ -90,22 +90,22 @@ const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || "")
 const THEMES = {
   retro: {
     name: "Retro",
-    // The menu stack. Study, Self Quiz and 86 It are one gradient: a single
-    // sweep of hue at FIXED lightness and chroma (L* 0.51, C 0.087 in OKLCH),
-    // three stops 73° apart. Holding lightness is what makes that safe rather
-    // than merely pretty — the label colour is fixed, so a ramp that darkened
-    // or lightened as it went would starve one end of contrast. These sit at
-    // 5.1:1 to 5.6:1 against textOnFill, comfortably past AA, and vary only in
-    // the one channel that carries no contrast.
+    // The menu stack is one gradient. All four buttons are a single sweep of hue
+    // at FIXED lightness and chroma (L* 0.51, C 0.087 in OKLCH), four stops 30°
+    // apart running amber → copper → red → plum. Holding lightness is what makes
+    // that safe rather than merely pretty — the label colour is fixed, so a ramp
+    // that darkened or lightened as it went would starve one end of contrast.
+    // These sit at 5.5:1 to 5.6:1 against textOnFill, comfortably past AA, and
+    // vary only in the one channel that carries no contrast.
     //
-    // Index is deliberately NOT on the ramp. It is not a way to practise, it is
-    // the reference shelf, and leaving it off the sweep groups the three study
-    // modes as the set they actually are. It keeps the family's lightness so it
-    // still belongs to the stack.
-    navStudy:        "#02747f",   // teal      h=207
-    navQuiz:         "#5c6097",   // violet    h=280
-    navEightySix:    "#8c506a",   // rose      h=353
-    navIndex:        "#885b2a",   // amber     h=66, off-ramp
+    // The stops are listed in menu order and the hue must stay monotonic down
+    // the stack — that ordering IS the gradient. Reordering the buttons without
+    // reordering these turns the sweep back into four unrelated colours, which
+    // is what it looked like before.
+    navStudy:        "#865c28",   // amber     h=70
+    navQuiz:         "#90543f",   // copper    h=40
+    navEightySix:    "#90505b",   // red       h=10
+    navIndex:        "#875176",   // plum      h=340
 
     well:            "#17100a",   // darkest wood: wells, input fields, text on brass
     surfaceQuiet:    "#2b1c0d",   // quiet button faces
@@ -172,13 +172,14 @@ const THEMES = {
 
   future: {
     name: "Future",
-    // The same construction in Future's own spectrum: blue through violet to
-    // magenta, L* 0.54 and C 0.225, which is the most chroma sRGB will hold
-    // across this arc without clipping — the neon survives. 5.1:1 to 5.4:1.
-    navStudy:        "#315cef",   // blue      h=266
-    navQuiz:         "#9336d0",   // violet    h=308
-    navEightySix:    "#c40181",   // magenta   h=350
-    navIndex:        "#187a96",   // cyan      h=223, off-ramp and held quiet
+    // The same construction in Future's own spectrum: blue through violet and
+    // purple to magenta, four stops 25° apart at L* 0.54 and C 0.225 — near the
+    // most chroma sRGB will hold across this arc without clipping, so the neon
+    // survives. 5.3:1 to 5.6:1. Menu order and monotonic, as in Retro.
+    navStudy:        "#5154ed",   // blue      h=275
+    navQuiz:         "#863dda",   // violet    h=300
+    navEightySix:    "#aa26b4",   // purple    h=325
+    navIndex:        "#c40181",   // magenta   h=350
     well:            "#05070f",   // near-black blue: wells, input fields, text on cyan
     surfaceQuiet:    "#0d1426",   // quiet button faces
     surfaceDisabled: "#182a4a",   // disabled faces
