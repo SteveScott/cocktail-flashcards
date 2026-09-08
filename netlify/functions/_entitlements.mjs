@@ -16,11 +16,14 @@ import { getAdmin } from "./_firebaseAdmin.mjs";
 const FIELD = { stripe: "adsRemovedStripe", play: "adsRemovedPlay" };
 
 // Read one source's flag, accounting for documents written before the per-source
-// split existed. Those have `adsRemoved: true` and no source flags, and the
+// split existed. Exported because the restore path (_backup.mjs) has to apply
+// exactly this rule to the purchase block of a backup file: a second, drifting
+// copy of it would quietly revoke ad removal from everyone who bought on the web
+// before the split, which is the one thing a restore must never do. Those have `adsRemoved: true` and no source flags, and the
 // Stripe webhook was the only thing that ever set it — so an unqualified legacy
 // grant belongs to Stripe. Getting this wrong would revoke ad removal from
 // everyone who bought on the web before this change.
-function readFlag(data, source) {
+export function readFlag(data, source) {
   const explicit = data[FIELD[source]];
   if (typeof explicit === "boolean") return explicit;
   if (source === "stripe") return data.adsRemoved === true && data.adsRemovedSource !== "play";
