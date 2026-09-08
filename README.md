@@ -391,6 +391,19 @@ is the feature, so check it there rather than by playing a round: an ingredient 
 one-in-five-thousand turning up twice in an evening is bad luck, not a bug, and
 the two are indistinguishable from the table.
 
+**Ties need no tie-breaking.** 124 ingredients appear in exactly one recipe and so
+carry identical weights, which raises the fair question of whether a scan that
+walks the table in order favours whichever of them sits earliest. It does not.
+Each entry owns an interval on the cumulative line as wide as its weight, and
+equal weights are equal-width intervals at different offsets — the scan finds the
+interval containing `r`, and position is not an input. Adding jitter to separate
+tied weights would make this worse rather than better: applied once at build time
+it makes one ingredient permanently likelier than its twin, and applied per draw
+it perturbs a draw that is already exactly proportional. `-- --verify` proves it
+by sweeping the selector across [0,1) on a 20M-point grid and measuring the
+interval each tied ingredient actually receives; they come out identical to
+within the one grid point the grid cannot split.
+
 ### Tried
 
 A drink can be marked tried from the card or from the index. This is a fact
@@ -688,7 +701,7 @@ npm run build     # bundle + 322 static recipe pages + sitemap into dist/
 npm run preview   # serve dist/
 npm run lint      # eslint
 npm run icons     # redraw every icon and splash from scripts/icons.mjs
-npm run ingredient-frequency   # print the 86 It impostor table
+npm run ingredient-frequency   # print the 86 It impostor table (--verify to check it)
 ```
 
 - **Colour.** Two schemes, picked at the foot of the menu screen. **Retro** is

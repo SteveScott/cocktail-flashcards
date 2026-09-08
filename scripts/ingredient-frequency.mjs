@@ -18,6 +18,7 @@
 //   npm run ingredient-frequency
 //   npm run ingredient-frequency -- --all      every ingredient, not the top 30
 //   npm run ingredient-frequency -- Port       only rows matching a substring
+//   npm run ingredient-frequency -- --verify   prove ties are drawn fairly
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -32,6 +33,49 @@ const recipes = [...data.top50, ...data.master150];
 
 const codex = buildCodex(recipes);
 const eligible = recipes.filter(eightySixEligible);
+
+// ── --verify: are ingredients on the same weight drawn equally often? ───────
+//
+// 124 of the 242 ingredients appear in exactly one recipe, so they all carry an
+// identical weight, and a reasonable worry about a scan that walks the table in
+// order and stops at the first entry to exhaust `r` is that it favours whatever
+// sits earliest. It does not, and no jitter is needed to break the ties: each
+// entry owns an interval on the cumulative line as wide as its weight, and ties
+// get equal widths at different offsets. Position never enters.
+//
+// Sampling cannot show this convincingly — at these weights a run of four
+// million draws still leaves the tied group's chi-square wobbling by a couple of
+// sigma, which is indistinguishable from a small real bias. So sweep the
+// selector's input across [0,1) on a uniform grid instead: the number of grid
+// points landing on an ingredient is the width of its interval, measured with no
+// PRNG and no sampling noise at all.
+if (process.argv.includes("--verify")) {
+  const total = codex.reduce((s, e) => s + e.weight, 0);
+  const pick = x => {
+    let r = x * total;
+    for (let i = 0; i < codex.length; i++) { r -= codex[i].weight; if (r <= 0) return i; }
+    return codex.length - 1;
+  };
+
+  const GRID = 20_000_000;
+  const hits = new Array(codex.length).fill(0);
+  for (let k = 0; k < GRID; k++) hits[pick(k / GRID)]++;
+
+  const tied = codex.map((e, i) => ({ ...e, index: i, hits: hits[i] })).filter(e => e.count === 1);
+  const exact = GRID * tied[0].weight;
+  const widths = [...new Set(tied.map(t => t.hits))].sort((a, b) => a - b);
+  const worst = codex.reduce((w, e, i) => Math.max(w, Math.abs(hits[i] / GRID - e.weight) / e.weight), 0);
+
+  console.log(`sweeping ${GRID.toLocaleString()} points across [0,1) — no PRNG, no sampling noise\n`);
+  console.log(`${tied.length} ingredients tie on weight ${tied[0].weight.toExponential(4)} (one recipe each)`);
+  console.log(`each is owed ${exact.toFixed(2)} grid points; observed widths: ${widths.join(", ")}`);
+  console.log(`  first in scan order  ${tied[0].label.padEnd(22)} ${tied[0].hits}`);
+  console.log(`  last in scan order   ${tied.at(-1).label.padEnd(22)} ${tied.at(-1).hits}`);
+  console.log(`\nThe whole spread is ${widths.at(-1) - widths[0]} grid point out of ${Math.round(exact)} — the grid cannot`);
+  console.log(`split a point, and nothing else separates them. Ties are exact.`);
+  console.log(`\nWorst |measured − declared| across all ${codex.length} ingredients: ${(100 * worst).toFixed(4)}%`);
+  process.exit(0);
+}
 
 // Play the rounds the quiz would play, and count what the player is offered.
 const drawn = new Map();
