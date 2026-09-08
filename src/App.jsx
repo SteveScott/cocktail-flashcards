@@ -500,6 +500,17 @@ export default function App() {
   const [emailBusy, setEmailBusy] = useState(false);
   // Account deletion — required by Play for any app that offers account creation.
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  // Whether the reset control has been deliberately opened. Collapsed by default
+  // so the one irreversible action in the app is never a single tap away.
+  const [resetOpen, setResetOpen] = useState(false);
+  // The uid whose cloud progress this device has actually read back and
+  // reconciled with. Until it matches the signed-in user, `st` is only what this
+  // device happened to be holding, and nothing may be written up from it.
+  const [syncedUid, setSyncedUid] = useState(null);
+  // Set only by signOutUser(), and cleared as soon as it is acted on. Firebase
+  // reports a null user for more than a deliberate sign-out, and the difference
+  // decides whether this device's progress is cleared — see the auth effect.
+  const signOutIntent = useRef(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
   // One purchase — "Cocktail Flashcards Pro" — carries both halves of the
@@ -593,6 +604,9 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       stopDoc();
+      // A new subscription has to re-do the handshake before this device may
+      // write again, whichever user it turns out to be.
+      setSyncedUid(null);
       if (u) {
         // The first snapshot is the sign-in handshake (reconcile whatever is on
         // this device with the account); later ones are updates from elsewhere.
@@ -605,6 +619,15 @@ export default function App() {
           const cloud = data?.progress || null;
           const accountPro = Boolean(data?.adsRemoved);
           setAdsRemovedCloud(accountPro);
+          // A snapshot served from the local cache is not an answer about what
+          // this account holds. Firestore runs on the default memory cache
+          // (src/firebase.js), and the service worker lets the app boot with no
+          // network at all, so a cold offline start raises a snapshot reporting
+          // a document the client has simply never seen as absent. Read as "this
+          // account has no progress", that sent the handshake below down its
+          // `initState` branch and wrote a starter deck over a real one. Nothing
+          // is resolved, and firstSnapshot is not spent, until the server speaks.
+          if (snap.metadata.fromCache) return;
           // How wide the merged pool may be. Read from this very snapshot rather
           // than from state that hasn't re-rendered yet, and unioned with what we
           // already know so a native-only purchase isn't overlooked.
@@ -638,6 +661,10 @@ export default function App() {
                 .catch(e => console.error("Cloud sync failed", e));
               return stamped;
             });
+            // The account's own progress is now folded in, so the autosave effect
+            // below is free to write. Before this point it would have been
+            // writing whatever this device happened to hold.
+            setSyncedUid(u.uid);
             setDi(0); setRevealed(false);
             return;
           }
@@ -659,11 +686,21 @@ export default function App() {
         }, e => console.error("Cloud sync failed", e));
       } else {
         setAdsRemovedCloud(false);
-        // Clear progress on sign-out so the next user starts fresh — but only if
-        // it belonged to a signed-in account. Don't wipe a purely anonymous
-        // device's local progress on the initial "no user" callback at startup.
-        setSt(prev => (prev.uid ? initState(false) : prev));
-        setDi(0); setRevealed(false);
+        // Clear progress on sign-out so the next user starts fresh — but only on
+        // a sign-out the user actually asked for. Firebase reports a null user
+        // for a good deal more than that: a refresh token the backend rejects, an
+        // account disabled elsewhere, auth storage the WebView has evicted (it
+        // lives in IndexedDB, while progress lives in localStorage, and the two
+        // are evicted independently). Every one of those used to wipe the device
+        // with nobody having touched anything. Leaving the progress alone is safe
+        // — it still carries the uid it was earned under, so the handshake above
+        // will not fold it into a different account — and when auth comes back,
+        // that same uid makes it a same-user merge with nothing lost.
+        if (signOutIntent.current) {
+          signOutIntent.current = false;
+          setSt(prev => (prev.uid ? initState(false) : prev));
+          setDi(0); setRevealed(false);
+        }
       }
       setAuthReady(true);
     });
@@ -724,13 +761,21 @@ export default function App() {
   // Push progress to the cloud whenever it changes and a user is signed in.
   useEffect(() => {
     if (!firebaseEnabled || !user) return;
+    // Not until the handshake above has read this account back and reconciled it.
+    // `user` is set the moment auth resolves, but the first snapshot can be
+    // hundreds of milliseconds behind it — or never arrive, on a device that is
+    // offline — and in that window `st` is just this device's local copy. On a
+    // fresh install that copy is a starter deck, and writing it up (merge:true
+    // replaces the whole `progress` field) overwrote accounts that had years in
+    // them. Waiting costs nothing: the merged state is written by the handshake.
+    if (syncedUid !== user.uid) return;
     const t = setTimeout(() => {
       // merge:true so autosaving progress never clobbers server-owned fields
       // like `adsRemoved` (set by the Stripe webhook via the Admin SDK).
       setDoc(doc(db, "users", user.uid), { progress: st, updatedAt: Date.now() }, { merge: true }).catch(e => console.error("Cloud save failed", e));
     }, 800);
     return () => clearTimeout(t);
-  }, [st, user]);
+  }, [st, user, syncedUid]);
 
   // Check whether the signed-in user's email is on the ad whitelist.
   useEffect(() => {
@@ -909,7 +954,10 @@ export default function App() {
     // Fire-and-forget alongside the JS sign-out: this only drops the native
     // account selection; the JS sign-out below is what ends the session.
     signOutGoogleNative();
-    signOut(auth).catch(e => console.error("Sign-out failed", e));
+    // Tells the auth effect that the null user about to arrive is this, and not
+    // a session Firebase dropped on its own.
+    signOutIntent.current = true;
+    signOut(auth).catch(e => { signOutIntent.current = false; console.error("Sign-out failed", e); });
   }
 
   // Deletes the cloud account and its data, then clears this device. The server
@@ -1260,7 +1308,7 @@ export default function App() {
       "Are you absolutely sure you want to erase everything?",
     ].join("\n");
     if (!confirm(warning)) return;
-    setSt(initState(masterOn)); setDi(0); setRevealed(false);
+    setSt(initState(masterOn)); setDi(0); setRevealed(false); setResetOpen(false);
   }
   // Add or remove a cocktail from the study deck (st.active) by name. Adding a
   // cocktail also gives it a starting score and pulls it out of `learned` so it
@@ -1507,13 +1555,7 @@ export default function App() {
         <div style={{background:C.jade,height:"100%",width:`${(learned/total)*100}%`,transition:"width 0.5s"}} />
       </div>
 
-      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn(C.peacock),width:"100%",marginBottom:"0.3rem"}}>📚 Study Mode</button>
-      {/* Reset is the fine print of the deck this button opens, so it is set as a
-          footer to it rather than as a fifth thing to tap. Small, centred, and no
-          wider than its own text: a full-width bordered button gave a destructive
-          action the same weight and the same tap target as the four that only
-          navigate. */}
-      <button onClick={reset} style={{display:"block",margin:"0 auto 0.9rem",padding:"0.25rem 0.5rem",background:"transparent",border:"none",color:C.rust,fontSize:"0.7rem",fontWeight:600,cursor:"pointer"}}>⚠️ Reset progress</button>
+      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn(C.peacock),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
       <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn(C.plum),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
       <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn(C.oxblood),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn(C.cognac),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
@@ -1560,6 +1602,32 @@ export default function App() {
           })}
         </div>
       </div>
+      {/* Reset is the only irreversible thing in the app, and until now it sat in
+          the open among controls that merely navigate. It is put away here
+          instead: closed by default, at the foot of the menu below everything
+          anyone opens this screen to reach, and it takes a deliberate tap to
+          bring out at all. Opening it is not the reset — that still goes through
+          the confirm — it only puts the button on screen, so no single tap
+          anywhere on this screen can destroy anything. */}
+      <div style={{marginTop:"1.5rem"}}>
+        {resetOpen ? (
+          <div style={frame({borderRadius:12,padding:"1rem 1.25rem",border:`1px solid ${C.rustEdge}`})}>
+            <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.rust,marginBottom:"0.5rem"}}>⚠️ Reset progress</div>
+            <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:"0.9rem",lineHeight:1.5}}>
+              Erases every score, every cocktail you have mastered and every drink
+              you have marked as tried — on this device and in your account. There
+              is no undo.
+            </div>
+            <div style={{display:"flex",gap:"0.6rem"}}>
+              <button onClick={()=>setResetOpen(false)} style={{flex:1,padding:"0.6rem",borderRadius:8,background:"transparent",color:C.muted,fontWeight:600,fontSize:"0.85rem",border:`1px solid ${C.inset}`,cursor:"pointer"}}>Cancel</button>
+              <button onClick={reset} style={{flex:1,padding:"0.6rem",borderRadius:8,background:"transparent",color:C.rust,fontWeight:700,fontSize:"0.85rem",border:`1px solid ${C.rustEdge}`,cursor:"pointer"}}>⚠️ Erase everything</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={()=>setResetOpen(true)} style={{display:"block",margin:"0 auto",padding:"0.25rem 0.5rem",background:"transparent",border:"none",color:C.faint,fontSize:"0.7rem",cursor:"pointer"}}>Reset progress…</button>
+        )}
+      </div>
+
       {/* Below every control and above the legal footer: the one band of this
           screen where a mis-tap costs a stray ad click rather than a reset, and
           where holding space open pushes nothing the user was aiming at. */}
