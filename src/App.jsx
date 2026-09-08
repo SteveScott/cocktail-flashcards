@@ -102,6 +102,12 @@ const THEMES = {
     // the stack — that ordering IS the gradient. Reordering the buttons without
     // reordering these turns the sweep back into four unrelated colours, which
     // is what it looked like before.
+    //
+    // Which puts Index on the loud end of the ramp, and that is the right way
+    // round: it is the one mode that shows the whole book to everyone, paywall
+    // or not, so it is the button worth drawing the eye. If the ramp is ever
+    // reversed, reverse it in both schemes — Index earns the end stop, not a
+    // particular hue.
     navStudy:        "#865c28",   // amber     h=70
     navQuiz:         "#90543f",   // copper    h=40
     navEightySix:    "#90505b",   // red       h=10
