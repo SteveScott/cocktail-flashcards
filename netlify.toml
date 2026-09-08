@@ -3,6 +3,13 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# Every top-level file in the functions directory becomes a deployed function,
+# named after the file, and Netlify rejects a name containing anything but
+# letters, digits, hyphens and underscores. A test file named for what it tests
+# — foo.test.mjs — therefore asks for a function called "foo.test" and fails the
+# WHOLE deploy, not just itself, with "failed to deploy: foo.test". That is why
+# the suite lives in /tests and not next to the code it exercises: see the test
+# script in package.json. Keep it there.
 [functions]
   node_bundler = "esbuild"
 
