@@ -370,10 +370,26 @@ on the top 50 in both quizzes.
 
 **Self Quiz** grading is self-reported and does not touch study scores. **86 It**
 grades itself: right only when every real ingredient survives and every impostor
-is gone. Its impostors are drawn from `CODEX`, a frequency-weighted index of every
-ingredient in the corpus — deliberately the whole corpus and not the player's
+is gone. Its impostors are drawn from `CODEX`, a table of every ingredient in the
+corpus against a probability — deliberately the whole corpus and not the player's
 pool, because an impostor is an ingredient name rather than a recipe, and a
 smaller draw would make the free game easier rather than smaller.
+
+`buildCodex()` gives each ingredient a `frequency` (its share of all 1211
+ingredient mentions, 0–1) and a `weight` (the draw probability, also 0–1 and also
+summing to 1). Weight is frequency raised to `IMPOSTOR_EMPHASIS` and renormalised,
+and the exponent exists because plain frequency is not sharp enough: 124 of the
+242 ingredients appear in exactly one recipe, and drawn in proportion to their
+frequency that tail takes 10% of every draw between them — two ingredients a
+round the player has no reason to have heard of. At 1.5 the same tail takes 2.4%,
+one every other round, and Tawny Port goes from 0.083% of draws to 0.019%.
+
+`npm run ingredient-frequency` prints the table — recipe count, frequency, weight,
+and where each ingredient actually landed over 2000 simulated rounds. Pass a
+substring for one ingredient (`-- Port`) or `--all` for all 242. The distribution
+is the feature, so check it there rather than by playing a round: an ingredient at
+one-in-five-thousand turning up twice in an evening is bad luck, not a bug, and
+the two are indistinguishable from the table.
 
 ### Tried
 
@@ -672,6 +688,7 @@ npm run build     # bundle + 322 static recipe pages + sitemap into dist/
 npm run preview   # serve dist/
 npm run lint      # eslint
 npm run icons     # redraw every icon and splash from scripts/icons.mjs
+npm run ingredient-frequency   # print the 86 It impostor table
 ```
 
 - **Colour.** Two schemes, picked at the foot of the menu screen. **Retro** is

@@ -403,11 +403,11 @@ export function summarize(c) {
 
 // ── The codex: every ingredient the corpus knows, and how often ─────────────
 //
-// Used to draw plausible wrong answers for the "86 It" quiz. Frequency is the
-// whole point: an ingredient in 73 recipes is a far better impostor than one
-// that appears once, because the question worth asking is "does this belong in
-// THIS drink", not "have you ever heard of this". Half of all ingredient
-// mentions come from the top 21 items, so weighting keeps the game hard.
+// A table of every ingredient name in the corpus against a probability between
+// 0 and 1, used to draw plausible wrong answers for the "86 It" quiz. Frequency
+// is the whole point: an ingredient in 74 recipes is a far better impostor than
+// one that appears once, because the question worth asking is "does this belong
+// in THIS drink", not "have you ever heard of this".
 
 // An impostor has to read as an ingredient on its own. These do not: stated
 // alternatives ("Bourbon or Rye"), and entries carrying an instruction
@@ -434,6 +434,26 @@ export function ingredientLabels(c) {
   return seen;
 }
 
+// Raw frequency alone is not sharp enough, and the shape of the corpus is why.
+// 242 ingredients share 1211 mentions, but 124 of them appear exactly once, and
+// drawn in proportion to their frequency that one-off tail takes 10% of every
+// draw between them. Two impostors a question, ten questions a round, and a
+// player meets roughly two ingredients-from-nowhere per round — which is how
+// Tawny Port, at 1/1211 on its own, still turns up often enough to look broken.
+//
+// Raising each frequency to a power before normalising fixes it without banning
+// anything: the ranking is unchanged, but the gaps widen. At 1.5 the one-off
+// tail falls from 10% of draws to 2.4% — one obscure ingredient every other
+// round rather than two a round — while Fresh Lemon Juice doubles to 12%. Push
+// it higher and the top of the table starts repeating instead, which reads just
+// as mechanical; this is the exponent that makes rare things rare and common
+// things common without either becoming a tell.
+const IMPOSTOR_EMPHASIS = 1.5;
+
+// The table: every ingredient with `frequency`, its share of all ingredient
+// mentions, and `weight`, the draw probability derived from it. Both are 0..1
+// and both sum to 1 across the codex — `frequency` describes the corpus and is
+// what the table is read against, `weight` is what a draw actually uses.
 export function buildCodex(recipes) {
   const freq = new Map();
   for (const c of recipes) {
@@ -442,7 +462,16 @@ export function buildCodex(recipes) {
       freq.set(label, (freq.get(label) || 0) + 1);
     }
   }
-  return [...freq].map(([label, count]) => ({ label, count }));
+  const mentions = [...freq.values()].reduce((s, n) => s + n, 0) || 1;
+  const table = [...freq].map(([label, count]) => ({
+    label,
+    count,
+    frequency: count / mentions,
+  }));
+  const emphasised = table.map(e => Math.pow(e.frequency, IMPOSTOR_EMPHASIS));
+  const total = emphasised.reduce((s, w) => s + w, 0) || 1;
+  table.forEach((e, i) => { e.weight = emphasised[i] / total; });
+  return table;
 }
 
 // Two names clash when either contains the other. "Gin" cannot be an impostor
@@ -454,18 +483,19 @@ function clashes(a, b) {
   return x.includes(y) || y.includes(x);
 }
 
-// Draw n impostors, weighted by how common each is in the codex. Anything that
-// clashes with a real ingredient — or with an impostor already drawn — is out
-// of the pool before the draw, so a question can never offer the same thing
-// twice under two names.
+// Draw n impostors against the codex's `weight` column. Anything that clashes
+// with a real ingredient — or with an impostor already drawn — is out of the
+// pool before the draw, so a question can never offer the same thing twice
+// under two names. Removing entries leaves the remaining weights summing to
+// less than 1, so each draw renormalises over whatever pool it actually has.
 export function drawImpostors(codex, realLabels, n, rand = Math.random) {
   const out = [];
   let pool = codex.filter(e => !realLabels.some(r => clashes(e.label, r)));
   for (let i = 0; i < n && pool.length > 0; i++) {
-    const total = pool.reduce((s, e) => s + e.count, 0);
+    const total = pool.reduce((s, e) => s + e.weight, 0);
     let r = rand() * total;
     let pick = pool[pool.length - 1];
-    for (const e of pool) { r -= e.count; if (r <= 0) { pick = e; break; } }
+    for (const e of pool) { r -= e.weight; if (r <= 0) { pick = e; break; } }
     out.push(pick.label);
     pool = pool.filter(e => !clashes(e.label, pick.label));
   }
