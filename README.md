@@ -796,4 +796,4 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 | [docs/mobile-google-signin.md](docs/mobile-google-signin.md) | Native Google sign-in for the Capacitor build, and diagnosing failures. |
 | [docs/mobile-monetization.md](docs/mobile-monetization.md) | AdMob, Play Billing and RevenueCat setup, phase by phase. |
 | [docs/store-listing.md](docs/store-listing.md) | The Play listing copy — app name, short and full description — and the claims it is allowed to make. |
-| [docs/backup-restore.md](docs/backup-restore.md) | Taking a backup of every account, the file format, and how a restore merges — progress by union, purchases never revoked. |
+| [docs/backup-restore.md](docs/backup-restore.md) | The high-water mark behind every account, the one-file backup it makes possible, and how a restore merges — progress by union, purchases never revoked. |

@@ -5,18 +5,27 @@
 // engage. The scenario is the one the feature exists for: progress wiped and
 // purchases lost across the board, then restored from a file taken before it.
 import { fetchBackup, restoreBackup } from "../../src/admin-backup.js";
-import { mergeProgress, mergePurchase, describeChange, BACKUP_FORMAT, BACKUP_VERSION }
-  from "./_backup.mjs";
+import { mergePurchase, describeChange, BACKUP_FORMAT, BACKUP_VERSION } from "./_backup.mjs";
+import { mergeProgress } from "../../src/backup-format.js";
 
 // A fake Firestore: 250 accounts, so paging (100/page) and chunking both engage.
+// Two collections, as in the real thing -- users/{uid} follows the current state
+// wherever it goes, highWater/{uid} only ever rises.
 const db = new Map();
+const marks = new Map();
+
+// What the app does on every save (App.jsx -> saveHighWater).
+const save = (uid, progress) => {
+  db.set(uid, { ...db.get(uid), progress });
+  marks.set(uid, mergeProgress(marks.get(uid), progress, uid));
+};
 for (let i = 0; i < 250; i++) {
   db.set(`u${i}`, {
     updatedAt: i,
     adsRemovedStripe: i % 50 === 0, adsRemovedPlay: false, adsRemoved: i % 50 === 0,
     ...(i % 50 === 0 ? { adsRemovedAt: 1000 + i } : {}),
-    progress: { scores: { Negroni: i % 7 }, learned: i % 3 ? [] : ["Negroni"], tried: [], active: ["Sidecar"], deckSize: 20 },
   });
+  save(`u${i}`, { scores: { Negroni: i % 7 }, learned: i % 3 ? [] : ["Negroni"], tried: [], active: ["Sidecar"], deckSize: 20 });
 }
 const PAGE = 100;
 
@@ -33,7 +42,13 @@ global.fetch = async (url, opts) => {
       users: page.map((uid) => {
         const d = db.get(uid);
         const { progress, updatedAt, ...purchase } = d;
-        return { uid, email: `${uid}@example.com`, updatedAt, purchase, progress };
+        return {
+          uid, email: `${uid}@example.com`, updatedAt,
+          // Purchases from the server-owned document, progress from the mark:
+          // the split admin-backup.mjs makes, for the reasons it gives.
+          purchase,
+          progress: mergeProgress(marks.get(uid) || null, progress || null, uid),
+        };
       }),
       ...(body.cursor ? {} : { adWhitelist: [{ email: "comped@example.com", addedAt: 1 }] }),
       ...(page.length === PAGE ? { nextCursor: page[page.length - 1] } : {}),
@@ -62,8 +77,18 @@ global.fetch = async (url, opts) => {
 let fail = 0;
 const eq = (n, g, w) => { if (JSON.stringify(g) !== JSON.stringify(w)) { fail++; console.log(`FAIL ${n}: got ${JSON.stringify(g)} want ${JSON.stringify(w)}`); } else console.log(`ok   ${n}`); };
 
+// 0. The case this design exists for. u1 peaks, is wiped the next day, and the
+//    download happens the day after that. An export taken from the live
+//    documents would record the wipe; taken from the marks it records the peak.
+save("u1", { scores: { Negroni: 6, Sidecar: 6 }, learned: ["Negroni", "Sidecar"], tried: ["A"], active: [], deckSize: 20 });
+save("u1", { scores: {}, learned: [], tried: [], active: [], deckSize: 20 });   // wiped
+eq("the live document followed the wipe down", db.get("u1").progress.learned, []);
+eq("the mark did not", marks.get("u1").learned, ["Negroni", "Sidecar"]);
+
 // 1. Export stitches all three pages into one file.
 const backup = await fetchBackup("tok");
+eq("the file holds the peak, not the wipe",
+  backup.users.find((u) => u.uid === "u1").progress.learned, ["Negroni", "Sidecar"]);
 eq("paged export returns every account", backup.users.length, 250);
 eq("counts computed", backup.counts, { users: 250, adWhitelist: 1 });
 eq("no cursor left in the file", backup.nextCursor, undefined);
@@ -87,6 +112,7 @@ eq("restore examined everyone", done.examined, 250);
 eq("Pro restored for all 5", done.proRestored, 5);
 eq("progress back", db.get("u3").progress.scores.Negroni, 3);
 eq("learned back", db.get("u0").progress.learned, ["Negroni"]);
+eq("u1 restored to its peak, not its last state", db.get("u1").progress.learned, ["Negroni", "Sidecar"]);
 eq("purchase back", db.get("u50").adsRemoved, true);
 eq("original grant date kept", db.get("u50").adsRemovedAt, 1050);
 

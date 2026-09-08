@@ -2,12 +2,26 @@ import { readFlag } from "./_entitlements.mjs";
 
 // The backup file format, and the rules for folding one back into Firestore.
 //
+// ── One row per user, at their best ─────────────────────────────────────────
+//
+// This is not a snapshot of a moment. Every user carries a HIGH-WATER MARK in
+// highWater/{uid}, which the app raises on every save and which can only ever
+// grow (mergeProgress in src/backup-format.js, enforced again by
+// firestore.rules). The export reads those marks, so the file holds each user
+// at their maximum completed state — not at whatever state they happened to be
+// in when the button was pressed.
+//
+// That is what makes the file date-independent. There is nothing to schedule
+// and no window to miss: a wipe on Tuesday cannot lower Monday's peak, so a
+// download on Wednesday still carries it. One file, always current, always the
+// best each account has ever reached.
+//
 // ── The shape ───────────────────────────────────────────────────────────────
 //
 //   {
 //     "format": "cocktail-flashcards/backup",
-//     "version": 1,
-//     "createdAt": "2026-09-08T13:04:11.912Z",
+//     "version": 2,
+//     "createdAt": "2026-09-08T13:04:11.912Z",   // when downloaded; not what it holds
 //     "projectId": "cocktail-flashcards",
 //     "counts": { "users": 412, "adWhitelist": 3 },
 //     "users": [
@@ -15,8 +29,8 @@ import { readFlag } from "./_entitlements.mjs";
 //         "uid": "V1cVv…",
 //         "email": "drinker@example.com",     // from Auth, for restoring one
 //         "updatedAt": 1757340000000,          //   person by address
-//         "purchase": {                        // what was PAID FOR
-//           "adsRemoved": true,
+//         "purchase": {                        // what was PAID FOR — from
+//           "adsRemoved": true,                //   users/{uid}, server-owned
 //           "adsRemovedStripe": true,
 //           "adsRemovedPlay": false,
 //           "adsRemovedAt": 1756000000000,
@@ -24,8 +38,8 @@ import { readFlag } from "./_entitlements.mjs";
 //           "stripeSessionId": "cs_…",
 //           "revenueCatEventId": null
 //         },
-//         "progress": {                        // what was EARNED
-//           "scores": { "Negroni": 6, "Sidecar": 2 },
+//         "progress": {                        // what was EARNED — the
+//           "scores": { "Negroni": 6 },        //   high-water mark
 //           "learned": ["Negroni"],
 //           "tried": ["Negroni", "Sazerac"],
 //           "active": ["Sidecar", "Martini"],
@@ -37,22 +51,25 @@ import { readFlag } from "./_entitlements.mjs";
 //     "adWhitelist": [{ "email": "comped@example.com", "addedAt": 1, "addedBy": "…" }]
 //   }
 //
-// Purchase and progress are separate blocks rather than one flat document
-// because they are restored under opposite rules, and splitting them puts that
-// difference in the data where it can be read, instead of only in the code:
-// progress is merged, purchases are never lowered.
+// Purchase and progress are separate blocks, and they come from separate
+// documents, because they are trusted differently. Progress is client-written,
+// so a restore pushing it back into users/{uid} may only ever carry progress —
+// were an entitlement to ride along in a document its owner can write, any user
+// could grant themselves Pro by writing to their own mark and waiting for a
+// restore. Purchases are therefore read from users/{uid}, which no client can
+// write (firestore.rules), and merged under their own rule below.
 //
 // ── The one invariant ───────────────────────────────────────────────────────
 //
 // A restore only ever ADDS. No field is deleted, no number goes down, no true
 // becomes false, no user disappears. That is what makes it safe to run against
-// a live database, safe to run twice, and safe to run from a backup that is
-// older than the data already there — the worst a stale file can do is nothing.
-// Every merge below has to preserve it.
+// a live database, safe to run twice, and safe to run from a file older than
+// the data already there — the worst a stale file can do is nothing. Every
+// merge below has to preserve it.
 
 // Shared with the browser half, which validates a file before uploading it and
 // must not pull firebase-admin into the bundle to do so.
-export { BACKUP_FORMAT, BACKUP_VERSION } from "../../src/backup-format.js";
+export { BACKUP_FORMAT, BACKUP_VERSION, mergeProgress } from "../../src/backup-format.js";
 import { BACKUP_FORMAT, BACKUP_VERSION } from "../../src/backup-format.js";
 
 // Everything on a user document that records a purchase rather than progress.
@@ -75,54 +92,13 @@ export const PURCHASE_FIELDS = [
 // the document describing a purchase that has since been superseded.
 const PURCHASE_REFS = ["adsRemovedSource", "stripeSessionId", "revenueCatEventId"];
 
-const DEFAULT_DECK_SIZE = 20;
-
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const union = (a, b) => Array.from(new Set([...asArray(a), ...asArray(b)]));
 
 // Pull the purchase block out of a live Firestore document.
 export function purchaseOf(data = {}) {
   const out = {};
   for (const f of PURCHASE_FIELDS) if (data[f] !== undefined) out[f] = data[f];
   return out;
-}
-
-// Merge two progress states, taking the best of each: the higher score, the
-// union of every list. This is the same rule App.jsx -> mergeStates() applies
-// when it folds a device's progress into an account, for the same reason —
-// having mastered a cocktail is a fact one copy of the data cannot un-know.
-//
-// `active` is left as the union rather than trimmed to a deck size. Only the
-// client knows which cocktails the pool currently covers (the free top 50, or
-// the whole book with Pro), and its refillDeck() cuts the deck back to size on
-// the next load. Trimming here would mean guessing, and guessing low loses a
-// card the user was studying.
-export function mergeProgress(live, backup, uid) {
-  const a = live || null;
-  const b = backup || null;
-  if (!a && !b) return null;
-
-  const scores = { ...(a?.scores || {}) };
-  for (const [name, value] of Object.entries(b?.scores || {})) {
-    const n = Number(value) || 0;
-    scores[name] = Math.max(Number(scores[name]) || 0, n);
-  }
-
-  const learned = union(a?.learned, b?.learned);
-  const learnedSet = new Set(learned);
-
-  return {
-    scores,
-    learned,
-    tried: union(a?.tried, b?.tried),
-    // A cocktail that has been mastered is not also still waiting in the deck.
-    active: union(a?.active, b?.active).filter((n) => !learnedSet.has(n)),
-    masterMode: Boolean(a?.masterMode || b?.masterMode),
-    // A current preference rather than progress, so the live value wins and the
-    // backup only supplies one where the document has none.
-    deckSize: a?.deckSize || b?.deckSize || DEFAULT_DECK_SIZE,
-    uid,
-  };
 }
 
 // Merge purchases, monotonically. An entitlement can only be turned ON here.
@@ -187,6 +163,8 @@ export function describeChange(liveData = {}, merged = {}) {
 export function validateBackup(backup) {
   if (!backup || typeof backup !== "object") throw new Error("That file is not a backup.");
   if (backup.format !== BACKUP_FORMAT) throw new Error("That file is not a Cocktail Flashcards backup.");
+  // A v1 file (a point-in-time snapshot, before high-water marks) restores
+  // perfectly well: the merge treats whatever it holds as one more lower bound.
   if (backup.version > BACKUP_VERSION) {
     throw new Error(`That backup was written by a newer version of the app (v${backup.version}). Update before restoring it.`);
   }

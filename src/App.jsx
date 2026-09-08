@@ -8,6 +8,7 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { fetchBackup, saveBackupFile, readBackupFile, restoreBackup } from "./admin-backup.js";
+import { mergeProgress, growsFrom, sameProgress } from "./backup-format.js";
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
 import { norm, getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
@@ -524,6 +525,10 @@ export default function App() {
   // keeps the live value reachable in there, so a merge can never narrow the pool
   // of someone who has already been confirmed as Pro.
   const proRef = useRef(false);
+  // This account's high-water mark: everything it has ever had, held here so a
+  // save does not have to read it back first. Seeded from highWater/{uid} at
+  // sign-in, raised on every save, never lowered — see saveHighWater().
+  const highWaterRef = useRef(null);
   useEffect(() => { proRef.current = isPro; }, [isPro]);
 
   // Is this visitor actually being served web ads right now? It no longer
@@ -604,6 +609,9 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       stopDoc();
+      // Whoever signs in next has their own mark; one account's must never be
+      // written to another's document.
+      highWaterRef.current = null;
       if (u) {
         // The first snapshot is the sign-in handshake (reconcile whatever is on
         // this device with the account); later ones are updates from elsewhere.
@@ -649,6 +657,18 @@ export default function App() {
                 .catch(e => console.error("Cloud sync failed", e));
               return stamped;
             });
+            // Seed the high-water mark before the first save can raise it. Read
+            // separately from users/{uid}: it is a different document, and on a
+            // device that has never saved it is the only place this account's
+            // best state exists. A failure here is not fatal — the mark starts
+            // from what this device knows and grows from there, and the rules
+            // reject any write that would lower it.
+            getDoc(doc(db, "highWater", u.uid))
+              .then(hw => {
+                highWaterRef.current = mergeProgress(
+                  highWaterRef.current, hw.exists() ? hw.data()?.progress : null, u.uid);
+              })
+              .catch(e => console.error("Could not read the high-water mark", e));
             setDi(0); setRevealed(false);
             return;
           }
@@ -732,6 +752,37 @@ export default function App() {
     }
   }, []);
 
+  // Raise this account's high-water mark alongside the ordinary save.
+  //
+  // users/{uid} holds the CURRENT state and so follows it down: a reset, or a
+  // bug of the kind that emptied accounts, writes the emptied state straight
+  // over the full one. highWater/{uid} is the same progress under a different
+  // rule — it only ever grows — so the best an account has ever reached
+  // survives whatever happens to the live document. It is what the admin backup
+  // exports, and it is why that file needs no schedule and no snapshot: the
+  // peak is already recorded, whenever the download happens.
+  //
+  // Progress only. This document is client-written and a restore pushes it back
+  // into users/{uid}, so an entitlement riding along here would be one any user
+  // could grant themselves. firestore.rules refuses any other field.
+  function saveHighWater(uid, progress) {
+    const raised = mergeProgress(highWaterRef.current, progress, uid);
+    if (!raised) return;
+    if (!growsFrom(highWaterRef.current, raised)) {
+      // Unreachable unless the merge itself is wrong: the rules would reject
+      // this write anyway, so fail loudly here rather than silently there.
+      console.error("High-water merge would lose progress; not writing", uid);
+      return;
+    }
+    // Nothing new to record: skip the write rather than spend one saying so.
+    // Studying re-reads and re-saves constantly, and the mark only moves when
+    // something is actually learned, tried or scored higher.
+    if (sameProgress(highWaterRef.current, raised)) return;
+    highWaterRef.current = raised;
+    setDoc(doc(db, "highWater", uid), { progress: raised, updatedAt: Date.now() }, { merge: true })
+      .catch(e => console.error("High-water save failed", e));
+  }
+
   // Push progress to the cloud whenever it changes and a user is signed in.
   useEffect(() => {
     if (!firebaseEnabled || !user) return;
@@ -739,6 +790,7 @@ export default function App() {
       // merge:true so autosaving progress never clobbers server-owned fields
       // like `adsRemoved` (set by the Stripe webhook via the Admin SDK).
       setDoc(doc(db, "users", user.uid), { progress: st, updatedAt: Date.now() }, { merge: true }).catch(e => console.error("Cloud save failed", e));
+      saveHighWater(user.uid, st);
     }, 800);
     return () => clearTimeout(t);
   }, [st, user]);
@@ -934,7 +986,7 @@ export default function App() {
       const idToken = await user.getIdToken();
       const backup = await fetchBackup(idToken, n => setBackupMsg(`Read ${n} accounts…`));
       saveBackupFile(backup);
-      setBackupMsg(`Saved ${backup.counts.users} accounts and ${backup.counts.adWhitelist} whitelist entries.`);
+      setBackupMsg(`Saved ${backup.counts.users} accounts at their best, and ${backup.counts.adWhitelist} whitelist entries.`);
     } catch (e) {
       console.error("Backup failed", e);
       setBackupMsg(""); setBackupErr(e.message || "Backup failed.");
@@ -950,7 +1002,7 @@ export default function App() {
     try {
       const backup = await readBackupFile(file);
       setLoadedBackup(backup);
-      setBackupMsg(`Loaded ${backup.users.length} accounts, taken ${new Date(backup.createdAt).toLocaleString()}.`);
+      setBackupMsg(`Loaded ${backup.users.length} accounts, downloaded ${new Date(backup.createdAt).toLocaleString()}.`);
     } catch (err) {
       setLoadedBackup(null);
       setBackupErr(err.message || "Could not read that file.");
@@ -966,7 +1018,7 @@ export default function App() {
     if (!dryRun && !confirm(
       who
         ? `Restore ${who} from this backup?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.`
-        : `Restore all ${loadedBackup.users.length} accounts from this backup?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.`
+        : `Restore all ${loadedBackup.users.length} accounts from this backup?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.\n\nNothing can be lost by running this, including from an old file.`
     )) return;
 
     setBackupErr(""); setRestoreResult(null); setBackupBusy(dryRun ? "preview" : "restore");
@@ -1547,10 +1599,13 @@ export default function App() {
       {/* Backup and restore. The endpoints behind both buttons run on the
           server with the Admin SDK, because firestore.rules deliberately forbids
           any client — an admin's included — from listing the users collection or
-          reading someone else's document. A restore can only ever ADD: scores
-          take whichever value is higher, lists are unioned, and a purchase can
-          be restored but never revoked, so running one against the live database
-          is safe even from a file older than the data already in it. */}
+          reading someone else's document.
+
+          The file holds every account at its BEST, not as it was at the moment
+          of download: progress comes from the high-water marks the app raises on
+          every save. So there is nothing to schedule and no window to miss, and
+          a restore can only ever ADD — scores take whichever value is higher,
+          lists are unioned, and a purchase can be restored but never revoked. */}
       {isAdmin && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
           <button onClick={()=>setShowBackup(v=>!v)} style={{background:"transparent",border:"none",color:C.brass,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
@@ -1558,9 +1613,13 @@ export default function App() {
           </button>
           {showBackup && (
             <div style={{marginTop:"0.75rem"}}>
-              <button onClick={downloadBackup} disabled={Boolean(backupBusy)} style={{...btn(C.brass),color:C.ink,width:"100%",padding:"0.55rem",fontSize:"0.8rem",marginBottom:"0.75rem",opacity:backupBusy?0.6:1}}>
+              <button onClick={downloadBackup} disabled={Boolean(backupBusy)} style={{...btn(C.brass),color:C.ink,width:"100%",padding:"0.55rem",fontSize:"0.8rem",marginBottom:"0.4rem",opacity:backupBusy?0.6:1}}>
                 {backupBusy === "backup" ? "Downloading…" : "⬇ Download backup"}
               </button>
+              <div style={{fontSize:"0.72rem",color:C.faint,marginBottom:"0.9rem",lineHeight:1.5}}>
+                Every account at its best, not as it stands right now — so the
+                date you take it does not matter. One file replaces the last.
+              </div>
 
               <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.faint,marginBottom:"0.5rem"}}>Restore from a file</div>
               <input type="file" accept="application/json,.json" onChange={pickBackupFile} disabled={Boolean(backupBusy)}

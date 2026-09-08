@@ -1,9 +1,19 @@
 import { FieldPath } from "firebase-admin/firestore";
 import { getAdmin } from "./_firebaseAdmin.mjs";
 import { requireAdmin, errorResponse } from "./_adminAuth.mjs";
-import { BACKUP_FORMAT, BACKUP_VERSION, purchaseOf } from "./_backup.mjs";
+import { BACKUP_FORMAT, BACKUP_VERSION, purchaseOf, mergeProgress } from "./_backup.mjs";
 
-// Exports every user document, and the ad whitelist, as one backup file.
+// Exports every account at its BEST, and the ad whitelist, as one backup file.
+//
+// Progress comes from highWater/{uid} — the mark the app raises on every save,
+// which can only ever grow — rather than from the live document, which follows
+// the current state down. That is the whole reason this file needs no schedule
+// and no snapshot: a wipe cannot lower a peak that was already recorded, so a
+// download at any later moment still carries it.
+//
+// Purchases come from users/{uid} instead, and deliberately so. The mark is
+// client-written, and a restore pushes it back; an entitlement carried in a
+// document its owner can write would be one any user could grant themselves.
 //
 // This has to run server-side: firestore.rules sets `allow list: if false` on
 // users/{uid} precisely so that no client — an administrator's included — can
@@ -32,6 +42,19 @@ export async function handler(event) {
     if (cursor) query = query.startAfter(db.collection("users").doc(cursor));
     const snap = await query.get();
 
+    // The marks for this page, in one round trip. A user who has not saved
+    // since high-water marks shipped has none yet; their live progress is then
+    // the best record there is, and merging the two means the export self-heals
+    // as those accounts come back rather than needing a migration.
+    let marks = {};
+    if (snap.docs.length) {
+      const refs = snap.docs.map((d) => db.collection("highWater").doc(d.id));
+      const markDocs = await db.getAll(...refs);
+      marks = Object.fromEntries(
+        markDocs.filter((d) => d.exists).map((d) => [d.id, d.data()?.progress || null])
+      );
+    }
+
     // The address is what makes "restore this one person" answerable from a
     // support email, so it is looked up here rather than left to whoever reads
     // the file. It lives in Auth, not Firestore, and a failure to read it is not
@@ -55,7 +78,7 @@ export async function handler(event) {
         // Split deliberately: these two halves are restored under opposite
         // rules. See _backup.mjs.
         purchase: purchaseOf(data),
-        progress: data.progress || null,
+        progress: mergeProgress(marks[doc.id] || null, data.progress || null, doc.id),
       };
     });
 

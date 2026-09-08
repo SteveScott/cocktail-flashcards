@@ -4,8 +4,8 @@
 // that it can only ever add, and that a purchase can never be lost to a stale
 // file -- so they get a regression guard even though the project carries no
 // test framework. Plain node, no runner, no dependency.
-import { mergeProgress, mergePurchase, describeChange, validateBackup, BACKUP_FORMAT }
-  from "./_backup.mjs";
+import { mergePurchase, describeChange, validateBackup, BACKUP_FORMAT } from "./_backup.mjs";
+import { mergeProgress, growsFrom, sameProgress } from "../../src/backup-format.js";
 
 let fail = 0;
 const eq = (name, got, want) => {
@@ -64,6 +64,49 @@ const shrank = Object.entries(live.scores).some(([k,v]) => (m.scores[k]||0) < v)
   || live.learned.some(n => !m.learned.includes(n))
   || live.tried.some(n => !m.tried.includes(n));
 eq("no live value ever shrinks", shrank, false);
+
+// ── the high-water ratchet: the claim the whole file rests on ──────────────
+// A mark, then the account is wiped, then it saves again. The mark must not
+// follow it down -- this is the failure the feature exists to survive.
+const peak = mergeProgress(null, { scores:{Negroni:6,Sidecar:4}, learned:["Negroni"], tried:["A","B"], active:["Sidecar"], masterMode:true, deckSize:20 }, "u1");
+const wiped = { scores:{}, learned:[], tried:[], active:[], deckSize:20 };
+const afterWipe = mergeProgress(peak, wiped, "u1");
+eq("a wipe cannot lower the mark", afterWipe, peak);
+eq("and the rules would accept that write", growsFrom(peak, afterWipe), true);
+
+// Genuine new progress still raises it.
+const raised = mergeProgress(peak, { scores:{Negroni:6,Daiquiri:3}, learned:["Negroni","Sidecar"], tried:["A","B","C"], active:[], deckSize:20 }, "u1");
+eq("real progress raises the mark", [raised.scores.Daiquiri, raised.learned.length, raised.tried.length], [3, 2, 3]);
+eq("raising it is still a growth", growsFrom(peak, raised), true);
+
+// growsFrom is what the client checks before writing, mirroring the rules.
+eq("shrinking is caught", growsFrom(peak, wiped), false);
+eq("dropping one mastered cocktail is caught",
+  growsFrom(peak, { ...peak, learned: [] }), false);
+eq("dropping a tried mark is caught", growsFrom(peak, { ...peak, tried: ["A"] }), false);
+eq("forgetting a scored cocktail is caught",
+  growsFrom(peak, { ...peak, scores: { Negroni: 6 } }), false);
+eq("turning masterMode back off is caught",
+  growsFrom(peak, { ...peak, masterMode: false }), false);
+eq("emptying the deck is fine -- mastering does that",
+  growsFrom(peak, { ...peak, active: [] }), true);
+eq("nothing to compare against yet", growsFrom(null, peak), true);
+
+// Order must not matter: two devices raising the same mark from different
+// states have to converge, or the "max" depends on who saved last.
+const devA = { scores:{Negroni:6}, learned:["Negroni"], tried:["A"], active:["X"], deckSize:20 };
+const devB = { scores:{Negroni:2,Sidecar:5}, learned:[], tried:["B"], active:["Y"], masterMode:true, deckSize:20 };
+eq("commutative", mergeProgress(devA, devB, "u"), mergeProgress(devB, devA, "u"));
+eq("associative", mergeProgress(mergeProgress(devA, devB, "u"), peak, "u"),
+                  mergeProgress(devA, mergeProgress(devB, peak, "u"), "u"));
+eq("idempotent under repetition", mergeProgress(mergeProgress(devA, devB, "u"), devB, "u"),
+                                  mergeProgress(devA, devB, "u"));
+
+// The write-skip: a save that learned nothing must not spend a document write.
+eq("an unchanged mark is recognised", sameProgress(peak, mergeProgress(peak, wiped, "u1")), true);
+eq("a raised mark is not", sameProgress(peak, raised), false);
+eq("order alone is not a change",
+  sameProgress(peak, { ...peak, learned: [...peak.learned].reverse(), tried: [...peak.tried].reverse() }), true);
 
 // ── summary + validation ───────────────────────────────────────────────────
 eq("dry run counts additions",
