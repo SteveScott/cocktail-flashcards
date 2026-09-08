@@ -1235,8 +1235,31 @@ export default function App() {
       return refillDeck({...p, scores, masterMode:m}, np);
     });
   }
+  // Reset is the one irreversible thing in the app. It does not just reshuffle
+  // the deck: it drops every score, every mastered cocktail and every tried
+  // mark, and the autosave effect then writes that emptied state over the copy
+  // held under the account, so signing in again does not bring any of it back.
+  // "Reset all progress?" was far too easy to wave through for something that
+  // final, so the confirm now names each thing that goes and counts it.
   function reset() {
-    if (!confirm("Reset all progress?")) return;
+    const mastered = st.learned?.length || 0;
+    const triedCount = st.tried?.length || 0;
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const warning = [
+      "\u26a0\ufe0f  WARNING \u2014 THIS CANNOT BE UNDONE  \u26a0\ufe0f",
+      "",
+      "Resetting erases ALL of your progress: on this device, and the copy saved to your account.",
+      "",
+      `  \u2022 ${plural(mastered, "cocktail")} mastered`,
+      `  \u2022 ${plural(triedCount, "drink")} marked as tried`,
+      "  \u2022 every quiz score you have earned",
+      "  \u2022 your current study deck",
+      "",
+      "There is no undo. None of it can be recovered.",
+      "",
+      "Are you absolutely sure you want to erase everything?",
+    ].join("\n");
+    if (!confirm(warning)) return;
     setSt(initState(masterOn)); setDi(0); setRevealed(false);
   }
   // Add or remove a cocktail from the study deck (st.active) by name. Adding a
@@ -1484,7 +1507,13 @@ export default function App() {
         <div style={{background:C.jade,height:"100%",width:`${(learned/total)*100}%`,transition:"width 0.5s"}} />
       </div>
 
-      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn(C.peacock),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
+      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn(C.peacock),width:"100%",marginBottom:"0.3rem"}}>📚 Study Mode</button>
+      {/* Reset is the fine print of the deck this button opens, so it is set as a
+          footer to it rather than as a fifth thing to tap. Small, centred, and no
+          wider than its own text: a full-width bordered button gave a destructive
+          action the same weight and the same tap target as the four that only
+          navigate. */}
+      <button onClick={reset} style={{display:"block",margin:"0 auto 0.9rem",padding:"0.25rem 0.5rem",background:"transparent",border:"none",color:C.rust,fontSize:"0.7rem",fontWeight:600,cursor:"pointer"}}>⚠️ Reset progress</button>
       <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn(C.plum),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
       <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn(C.oxblood),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
       <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn(C.cognac),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
@@ -1511,8 +1540,6 @@ export default function App() {
           </button>
         )}
       </div>
-      <button onClick={reset} style={{width:"100%",padding:"0.6rem",borderRadius:8,background:"transparent",color:C.rust,fontWeight:600,fontSize:"0.85rem",border:`1px solid ${C.rustEdge}`,cursor:"pointer"}}>Reset Progress</button>
-
       <div style={{marginTop:"1.5rem"}}>
         <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.faint,marginBottom:"0.5rem"}}>Colour scheme</div>
         <div role="group" aria-label="Colour scheme" style={{display:"flex",gap:"0.6rem"}}>
