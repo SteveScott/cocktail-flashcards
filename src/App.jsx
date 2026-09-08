@@ -510,9 +510,12 @@ export default function App() {
   const [emailBusy, setEmailBusy] = useState(false);
   // Account deletion — required by Play for any app that offers account creation.
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  // Whether the reset control has been deliberately opened. Collapsed by default
-  // so the one irreversible action in the app is never a single tap away.
-  const [resetOpen, setResetOpen] = useState(false);
+  // The Progress screen's own busy flag and result line, for the restore a user
+  // runs on their own account. Separate from the admin panel's `backupBusy`:
+  // both live on this screen now, and one running must not grey out the other.
+  const [selfBusy, setSelfBusy] = useState(false);
+  const [selfMsg, setSelfMsg] = useState("");
+  const [selfErr, setSelfErr] = useState("");
   // The uid whose cloud progress this device has actually read back and
   // reconciled with. Until it matches the signed-in user, `st` is only what this
   // device happened to be holding, and nothing may be written up from it.
@@ -1057,6 +1060,55 @@ export default function App() {
     } finally { setBackupBusy(""); }
   }
 
+  // Restore this account's OWN progress, to the maximum it has ever reached.
+  //
+  // No server, and no admin: highWater/{uid} is this user's own document and
+  // firestore.rules already lets its owner read it (`allow get` on a uid match),
+  // so the whole restore is a read and a merge on the client. The admin endpoint
+  // below stays for the case this cannot cover — restoring somebody else, or
+  // restoring a purchase, which lives in a ledger no client may read.
+  //
+  // Folded in with mergeStates(), the same union-and-max the sign-in handshake
+  // uses to reconcile a device with its account. That is what makes this safe to
+  // press at any time, including by someone who has not lost anything: it only
+  // ever ADDS. A score already higher here stays, a cocktail learned since the
+  // mark was last raised is kept, and pressing it twice does nothing the second
+  // time. The autosave effect writes the result up as it would any other change.
+  async function restoreOwnProgress() {
+    setSelfErr(""); setSelfMsg(""); setSelfBusy(true);
+    try {
+      const snap = await getDoc(doc(db, "highWater", user.uid));
+      // Unioned with the mark already in memory rather than taken raw: this
+      // device may have raised it since sign-in, and a restore must not be the
+      // one thing that walks progress backwards.
+      const peak = mergeProgress(highWaterRef.current, snap.exists() ? snap.data()?.progress : null, user.uid);
+      if (!peak) {
+        setSelfMsg("There is no saved progress for this account yet — nothing to restore.");
+        return;
+      }
+      highWaterRef.current = peak;
+
+      // Counted against this render's state, for the message only; the write
+      // below re-merges from `prev` so nothing that lands in between is lost.
+      const merged = mergeStates(st, peak, proRef.current);
+      const learnedBack = (merged.learned?.length || 0) - (st.learned?.length || 0);
+      const triedBack = (merged.tried?.length || 0) - (st.tried?.length || 0);
+      const scoresBack = Object.keys(merged.scores || {})
+        .filter((n) => (Number(merged.scores[n]) || 0) > (Number(st.scores?.[n]) || 0)).length;
+
+      setSt(prev => ({ ...mergeStates(prev, peak, proRef.current), uid: user.uid }));
+      setDi(0); setRevealed(false);
+
+      const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+      setSelfMsg(learnedBack || triedBack || scoresBack
+        ? `Restored to your maximum progress \u2014 ${plural(learnedBack, "cocktail")} mastered, ${plural(triedBack, "tried mark")} and ${plural(scoresBack, "score")} brought back.`
+        : "Your progress is already at its maximum — there was nothing to bring back.");
+    } catch (e) {
+      console.error("Restore failed", e);
+      setSelfErr("Could not reach your saved progress. Check your connection and try again.");
+    } finally { setSelfBusy(false); }
+  }
+
   // Deletes the cloud account and its data, then clears this device. The server
   // does the work — firestore.rules forbids clients deleting users/{uid}, and
   // the client SDK's deleteUser() rejects sessions older than a few minutes.
@@ -1380,32 +1432,45 @@ export default function App() {
       return refillDeck({...p, scores, masterMode:m}, np);
     });
   }
-  // Reset is the one irreversible thing in the app. It does not just reshuffle
-  // the deck: it drops every score, every mastered cocktail and every tried
-  // mark, and the autosave effect then writes that emptied state over the copy
-  // held under the account, so signing in again does not bring any of it back.
-  // "Reset all progress?" was far too easy to wave through for something that
-  // final, so the confirm now names each thing that goes and counts it.
+  // Clearing drops every score, every mastered cocktail and every tried mark,
+  // and the autosave effect then writes that emptied state over the copy held
+  // under the account. "Reset all progress?" was far too easy to wave through,
+  // so the confirm names each thing that goes and counts it.
+  //
+  // What it no longer claims is that the loss is permanent. For a signed-in
+  // account it is not: highWater/{uid} keeps the maximum progress ever reached
+  // and only ever grows, so clearing cannot lower it and Restore Progress puts
+  // it straight back. Signed out there is no such copy, and the warning says so
+  // — the same button really is irreversible in that case, and a confirm that
+  // overstated the risk for one user would understate it for the other.
   function reset() {
     const mastered = st.learned?.length || 0;
     const triedCount = st.tried?.length || 0;
     const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const recoverable = Boolean(firebaseEnabled && user);
     const warning = [
-      "\u26a0\ufe0f  WARNING \u2014 THIS CANNOT BE UNDONE  \u26a0\ufe0f",
+      recoverable
+        ? "\u26a0\ufe0f  CLEAR ALL PROGRESS  \u26a0\ufe0f"
+        : "\u26a0\ufe0f  WARNING \u2014 THIS CANNOT BE UNDONE  \u26a0\ufe0f",
       "",
-      "Resetting erases ALL of your progress: on this device, and the copy saved to your account.",
+      "This erases ALL of your progress: on this device, and the copy saved to your account.",
       "",
       `  \u2022 ${plural(mastered, "cocktail")} mastered`,
       `  \u2022 ${plural(triedCount, "drink")} marked as tried`,
       "  \u2022 every quiz score you have earned",
       "  \u2022 your current study deck",
       "",
-      "There is no undo. None of it can be recovered.",
+      recoverable
+        ? "Your account keeps your maximum progress \u2014 the best you have ever reached. Restore Progress will bring it back."
+        : "You are not signed in, so there is no saved copy to restore from. None of it can be recovered.",
       "",
-      "Are you absolutely sure you want to erase everything?",
+      "Clear your progress now?",
     ].join("\n");
     if (!confirm(warning)) return;
-    setSt(initState(masterOn)); setDi(0); setRevealed(false); setResetOpen(false);
+    setSt(initState(masterOn)); setDi(0); setRevealed(false);
+    setSelfErr(""); setSelfMsg(recoverable
+      ? "Progress cleared. Restore Progress will bring back your maximum progress."
+      : "Progress cleared.");
   }
   // Add or remove a cocktail from the study deck (st.active) by name. Adding a
   // cocktail also gives it a starting score and pulls it out of `learned` so it
@@ -1480,6 +1545,133 @@ export default function App() {
   // The admin form stacks in a narrow footer column, so the fields take the full
   // width rather than the flex-basis pairing they used inside the account card.
   const stackedField = { width:"100%", boxSizing:"border-box", background:C.ink, border:`1px solid ${C.rule}`, borderRadius:8, padding:"0.4rem 0.6rem", fontSize:"0.8rem", color:C.parchment };
+
+  // The Progress screen. Restoring and clearing are the same subject from
+  // opposite ends, and they were in different places — clearing at the foot of
+  // the menu, restoring in an admin panel no ordinary user could see. They are
+  // one screen now, one tap off the menu, and the restore is the user's own.
+  //
+  // Green above red, and the green one first: the recoverable action is the one
+  // most people arriving here actually want, and reading order should not put
+  // the destructive one under the thumb of somebody scanning for help.
+  //
+  // The two fills are the study screen's own — jadeDeep from "Got It", oxblood
+  // from "Missed It" — so yes and no read the same here as they do on a card.
+  if (mode === "progress") return (
+    <div style={page}><div style={wrap}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+        <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer"}}>← Menu</button>
+        <span style={{color:C.muted,fontSize:"0.85rem"}}>{learned} of {total} mastered</span>
+      </div>
+
+      <h1 style={{...C.ui.h1,margin:"0 0 0.35rem",color:C.ivory}}>Progress</h1>
+      <p style={{color:C.faint,fontSize:"0.78rem",lineHeight:1.6,marginTop:0,marginBottom:"1.5rem"}}>
+        Your account keeps your <strong style={{color:C.parchment,fontWeight:700}}>maximum progress</strong> — the
+        best you have ever reached, on any device. It only ever grows, so nothing
+        that happens here can lower it and your progress can always be restored
+        to that maximum.
+      </p>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.75rem"}}>
+        {[["Mastered",learned,C.jade],["In deck",deck.length,C.peacock],["Tried",st.tried?.length||0,C.brass]].map(([l,v,c])=>(
+          <div key={l} style={frame({borderRadius:12,padding:"0.9rem",textAlign:"center"})}>
+            <div style={{fontSize:"1.75rem",fontWeight:800,color:c}}>{v}</div>
+            <div style={{fontSize:"0.75rem",color:C.muted,marginTop:2}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={restoreOwnProgress}
+        disabled={!firebaseEnabled || !user || selfBusy}
+        style={{...btn(C.jadeDeep),width:"100%",marginBottom:"0.5rem",opacity:(!firebaseEnabled||!user||selfBusy)?0.5:1,cursor:(!firebaseEnabled||!user||selfBusy)?"not-allowed":"pointer"}}>
+        {selfBusy ? "Restoring…" : "♻️ Restore Progress"}
+      </button>
+      <div style={{fontSize:"0.75rem",color:C.faint,lineHeight:1.55,marginBottom:"1.75rem"}}>
+        {firebaseEnabled && user
+          ? "Brings back your maximum progress. Nothing you have now is removed or lowered — anything already ahead of the saved copy is kept, so this is safe to press at any time."
+          : "Sign in to restore. Your maximum progress is kept with your account, so there is nothing saved to restore from while you are signed out."}
+      </div>
+
+      <button onClick={reset} style={{...btn(C.oxblood),width:"100%",marginBottom:"0.5rem"}}>⚠️ Clear Progress</button>
+      <div style={{fontSize:"0.75rem",color:C.faint,lineHeight:1.55,marginBottom:"1.25rem"}}>
+        Erases every score, every cocktail you have mastered and every drink you
+        have marked as tried — on this device and in your account.{" "}
+        {firebaseEnabled && user
+          ? "Your maximum progress is kept, so Restore Progress can bring this back."
+          : "You are signed out, so there is no saved copy and this cannot be undone."}
+      </div>
+
+      {selfMsg && <div role="status" style={frame({borderRadius:12,padding:"0.75rem 1rem",border:`1px solid ${C.jadeEdge}`,fontSize:"0.78rem",color:C.parchment,lineHeight:1.55,marginBottom:"1.25rem"})}>{selfMsg}</div>}
+      {selfErr && <div role="alert" style={frame({borderRadius:12,padding:"0.75rem 1rem",border:`1px solid ${C.rustEdge}`,fontSize:"0.78rem",color:C.ember,lineHeight:1.55,marginBottom:"1.25rem"})}>{selfErr}</div>}
+
+      {/* Restore. The endpoint runs on the server with the Admin SDK, because
+          firestore.rules deliberately forbids any client — an admin's included —
+          from listing the users collection or reading someone else's document.
+
+          No file changes hands. Progress and purchases are already backed up the
+          moment they happen — a high-water mark that only ever grows, and a
+          purchase ledger no client can even read — so this just merges those
+          straight into the account. A restore can only ever ADD: scores take
+          whichever value is higher, lists are unioned, and a purchase can be
+          restored but never revoked. See docs/backup-restore.md. */}
+      {isAdmin && (
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
+          <button onClick={()=>setShowBackup(v=>!v)} style={{background:"transparent",border:"none",color:C.brass,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
+            🛟 Restore Progress (admin) {showBackup ? "▲" : "▼"}
+          </button>
+          {showBackup && (
+            <div style={{marginTop:"0.75rem"}}>
+              <div style={{fontSize:"0.72rem",color:C.faint,marginBottom:"0.75rem",lineHeight:1.5}}>
+                Every account's best-ever progress, and every purchase, already
+                lives safely in Firestore. This merges that back into the account
+                — nothing to download, nothing to upload.
+              </div>
+
+              <input
+                value={restoreWho}
+                onChange={e=>setRestoreWho(e.target.value)}
+                placeholder="Email or uid — blank restores everyone"
+                style={{width:"100%",boxSizing:"border-box",padding:"0.5rem 0.75rem",borderRadius:8,background:C.ink,border:`1px solid ${C.rule}`,color:C.ivory,fontSize:"0.8rem",outline:"none",marginBottom:"0.6rem"}}
+              />
+              <div style={{display:"flex",gap:"0.5rem"}}>
+                <button onClick={()=>runRestore(true)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.peacockLite,fontWeight:600,fontSize:"0.78rem",border:`1px solid ${C.peacockEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
+                  {backupBusy === "preview" ? "Checking…" : "Preview"}
+                </button>
+                <button onClick={()=>runRestore(false)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.brass,fontWeight:700,fontSize:"0.78rem",border:`1px solid ${C.brassEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
+                  {backupBusy === "restore" ? "Restoring…" : "Restore"}
+                </button>
+              </div>
+
+              {backupMsg && <div style={{fontSize:"0.75rem",color:C.muted,marginTop:"0.6rem"}}>{backupMsg}</div>}
+              {backupErr && <div style={{fontSize:"0.75rem",color:C.ember,marginTop:"0.6rem"}}>{backupErr}</div>}
+
+              {restoreResult && (
+                <div style={{marginTop:"0.75rem",background:C.ink,borderRadius:8,padding:"0.6rem 0.75rem"}}>
+                  <div style={{fontSize:"0.78rem",fontWeight:700,color:restoreResult.dryRun?C.peacockLite:C.jade,marginBottom:"0.35rem"}}>
+                    {restoreResult.dryRun ? "Preview — nothing was written" : "Restored"}
+                  </div>
+                  <div style={{fontSize:"0.75rem",color:C.muted,lineHeight:1.6}}>
+                    {restoreResult.examined} account{restoreResult.examined === 1 ? "" : "s"} checked ·{" "}
+                    {restoreResult.changed} {restoreResult.dryRun ? "would change" : "changed"}
+                    {restoreResult.proRestored > 0 && ` · ${restoreResult.proRestored} Pro ${restoreResult.dryRun ? "would be" : ""} restored`}
+                  </div>
+                  <div style={{marginTop:"0.4rem",maxHeight:150,overflowY:"auto",display:"flex",flexDirection:"column",gap:"0.25rem"}}>
+                    {restoreResult.details?.map(d => (
+                      <div key={d.uid} style={{fontSize:"0.72rem",color:C.parchment}}>
+                        {d.email || d.uid}: +{d.learnedAdded} learned, +{d.triedAdded} tried, {d.scoresRaised} scores raised
+                        {d.proRestored && <span style={{color:C.brass}}> · Pro restored</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div></div>
+  );
 
   if (mode === "menu") return (
     <div style={page}><div style={wrap}>
@@ -1639,72 +1831,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Restore. The endpoint runs on the server with the Admin SDK, because
-          firestore.rules deliberately forbids any client — an admin's included —
-          from listing the users collection or reading someone else's document.
-
-          No file changes hands. Progress and purchases are already backed up the
-          moment they happen — a high-water mark that only ever grows, and a
-          purchase ledger no client can even read — so this just merges those
-          straight into the account. A restore can only ever ADD: scores take
-          whichever value is higher, lists are unioned, and a purchase can be
-          restored but never revoked. See docs/backup-restore.md. */}
-      {isAdmin && (
-        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
-          <button onClick={()=>setShowBackup(v=>!v)} style={{background:"transparent",border:"none",color:C.brass,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
-            🛟 Restore Progress (admin) {showBackup ? "▲" : "▼"}
-          </button>
-          {showBackup && (
-            <div style={{marginTop:"0.75rem"}}>
-              <div style={{fontSize:"0.72rem",color:C.faint,marginBottom:"0.75rem",lineHeight:1.5}}>
-                Every account's best-ever progress, and every purchase, already
-                lives safely in Firestore. This merges that back into the account
-                — nothing to download, nothing to upload.
-              </div>
-
-              <input
-                value={restoreWho}
-                onChange={e=>setRestoreWho(e.target.value)}
-                placeholder="Email or uid — blank restores everyone"
-                style={{width:"100%",boxSizing:"border-box",padding:"0.5rem 0.75rem",borderRadius:8,background:C.ink,border:`1px solid ${C.rule}`,color:C.ivory,fontSize:"0.8rem",outline:"none",marginBottom:"0.6rem"}}
-              />
-              <div style={{display:"flex",gap:"0.5rem"}}>
-                <button onClick={()=>runRestore(true)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.peacockLite,fontWeight:600,fontSize:"0.78rem",border:`1px solid ${C.peacockEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
-                  {backupBusy === "preview" ? "Checking…" : "Preview"}
-                </button>
-                <button onClick={()=>runRestore(false)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.brass,fontWeight:700,fontSize:"0.78rem",border:`1px solid ${C.brassEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
-                  {backupBusy === "restore" ? "Restoring…" : "Restore"}
-                </button>
-              </div>
-
-              {backupMsg && <div style={{fontSize:"0.75rem",color:C.muted,marginTop:"0.6rem"}}>{backupMsg}</div>}
-              {backupErr && <div style={{fontSize:"0.75rem",color:C.ember,marginTop:"0.6rem"}}>{backupErr}</div>}
-
-              {restoreResult && (
-                <div style={{marginTop:"0.75rem",background:C.ink,borderRadius:8,padding:"0.6rem 0.75rem"}}>
-                  <div style={{fontSize:"0.78rem",fontWeight:700,color:restoreResult.dryRun?C.peacockLite:C.jade,marginBottom:"0.35rem"}}>
-                    {restoreResult.dryRun ? "Preview — nothing was written" : "Restored"}
-                  </div>
-                  <div style={{fontSize:"0.75rem",color:C.muted,lineHeight:1.6}}>
-                    {restoreResult.examined} account{restoreResult.examined === 1 ? "" : "s"} checked ·{" "}
-                    {restoreResult.changed} {restoreResult.dryRun ? "would change" : "changed"}
-                    {restoreResult.proRestored > 0 && ` · ${restoreResult.proRestored} Pro ${restoreResult.dryRun ? "would be" : ""} restored`}
-                  </div>
-                  <div style={{marginTop:"0.4rem",maxHeight:150,overflowY:"auto",display:"flex",flexDirection:"column",gap:"0.25rem"}}>
-                    {restoreResult.details?.map(d => (
-                      <div key={d.uid} style={{fontSize:"0.72rem",color:C.parchment}}>
-                        {d.email || d.uid}: +{d.learnedAdded} learned, +{d.triedAdded} tried, {d.scoresRaised} scores raised
-                        {d.proRestored && <span style={{color:C.brass}}> · Pro restored</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
         {[["Learned",learned,C.jade],["Active",deck.length,C.peacock],["Total",total,C.brass]].map(([l,v,c])=>(
           <div key={l} style={frame({borderRadius:12,padding:"0.9rem",textAlign:"center"})}>
@@ -1721,7 +1847,12 @@ export default function App() {
       <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn(C.peacock),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
       <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn(C.plum),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
       <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn(C.oxblood),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
-      <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn(C.cognac),width:"100%",marginBottom:"1.5rem"}}>🔍 Index — Search Cocktails</button>
+      <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn(C.cognac),width:"100%",marginBottom:"0.75rem"}}>🔍 Index — Search Cocktails</button>
+      {/* Deliberately the smallest thing in the stack, and last. Nothing here is
+          somewhere you go to study — it is where you go once something has gone
+          wrong — so it sits below every control that is, in a quiet face rather
+          than a colour that competes with them. */}
+      <button onClick={()=>{setSelfMsg("");setSelfErr("");setMode("progress");}} style={{...btn(C.walnut),width:"100%",padding:"0.6rem",fontSize:"0.85rem",marginBottom:"1.5rem",border:`1px solid ${C.rule}`}}>Progress</button>
 
       {/* The paywall itself. Study and quizzes cover the top 50 for free; this
           switch is what adds the rest of the book to both. Without Pro it isn't a
@@ -1765,32 +1896,6 @@ export default function App() {
           })}
         </div>
       </div>
-      {/* Reset is the only irreversible thing in the app, and until now it sat in
-          the open among controls that merely navigate. It is put away here
-          instead: closed by default, at the foot of the menu below everything
-          anyone opens this screen to reach, and it takes a deliberate tap to
-          bring out at all. Opening it is not the reset — that still goes through
-          the confirm — it only puts the button on screen, so no single tap
-          anywhere on this screen can destroy anything. */}
-      <div style={{marginTop:"1.5rem"}}>
-        {resetOpen ? (
-          <div style={frame({borderRadius:12,padding:"1rem 1.25rem",border:`1px solid ${C.rustEdge}`})}>
-            <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.rust,marginBottom:"0.5rem"}}>⚠️ Reset progress</div>
-            <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:"0.9rem",lineHeight:1.5}}>
-              Erases every score, every cocktail you have mastered and every drink
-              you have marked as tried — on this device and in your account. There
-              is no undo.
-            </div>
-            <div style={{display:"flex",gap:"0.6rem"}}>
-              <button onClick={()=>setResetOpen(false)} style={{flex:1,padding:"0.6rem",borderRadius:8,background:"transparent",color:C.muted,fontWeight:600,fontSize:"0.85rem",border:`1px solid ${C.inset}`,cursor:"pointer"}}>Cancel</button>
-              <button onClick={reset} style={{flex:1,padding:"0.6rem",borderRadius:8,background:"transparent",color:C.rust,fontWeight:700,fontSize:"0.85rem",border:`1px solid ${C.rustEdge}`,cursor:"pointer"}}>⚠️ Erase everything</button>
-            </div>
-          </div>
-        ) : (
-          <button onClick={()=>setResetOpen(true)} style={{display:"block",margin:"0 auto",padding:"0.25rem 0.5rem",background:"transparent",border:"none",color:C.faint,fontSize:"0.7rem",cursor:"pointer"}}>Reset progress…</button>
-        )}
-      </div>
-
       {/* Below every control and above the legal footer: the one band of this
           screen where a mis-tap costs a stray ad click rather than a reset, and
           where holding space open pushes nothing the user was aiming at. */}
