@@ -1546,10 +1546,14 @@ export default function App() {
   // width rather than the flex-basis pairing they used inside the account card.
   const stackedField = { width:"100%", boxSizing:"border-box", background:C.ink, border:`1px solid ${C.rule}`, borderRadius:8, padding:"0.4rem 0.6rem", fontSize:"0.8rem", color:C.parchment };
 
-  // The Progress screen. Restoring and clearing are the same subject from
+  // The Backup & Reset screen. Restoring and clearing are the same subject from
   // opposite ends, and they were in different places — clearing at the foot of
   // the menu, restoring in an admin panel no ordinary user could see. They are
   // one screen now, one tap off the menu, and the restore is the user's own.
+  //
+  // Named for both halves rather than "Progress": the menu already SHOWS
+  // progress a few rows up, in the tiles and the bar, so a button repeating the
+  // word would read as another readout instead of somewhere to go and act.
   //
   // Green above red, and the green one first: the recoverable action is the one
   // most people arriving here actually want, and reading order should not put
@@ -1564,7 +1568,7 @@ export default function App() {
         <span style={{color:C.muted,fontSize:"0.85rem"}}>{learned} of {total} mastered</span>
       </div>
 
-      <h1 style={{...C.ui.h1,margin:"0 0 0.35rem",color:C.ivory}}>Progress</h1>
+      <h1 style={{...C.ui.h1,margin:"0 0 0.35rem",color:C.ivory}}>Backup &amp; Reset</h1>
       <p style={{color:C.faint,fontSize:"0.78rem",lineHeight:1.6,marginTop:0,marginBottom:"1.5rem"}}>
         Your account keeps your <strong style={{color:C.parchment,fontWeight:700}}>maximum progress</strong> — the
         best you have ever reached, on any device. It only ever grows, so nothing
@@ -1852,7 +1856,7 @@ export default function App() {
           somewhere you go to study — it is where you go once something has gone
           wrong — so it sits below every control that is, in a quiet face rather
           than a colour that competes with them. */}
-      <button onClick={()=>{setSelfMsg("");setSelfErr("");setMode("progress");}} style={{...btn(C.walnut),width:"100%",padding:"0.6rem",fontSize:"0.85rem",marginBottom:"1.5rem",border:`1px solid ${C.rule}`}}>Progress</button>
+      <button onClick={()=>{setSelfMsg("");setSelfErr("");setMode("progress");}} style={{...btn(C.walnut),width:"100%",padding:"0.6rem",fontSize:"0.85rem",marginBottom:"1.5rem",border:`1px solid ${C.rule}`}}>Backup &amp; Reset</button>
 
       {/* The paywall itself. Study and quizzes cover the top 50 for free; this
           switch is what adds the rest of the book to both. Without Pro it isn't a
