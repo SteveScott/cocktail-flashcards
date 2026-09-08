@@ -5,9 +5,9 @@
 // paging engages. No file exists anywhere in this test, on purpose: the
 // scenario is the one the feature exists for -- an account peaks, is wiped,
 // and is restored straight from what was already sitting in Firestore.
-import { restoreProgress } from "../../src/admin-restore.js";
-import { mergePurchase, describeChange } from "./_backup.mjs";
-import { mergeProgress } from "../../src/progress-merge.js";
+import { restoreProgress } from "../src/admin-restore.js";
+import { mergePurchase, describeChange } from "../netlify/functions/_backup.mjs";
+import { mergeProgress } from "../src/progress-merge.js";
 
 // A fake Firestore: three collections, as in the real thing.
 //   users           the current state -- follows a wipe wherever it goes

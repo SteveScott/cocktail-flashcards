@@ -191,12 +191,12 @@ bring it straight back.
 npm test
 ```
 
-`_backup.test.mjs` covers the rules directly — that the mark cannot be walked
+`tests/backup.test.mjs` covers the rules directly — that the mark cannot be walked
 backwards by a wipe, that `growsFrom` catches every kind of shrink, that the
 merge is commutative, associative and idempotent, that a purchase can never be
 revoked, and that a legacy grant survives.
 
-`_restore.e2e.test.mjs` drives the real client half against a fake Firestore of
+`tests/restore.e2e.test.mjs` drives the real client half against a fake Firestore of
 250 accounts — enough that the server's cursor paging engages — with no file
 anywhere in it: an account peaks and is wiped and is restored straight from
 what was already there; a `users/{uid}` document is deleted outright and its
