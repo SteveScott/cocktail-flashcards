@@ -78,15 +78,29 @@ the same place. `npm test` holds it to that.
 
 ## Who can do it
 
-`ADMIN_EMAILS` — a server-only variable, set in the Netlify site's environment.
-Not `VITE_ADMIN_EMAILS`, which is compiled into the bundle every visitor
-downloads and only decides whether the admin panel is drawn.
+`VITE_ADMIN_EMAILS`, set in the Netlify site's environment. One list, read in
+two places: the client, to decide whether to draw the admin panel, and
+`_adminAuth.mjs`, to decide who may actually call the restore endpoint. Netlify
+hands every site variable to a function whatever its name — the `VITE_` prefix
+only governs what Vite inlines into the browser bundle.
 
 A caller must present a valid Firebase ID token, for an account with a
 **verified** email, on that list. The same three conditions `firestore.rules`
 applies in `isAdmin()`, mirrored on purpose: the Admin SDK does not run the
-rules, so this check is the only one there is. If `ADMIN_EMAILS` is empty the
+rules, so this check is the only one there is. If the variable is empty the
 restore endpoint refuses to run — a deploy that forgets it fails closed.
+
+**The list being in the client bundle costs nothing.** It is not a credential
+and never was doing the work: an address only matters to someone already
+holding a Firebase ID token minted for it, and those are signed by Google and
+verified here against Firebase's public keys. Reading the list tells an
+attacker whose account to go after — which `firestore.rules` already tells
+them, since its `admins()` carries the same addresses in plaintext. What it
+does not give them is any way to be that person.
+
+The one thing to watch is the reverse: this variable and the `admins()` list in
+`firestore.rules` are separate and must be kept in step by hand. This one gates
+the restore endpoint; that one gates ad-whitelist writes.
 
 ## How a restore merges
 

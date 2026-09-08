@@ -1,15 +1,19 @@
 import { getAdmin } from "./_firebaseAdmin.mjs";
 
-// Who may call the backup and restore endpoints.
+// Who may call the restore endpoint. The same list the client reads to decide
+// whether to draw the admin panel — one variable, one set of people, nothing to
+// keep in step. Netlify hands every site variable to a function regardless of
+// its name; the VITE_ prefix is a Vite build convention about what gets inlined
+// into the browser bundle, not a limit on what the server can see.
 //
-// Deliberately NOT the VITE_ADMIN_EMAILS the client reads. That one is compiled
-// into the JS bundle every visitor downloads, and all it decides is whether the
-// admin panel is drawn — anyone can set it in their own copy. This one lives
-// only on the server, and it is the single thing standing between a stolen
-// session and every user document in the project, because the Admin SDK these
-// functions use bypasses firestore.rules entirely.
+// It being in that bundle is not a weakness here, because the list is not a
+// secret and was never doing the work. The boundary is the signature check
+// below: an address only matters to someone already holding a Firebase ID token
+// minted for it, and those cannot be forged. Reading the list tells an attacker
+// whose account to go after, which firestore.rules already tells them — its
+// admins() carries the same addresses in plaintext.
 function adminEmails() {
-  return (process.env.ADMIN_EMAILS || "")
+  return (process.env.VITE_ADMIN_EMAILS || "")
     .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 }
 
@@ -27,8 +31,8 @@ export class HttpError extends Error {
 export async function requireAdmin(event) {
   const allowed = adminEmails();
   // An empty list is a misconfiguration, not an open door. Failing closed here
-  // is what keeps a deploy that forgot ADMIN_EMAILS from exposing the restore
-  // endpoint to every signed-in user in the project.
+  // is what keeps a deploy that forgot VITE_ADMIN_EMAILS from exposing the
+  // restore endpoint to every signed-in user in the project.
   if (allowed.length === 0) {
     throw new HttpError(503, "No administrators are configured for this deployment.");
   }

@@ -16,8 +16,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Accounts allowed to manage the ad whitelist. This must be kept in step
-    // with VITE_ADMIN_EMAILS in .env — that variable only hides the admin UI,
-    // it grants nothing. Lowercase entries only.
+    // with VITE_ADMIN_EMAILS in .env by hand — that variable grants nothing
+    // HERE, in the rules, however it is set. (It does gate the admin restore
+    // endpoint, which runs on the Admin SDK and so never reaches these rules at
+    // all — see netlify/functions/_adminAuth.mjs.) Lowercase entries only.
     function admins() {
       return ['stevescott517@gmail.com'];
     }
