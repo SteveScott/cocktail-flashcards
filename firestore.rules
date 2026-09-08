@@ -113,6 +113,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // A second, independent copy of every account's purchase fields, kept in
+    // lockstep with users/{uid} by setSourceEntitlement (_entitlements.mjs) —
+    // same transaction, same values, every time a purchase is granted or
+    // revoked. It exists so a restore has something to read even if users/{uid}
+    // itself is ever damaged: see docs/backup-restore.md.
+    //
+    // No client access at all, in either direction — not even a GET of your own
+    // entitlement, which users/{uid} already serves. A collection no client can
+    // reach is one a client cannot corrupt, race, or leak from; only the Admin
+    // SDK (the webhooks, and the restore endpoint) ever touches it. The
+    // catch-all at the bottom of this file would deny it anyway; it is repeated
+    // here, explicitly, because silence on a collection this security-sensitive
+    // would read as an oversight rather than a decision.
+    match /purchaseLedger/{uid} {
+      allow read, write: if false;
+    }
+
     match /adWhitelist/{email} {
       // A signed-in user may check whether their OWN email is whitelisted
       // (src/firebase.js → isEmailAdWhitelisted), and nothing else. Reading the

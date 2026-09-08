@@ -7,8 +7,8 @@ import {
   isEmailAdWhitelisted, addEmailToAdWhitelist, removeEmailFromAdWhitelist, listAdWhitelist,
 } from "./firebase";
 import cocktailData from './cocktails.json';
-import { fetchBackup, saveBackupFile, readBackupFile, restoreBackup } from "./admin-backup.js";
-import { mergeProgress, growsFrom, sameProgress } from "./backup-format.js";
+import { restoreProgress } from "./admin-restore.js";
+import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
 import { norm, getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
@@ -465,8 +465,6 @@ export default function App() {
   const [backupBusy, setBackupBusy] = useState("");
   const [backupMsg, setBackupMsg] = useState("");
   const [backupErr, setBackupErr] = useState("");
-  // The parsed file an admin has picked, held until they say what to do with it.
-  const [loadedBackup, setLoadedBackup] = useState(null);
   // Blank restores everyone; an address or uid restores that one account, which
   // is the case that actually comes up — someone writes in having lost theirs.
   const [restoreWho, setRestoreWho] = useState("");
@@ -758,9 +756,9 @@ export default function App() {
   // bug of the kind that emptied accounts, writes the emptied state straight
   // over the full one. highWater/{uid} is the same progress under a different
   // rule — it only ever grows — so the best an account has ever reached
-  // survives whatever happens to the live document. It is what the admin backup
-  // exports, and it is why that file needs no schedule and no snapshot: the
-  // peak is already recorded, whenever the download happens.
+  // survives whatever happens to the live document. Admin restore reads this
+  // document directly, so the peak is already backed up the moment it is
+  // reached — there is no export step and nothing to schedule.
   //
   // Progress only. This document is client-written and a restore pushes it back
   // into users/{uid}, so an entitlement riding along here would be one any user
@@ -975,62 +973,31 @@ export default function App() {
     signOut(auth).catch(e => console.error("Sign-out failed", e));
   }
 
-  // Deletes the cloud account and its data, then clears this device. The server
-  // does the work — firestore.rules forbids clients deleting users/{uid}, and
-  // the client SDK's deleteUser() rejects sessions older than a few minutes.
-  // Download every user document as one file. Paged by the server and stitched
-  // back together here; see src/admin-backup.js.
-  async function downloadBackup() {
-    setBackupErr(""); setRestoreResult(null); setBackupBusy("backup");
-    try {
-      const idToken = await user.getIdToken();
-      const backup = await fetchBackup(idToken, n => setBackupMsg(`Read ${n} accounts…`));
-      saveBackupFile(backup);
-      setBackupMsg(`Saved ${backup.counts.users} accounts at their best, and ${backup.counts.adWhitelist} whitelist entries.`);
-    } catch (e) {
-      console.error("Backup failed", e);
-      setBackupMsg(""); setBackupErr(e.message || "Backup failed.");
-    } finally { setBackupBusy(""); }
-  }
-
-  async function pickBackupFile(e) {
-    const file = e.target.files?.[0];
-    // Clear the input so picking the same file twice still fires a change event.
-    e.target.value = "";
-    if (!file) return;
-    setBackupErr(""); setBackupMsg(""); setRestoreResult(null);
-    try {
-      const backup = await readBackupFile(file);
-      setLoadedBackup(backup);
-      setBackupMsg(`Loaded ${backup.users.length} accounts, downloaded ${new Date(backup.createdAt).toLocaleString()}.`);
-    } catch (err) {
-      setLoadedBackup(null);
-      setBackupErr(err.message || "Could not read that file.");
-    }
-  }
-
-  // dryRun reads and compares without writing, so an operator can see what a
-  // file would do before it does it. The restore itself can only ever add — see
+  // Restore one account, or every account, to its best known state. No file is
+  // involved: the server reads highWater/{uid} and purchaseLedger/{uid} — both
+  // already durable, already current, already in Firestore — and merges them
+  // into users/{uid} directly. See netlify/functions/admin-restore.mjs.
+  //
+  // dryRun reads and compares without writing, so an operator can see what
+  // would change before it does. The restore itself can only ever add — see
   // netlify/functions/_backup.mjs — so the confirm is a courtesy, not a guard.
   async function runRestore(dryRun) {
-    if (!loadedBackup) return;
     const who = restoreWho.trim();
     if (!dryRun && !confirm(
       who
-        ? `Restore ${who} from this backup?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.`
-        : `Restore all ${loadedBackup.users.length} accounts from this backup?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.\n\nNothing can be lost by running this, including from an old file.`
+        ? `Restore ${who} to their best known progress?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.`
+        : `Restore every account to its best known progress?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.`
     )) return;
 
     setBackupErr(""); setRestoreResult(null); setBackupBusy(dryRun ? "preview" : "restore");
     try {
       const idToken = await user.getIdToken();
       const isUid = who && !who.includes("@");
-      const result = await restoreBackup(idToken, {
-        backup: loadedBackup,
+      const result = await restoreProgress(idToken, {
         uid: isUid ? who : undefined,
         email: isUid ? undefined : (who || undefined),
         dryRun,
-        onProgress: (done, total) => setBackupMsg(`${dryRun ? "Checked" : "Restored"} ${done} of ${total}…`),
+        onProgress: (done) => setBackupMsg(`${dryRun ? "Checked" : "Restored"} ${done} so far…`),
       });
       setRestoreResult(result);
       setBackupMsg("");
@@ -1040,6 +1007,9 @@ export default function App() {
     } finally { setBackupBusy(""); }
   }
 
+  // Deletes the cloud account and its data, then clears this device. The server
+  // does the work — firestore.rules forbids clients deleting users/{uid}, and
+  // the client SDK's deleteUser() rejects sessions older than a few minutes.
   async function deleteAccount() {
     if (!user || deleteBusy) return;
     setDeleteBusy(true);
@@ -1596,53 +1566,43 @@ export default function App() {
         </div>
       )}
 
-      {/* Backup and restore. The endpoints behind both buttons run on the
-          server with the Admin SDK, because firestore.rules deliberately forbids
-          any client — an admin's included — from listing the users collection or
-          reading someone else's document.
+      {/* Restore. The endpoint runs on the server with the Admin SDK, because
+          firestore.rules deliberately forbids any client — an admin's included —
+          from listing the users collection or reading someone else's document.
 
-          The file holds every account at its BEST, not as it was at the moment
-          of download: progress comes from the high-water marks the app raises on
-          every save. So there is nothing to schedule and no window to miss, and
-          a restore can only ever ADD — scores take whichever value is higher,
-          lists are unioned, and a purchase can be restored but never revoked. */}
+          No file changes hands. Progress and purchases are already backed up the
+          moment they happen — a high-water mark that only ever grows, and a
+          purchase ledger no client can even read — so this just merges those
+          straight into the account. A restore can only ever ADD: scores take
+          whichever value is higher, lists are unioned, and a purchase can be
+          restored but never revoked. See docs/backup-restore.md. */}
       {isAdmin && (
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
           <button onClick={()=>setShowBackup(v=>!v)} style={{background:"transparent",border:"none",color:C.brass,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
-            💾 Backup &amp; Restore (admin) {showBackup ? "▲" : "▼"}
+            🛟 Restore Progress (admin) {showBackup ? "▲" : "▼"}
           </button>
           {showBackup && (
             <div style={{marginTop:"0.75rem"}}>
-              <button onClick={downloadBackup} disabled={Boolean(backupBusy)} style={{...btn(C.brass),color:C.ink,width:"100%",padding:"0.55rem",fontSize:"0.8rem",marginBottom:"0.4rem",opacity:backupBusy?0.6:1}}>
-                {backupBusy === "backup" ? "Downloading…" : "⬇ Download backup"}
-              </button>
-              <div style={{fontSize:"0.72rem",color:C.faint,marginBottom:"0.9rem",lineHeight:1.5}}>
-                Every account at its best, not as it stands right now — so the
-                date you take it does not matter. One file replaces the last.
+              <div style={{fontSize:"0.72rem",color:C.faint,marginBottom:"0.75rem",lineHeight:1.5}}>
+                Every account's best-ever progress, and every purchase, already
+                lives safely in Firestore. This merges that back into the account
+                — nothing to download, nothing to upload.
               </div>
 
-              <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.faint,marginBottom:"0.5rem"}}>Restore from a file</div>
-              <input type="file" accept="application/json,.json" onChange={pickBackupFile} disabled={Boolean(backupBusy)}
-                style={{width:"100%",fontSize:"0.75rem",color:C.muted,marginBottom:"0.6rem"}} />
-
-              {loadedBackup && (
-                <>
-                  <input
-                    value={restoreWho}
-                    onChange={e=>setRestoreWho(e.target.value)}
-                    placeholder="Email or uid — blank restores everyone"
-                    style={{width:"100%",boxSizing:"border-box",padding:"0.5rem 0.75rem",borderRadius:8,background:C.ink,border:`1px solid ${C.rule}`,color:C.ivory,fontSize:"0.8rem",outline:"none",marginBottom:"0.6rem"}}
-                  />
-                  <div style={{display:"flex",gap:"0.5rem"}}>
-                    <button onClick={()=>runRestore(true)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.peacockLite,fontWeight:600,fontSize:"0.78rem",border:`1px solid ${C.peacockEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
-                      {backupBusy === "preview" ? "Checking…" : "Preview"}
-                    </button>
-                    <button onClick={()=>runRestore(false)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.brass,fontWeight:700,fontSize:"0.78rem",border:`1px solid ${C.brassEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
-                      {backupBusy === "restore" ? "Restoring…" : "Restore"}
-                    </button>
-                  </div>
-                </>
-              )}
+              <input
+                value={restoreWho}
+                onChange={e=>setRestoreWho(e.target.value)}
+                placeholder="Email or uid — blank restores everyone"
+                style={{width:"100%",boxSizing:"border-box",padding:"0.5rem 0.75rem",borderRadius:8,background:C.ink,border:`1px solid ${C.rule}`,color:C.ivory,fontSize:"0.8rem",outline:"none",marginBottom:"0.6rem"}}
+              />
+              <div style={{display:"flex",gap:"0.5rem"}}>
+                <button onClick={()=>runRestore(true)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.peacockLite,fontWeight:600,fontSize:"0.78rem",border:`1px solid ${C.peacockEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
+                  {backupBusy === "preview" ? "Checking…" : "Preview"}
+                </button>
+                <button onClick={()=>runRestore(false)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.brass,fontWeight:700,fontSize:"0.78rem",border:`1px solid ${C.brassEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
+                  {backupBusy === "restore" ? "Restoring…" : "Restore"}
+                </button>
+              </div>
 
               {backupMsg && <div style={{fontSize:"0.75rem",color:C.muted,marginTop:"0.6rem"}}>{backupMsg}</div>}
               {backupErr && <div style={{fontSize:"0.75rem",color:C.ember,marginTop:"0.6rem"}}>{backupErr}</div>}
@@ -1656,7 +1616,6 @@ export default function App() {
                     {restoreResult.examined} account{restoreResult.examined === 1 ? "" : "s"} checked ·{" "}
                     {restoreResult.changed} {restoreResult.dryRun ? "would change" : "changed"}
                     {restoreResult.proRestored > 0 && ` · ${restoreResult.proRestored} Pro ${restoreResult.dryRun ? "would be" : ""} restored`}
-                    {restoreResult.whitelistRestored > 0 && ` · ${restoreResult.whitelistRestored} whitelist`}
                   </div>
                   <div style={{marginTop:"0.4rem",maxHeight:150,overflowY:"auto",display:"flex",flexDirection:"column",gap:"0.25rem"}}>
                     {restoreResult.details?.map(d => (

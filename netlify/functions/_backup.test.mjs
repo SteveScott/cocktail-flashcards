@@ -1,11 +1,12 @@
-// Run with: npm run test:backup
+// Run with: npm test
 //
 // The merge rules are the whole safety argument for the restore endpoint --
-// that it can only ever add, and that a purchase can never be lost to a stale
-// file -- so they get a regression guard even though the project carries no
-// test framework. Plain node, no runner, no dependency.
-import { mergePurchase, describeChange, validateBackup, BACKUP_FORMAT } from "./_backup.mjs";
-import { mergeProgress, growsFrom, sameProgress } from "../../src/backup-format.js";
+// that it can only ever add, and that a purchase can never be lost even when
+// purchaseLedger or highWater is behind users/{uid} in some way nobody
+// anticipated -- so they get a regression guard even though the project
+// carries no test framework. Plain node, no runner, no dependency.
+import { mergePurchase, describeChange } from "./_backup.mjs";
+import { mergeProgress, growsFrom, sameProgress } from "../../src/progress-merge.js";
 
 let fail = 0;
 const eq = (name, got, want) => {
@@ -114,14 +115,6 @@ eq("dry run counts additions",
   { learnedAdded:1, triedAdded:1, deckAdded:0, scoresRaised:2, proRestored:true, changed:true });
 eq("no-op reports no change",
   describeChange({ progress: m, adsRemoved: false }, { progress: m, adsRemoved: false }).changed, false);
-
-for (const [name, bad] of [["not json", null], ["wrong format", {format:"other"}],
-                           ["future version", {format:BACKUP_FORMAT, version:99}],
-                           ["no users", {format:BACKUP_FORMAT, version:1}]]) {
-  let threw = false;
-  try { validateBackup(bad); } catch { threw = true; }
-  eq(`rejects ${name}`, threw, true);
-}
 
 console.log(fail ? `\n${fail} FAILED` : "\nall passed");
 process.exit(fail ? 1 : 0);

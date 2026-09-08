@@ -1,107 +1,123 @@
+import { FieldPath } from "firebase-admin/firestore";
 import { getAdmin } from "./_firebaseAdmin.mjs";
 import { requireAdmin, errorResponse, HttpError } from "./_adminAuth.mjs";
-import { validateBackup, mergeProgress, mergePurchase, describeChange } from "./_backup.mjs";
+import { mergeProgress, mergePurchase, describeChange } from "./_backup.mjs";
 
-// Restores a backup into Firestore: everyone in the file, or one person out of
-// it when someone writes in having lost their progress.
+// Restores accounts to their best known state — one, picked by email or uid, or
+// every account — by reading straight out of Firestore. No file changes hands:
+// highWater/{uid} and purchaseLedger/{uid} are already durable, already current,
+// and already there (see _backup.mjs), so this endpoint is nothing more than
+// the merge itself, run server-side against the collection instead of an
+// upload.
 //
 // Every write goes through mergeProgress / mergePurchase, which between them
 // hold the one invariant this endpoint is built on: a restore only ever ADDS.
 // Nothing is deleted, no score goes down, no entitlement is revoked, no user is
-// removed. Three things follow, and all three are the reason it is shaped this
-// way rather than as a plain overwrite:
-//
-//   - it is safe against a live database, so it does not need downtime;
-//   - it is safe to run twice, so a half-finished restore is just re-run;
-//   - it is safe to run from a file older than the data already there, which is
-//     the normal case, since the accident being repaired happened after the
-//     backup was taken.
+// removed. That is what makes it safe to run against a live database with no
+// downtime, and safe to run twice — a restore interrupted partway through (a
+// lost connection, a timed-out function) is simply run again.
 //
 // Each user is written in its own transaction, for the same reason
 // setSourceEntitlement uses one: the Stripe and RevenueCat webhooks are writing
 // to these documents at unpredictable moments, and a read-modify-write without
 // one could drop a purchase that landed mid-restore.
-const MAX_USERS_PER_CALL = 100;
+//
+// A full restore is paged 100 accounts at a time, ordered by document id, the
+// same shape admin-backup.mjs used to page an export — except now the client
+// drives the SAME collection directly (src/admin-restore.js loops the cursor),
+// rather than paging through an array it downloaded first.
+const PAGE_SIZE = 100;
 
 export async function handler(event) {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method not allowed" };
 
   try {
     const admin = await requireAdmin(event);
-    const { backup, uid, email, dryRun = false } = JSON.parse(event.body || "{}");
-    validateBackup(backup);
-
-    // Restoring one person: pick them out of the file by uid, or by the address
-    // they wrote in from. Matching on either means support does not have to ask
-    // someone for a uid they have no way of knowing.
-    const wanted = (email || "").trim().toLowerCase();
-    const targets = (uid || wanted)
-      ? backup.users.filter((u) => (uid && u.uid === uid) || (wanted && (u.email || "").toLowerCase() === wanted))
-      : backup.users;
-
-    if ((uid || wanted) && targets.length === 0) {
-      throw new HttpError(404, "That account is not in this backup file.");
-    }
-    if (targets.length > MAX_USERS_PER_CALL) {
-      throw new HttpError(413, `Send at most ${MAX_USERS_PER_CALL} users per request.`);
-    }
-
+    const { uid, email, cursor, dryRun = false } = JSON.parse(event.body || "{}");
     const db = getAdmin().firestore();
+
+    // Restoring one person, by the uid they were told, or by the address they
+    // wrote in from — matching on either means support never has to ask someone
+    // for a uid they have no way of knowing.
+    const wanted = (email || "").trim().toLowerCase();
+    let targetUids;
+    let nextCursor;
+
+    if (uid || wanted) {
+      let resolved = uid;
+      if (!resolved) {
+        try {
+          resolved = (await getAdmin().auth().getUserByEmail(wanted)).uid;
+        } catch {
+          throw new HttpError(404, "No account with that email address.");
+        }
+      }
+      targetUids = [resolved];
+    } else {
+      let query = db.collection("users").orderBy(FieldPath.documentId()).limit(PAGE_SIZE);
+      if (cursor) query = query.startAfter(db.collection("users").doc(cursor));
+      const snap = await query.get();
+      targetUids = snap.docs.map((d) => d.id);
+      if (snap.docs.length === PAGE_SIZE) nextCursor = snap.docs[snap.docs.length - 1].id;
+    }
+
     const now = Date.now();
     const results = [];
 
-    for (const entry of targets) {
-      if (!entry?.uid) continue;
-      const ref = db.collection("users").doc(entry.uid);
+    for (const targetUid of targetUids) {
+      const ref = db.collection("users").doc(targetUid);
+      const hwRef = db.collection("highWater").doc(targetUid);
+      const ledgerRef = db.collection("purchaseLedger").doc(targetUid);
 
       // One transaction per user, sequentially: a failure on one account must
       // not roll back the others, and a restore is not on any hot path.
       const change = await db.runTransaction(async (tx) => {
-        const snap = await tx.get(ref);
-        const live = snap.exists ? snap.data() : {};
+        const [userSnap, hwSnap, ledgerSnap] = await Promise.all([tx.get(ref), tx.get(hwRef), tx.get(ledgerRef)]);
+        const live = userSnap.exists ? userSnap.data() : {};
+        const highWater = hwSnap.exists ? hwSnap.data()?.progress : null;
+        const ledger = ledgerSnap.exists ? ledgerSnap.data() : {};
 
         const merged = {
-          ...mergePurchase(live, entry.purchase || {}),
-          progress: mergeProgress(live.progress, entry.progress, entry.uid),
+          ...mergePurchase(live, ledger),
+          progress: mergeProgress(live.progress, highWater, targetUid),
         };
         const delta = describeChange(live, merged);
 
         // A dry run reads and compares and stops there, so an operator can see
-        // what a file would do to the live database before it does it.
+        // what would change before it does.
         if (dryRun || !delta.changed) return delta;
 
         tx.set(ref, {
           ...merged,
           updatedAt: now,
           // An audit trail on the document itself: who restored it, when, and
-          // from which file. Server-owned, so no client can write or clear it.
+          // from what. Server-owned, so no client can write or clear it.
           restoredAt: now,
           restoredBy: admin.email,
-          restoredFrom: backup.createdAt || null,
+          restoredFrom: "highWater/purchaseLedger",
         }, { merge: true });
         return delta;
       });
 
-      results.push({ uid: entry.uid, email: entry.email || null, ...change });
-    }
-
-    // Comped accounts are part of the picture: losing the whitelist puts ads
-    // back for people who were promised none. Created where missing and left
-    // alone where present — never deleted, like everything else here.
-    let whitelistRestored = 0;
-    if (!uid && !wanted && Array.isArray(backup.adWhitelist)) {
-      for (const entry of backup.adWhitelist) {
-        const id = (entry?.email || "").trim().toLowerCase();
-        if (!id) continue;
-        const ref = db.collection("adWhitelist").doc(id);
-        const snap = await ref.get();
-        if (snap.exists) continue;
-        whitelistRestored += 1;
-        if (!dryRun) await ref.set({ addedAt: entry.addedAt || now, addedBy: entry.addedBy || "restore" });
-      }
+      results.push({ uid: targetUid, ...change });
     }
 
     const changed = results.filter((r) => r.changed);
+
+    // Resolve emails for just the accounts something happened to, so the
+    // summary reads as people rather than a column of uids. Only the changed
+    // ones — usually a handful — rather than every account examined, which for
+    // a full restore can be the whole user base.
+    let emails = {};
+    if (changed.length) {
+      try {
+        const result = await getAdmin().auth().getUsers(changed.map((r) => ({ uid: r.uid })));
+        emails = Object.fromEntries(result.users.map((u) => [u.uid, u.email || null]));
+      } catch (e) {
+        console.error("Could not resolve emails for the restore summary", e);
+      }
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -109,10 +125,11 @@ export async function handler(event) {
         examined: results.length,
         changed: changed.length,
         proRestored: results.filter((r) => r.proRestored).length,
-        whitelistRestored,
         // Only the accounts something actually happened to, so the summary of a
         // full restore stays readable.
-        details: changed,
+        details: changed.map((r) => ({ ...r, email: emails[r.uid] || null })),
+        // Absent means this was the last page (or a single-account restore).
+        ...(nextCursor ? { nextCursor } : {}),
       }),
     };
   } catch (e) {

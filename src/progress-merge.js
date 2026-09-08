@@ -1,13 +1,10 @@
-// The backup format, and the one rule that defines it: progress only ever grows.
+// The high-water merge: the one rule that progress only ever grows.
 //
-// Shared by both halves. The client maintains each user's high-water mark with
-// mergeProgress() on every save; the server exports those marks and merges them
-// back on a restore with the same function. Kept free of any import so it can
-// live in the browser bundle — netlify/functions/_backup.mjs pulls in
-// firebase-admin, which must never reach it.
-
-export const BACKUP_FORMAT = "cocktail-flashcards/backup";
-export const BACKUP_VERSION = 2;
+// Shared by both halves. The client raises each account's mark with this on
+// every save (App.jsx -> saveHighWater); the server merges the same mark into
+// users/{uid} on a restore (netlify/functions/admin-restore.mjs), through the
+// re-export in netlify/functions/_backup.mjs. One implementation, run on both
+// sides, kept free of any import so it can live in the browser bundle.
 
 export const DEFAULT_DECK_SIZE = 20;
 

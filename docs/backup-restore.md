@@ -1,66 +1,80 @@
 # Backup and restore
 
-Progress and purchases live in one Firestore document per user, `users/{uid}`.
-This is how to take a copy of all of them, and how to put one back — for
-everybody after an accident, or for one person who has written in.
+Progress and purchases live in `users/{uid}`. This is how they stay recoverable
+without ever downloading or uploading anything, and how to restore one account
+— or every account — to its best known state.
 
-## One file, one row per user, at their best
+## Two durable copies, not a file
 
-The backup is **not** a snapshot of a moment, and its date does not matter.
+There is no backup file, and nothing to download. Every account's best progress
+and every purchase already exist a second time, live, in Firestore:
 
-Every account carries a **high-water mark** in `highWater/{uid}`: the same
-progress as the live document, under a different rule — it only ever grows. The
-app raises it on every save (`App.jsx → saveHighWater`), `firestore.rules`
-refuses any write that would lower it, and the export reads *those* rather than
-the live documents.
+| Collection | Holds | Written by | Can only |
+|---|---|---|---|
+| `users/{uid}` | current state | the app, every save; the webhooks, every entitlement change | — |
+| `highWater/{uid}` | progress at its **best ever** | the app, every save | **grow** |
+| `purchaseLedger/{uid}` | purchase fields, mirrored | the webhooks, every entitlement change | reflect the truth |
 
-So the file holds each account at its **maximum completed state**, whenever you
-happen to download it:
+A restore reads the second and third and merges them into the first. The
+instant a cocktail is mastered or a purchase completes, it is already backed
+up — there is no export step, no schedule, no window between a backup and an
+accident for something to fall through.
 
-| | `users/{uid}` | `highWater/{uid}` |
-|---|---|---|
-| Holds | the current state | the best state ever reached |
-| On a reset or a wipe | follows it down | unmoved |
-| Written by | the app, every save | the app, every save |
-| May contain | progress **and** purchases | progress only, enforced by rules |
+### `highWater/{uid}` — the progress mark
 
-Someone peaks on Monday, is wiped on Tuesday, and you download on Wednesday —
-the file still carries Monday's peak, because Tuesday could not lower it. There
-is nothing to schedule, no window to miss, and no reason to keep old files: each
-download supersedes the last.
+The app raises this on every save (`App.jsx → saveHighWater`) using
+`mergeProgress` — the same union-and-max rule `App.jsx → mergeStates()` uses to
+fold one device's progress into an account. `firestore.rules` enforces that it
+can only grow: a write dropping a learned cocktail, a tried mark, a scored
+cocktail, or master mode is rejected outright, which is exactly the shape of
+bug that used to empty accounts. (`active` is deliberately not checked — it is
+the one list that legitimately shrinks, when a cocktail is mastered.)
 
-What it is not is point-in-time recovery. It cannot show you what an account
-looked like last March, only the best it has ever been. If you need history,
-enable Firestore PITR in the Firebase console; it is separate, always on, and
-does not replace this.
+It is **progress only**. A restore pushes this document back into `users/{uid}`,
+and it is client-written — so if an entitlement could ride along in it, any
+user could grant themselves Pro by writing `adsRemoved: true` to their own mark
+and waiting for a restore. `firestore.rules` allows only `progress` and
+`updatedAt`, as a whitelist rather than a denylist, so a field added later is
+refused by default rather than silently allowed.
+
+### `purchaseLedger/{uid}` — the purchase mirror
+
+`setSourceEntitlement` (`_entitlements.mjs`) writes the identical purchase
+fields to `users/{uid}` **and** `purchaseLedger/{uid}` in the same transaction,
+every time a purchase, refund, or transfer happens. The two can never drift
+apart in normal operation.
+
+This is what makes "purchase history should never be lost" true even in the
+worst case: `users/{uid}` is not a document only a rare event touches — it also
+carries progress, written on every study session — so a bug or a slip that
+damages it takes the purchase down too, with nothing to recover from, unless
+something else holds an independent copy. `purchaseLedger/{uid}` is that copy.
+
+No client can reach it in either direction — not a `get`, not a `list`, nothing.
+`firestore.rules` denies it outright, explicitly, rather than leaving it to the
+catch-all at the bottom of the file: a collection this security-sensitive
+should never look like an oversight. Only the Admin SDK — the webhooks, and the
+restore endpoint — ever touches it.
+
+**Accounts that bought Pro before this collection existed** have nothing here
+yet, and won't until their next entitlement event (a refund, a restore, a
+replatform). Run `npm run backfill-purchase-ledger -- --apply` once to seed it
+for every existing purchaser from their current `users/{uid}` fields. Safe to
+run more than once — it skips any account that already has an entry.
 
 ## The one invariant
 
 **A restore only ever adds.** No field is deleted, no score goes down, no
-entitlement is revoked, no user disappears. Everything else follows:
+entitlement is revoked, no user disappears. Everything follows from that:
 
-- It is safe against the live database. No downtime, no maintenance window.
-- It is safe to run twice. A restore that failed halfway is just re-run.
-- It is safe to run from an old file. The worst it can do is nothing.
+- Safe against the live database. No downtime, no maintenance window.
+- Safe to run twice. An interrupted restore is simply run again.
+- Safe even when `highWater` or `purchaseLedger` is behind `users/{uid}` in some
+  way nobody anticipated — the worst either can do is nothing.
 
 `mergeProgress` is a least-upper-bound — commutative, associative, idempotent —
-which is what lets it be applied repeatedly, in any order, from any device, and
-always land in the same place. `npm test` holds it to that.
-
-## Why progress and purchases come from different documents
-
-The mark is **client-written**, and a restore pushes it back into `users/{uid}`.
-If an entitlement could ride along in it, any user could grant themselves Pro by
-writing `adsRemoved: true` to their own mark and waiting for a restore.
-
-So `highWater/{uid}` carries **progress only** — `firestore.rules` allows
-`progress` and `updatedAt` and nothing else, as a whitelist rather than a
-denylist, so a field added later is refused by default. Purchases are read from
-`users/{uid}`, which no client can write, and merged under their own rule below.
-
-That is why the file has two blocks per user rather than one flat document: they
-come from different places and are trusted differently, and putting that in the
-data keeps it from living only in the code.
+which is what lets it be applied repeatedly, in any order, and always land in
+the same place. `npm test` holds it to that.
 
 ## Who can do it
 
@@ -71,66 +85,8 @@ downloads and only decides whether the admin panel is drawn.
 A caller must present a valid Firebase ID token, for an account with a
 **verified** email, on that list. The same three conditions `firestore.rules`
 applies in `isAdmin()`, mirrored on purpose: the Admin SDK does not run the
-rules, so this check is the only one there is. If `ADMIN_EMAILS` is empty both
-endpoints refuse to run — a deploy that forgets it fails closed.
-
-## Taking a backup
-
-Menu → **💾 Backup & Restore (admin)** → **Download backup**.
-
-Paged 100 accounts at a time (a function response is capped at a few megabytes;
-the file is not) and stitched back together in the browser as
-`cocktail-flashcards-backup-<timestamp>.json`.
-
-Keep it somewhere that is not the Firebase project. A backup that lives in the
-thing it is backing up is not a backup.
-
-## The file
-
-```json
-{
-  "format": "cocktail-flashcards/backup",
-  "version": 2,
-  "createdAt": "2026-09-08T13:04:11.912Z",
-  "projectId": "cocktail-flashcards",
-  "counts": { "users": 412, "adWhitelist": 3 },
-  "users": [
-    {
-      "uid": "V1cVv…",
-      "email": "drinker@example.com",
-      "updatedAt": 1757340000000,
-
-      "purchase": {
-        "adsRemoved": true,
-        "adsRemovedStripe": true,
-        "adsRemovedPlay": false,
-        "adsRemovedAt": 1756000000000,
-        "adsRemovedSource": "stripe",
-        "stripeSessionId": "cs_…",
-        "revenueCatEventId": null
-      },
-
-      "progress": {
-        "scores": { "Negroni": 6, "Sidecar": 2 },
-        "learned": ["Negroni"],
-        "tried": ["Negroni", "Sazerac"],
-        "active": ["Martini", "Sidecar"],
-        "masterMode": true,
-        "deckSize": 20
-      }
-    }
-  ],
-  "adWhitelist": [
-    { "email": "comped@example.com", "addedAt": 1756000000000, "addedBy": "steve@…" }
-  ]
-}
-```
-
-`createdAt` is when the file was downloaded. It is not what the file holds —
-that is each account's peak, regardless of date.
-
-A `version: 1` file (a point-in-time snapshot, from before high-water marks)
-still restores: the merge treats whatever it holds as one more lower bound.
+rules, so this check is the only one there is. If `ADMIN_EMAILS` is empty the
+restore endpoint refuses to run — a deploy that forgets it fails closed.
 
 ## How a restore merges
 
@@ -138,93 +94,82 @@ still restores: the merge treats whatever it holds as one more lower bound.
 
 | Field | Rule |
 | --- | --- |
-| `scores` | per cocktail, `max(live, backup)` |
+| `scores` | per cocktail, `max(live, highWater)` |
 | `learned` | set union |
 | `tried` | set union |
 | `active` | set union, minus anything now in `learned` |
-| `masterMode` | `live OR backup` |
-| `deckSize` | live wins — a current preference, not progress; the backup only fills a blank |
+| `masterMode` | `live OR highWater` |
+| `deckSize` | live wins — a current preference, not progress; `highWater` only fills a blank |
 
-Lists come out sorted, so the result depends only on what the two sides hold and
-not on which was merged first. Without that, two devices raising the same mark
-produce documents equal in content but unequal to any comparison, and each then
-answers the other's write forever.
+Lists come out sorted, so the result depends only on what the two sides hold
+and not on which was merged first — without that, two devices raising the same
+mark from different states would produce documents equal in content but
+unequal to any comparison, and each would answer the other's write forever.
 
 `active` is left untrimmed. Only the client knows which cocktails the pool
 currently covers — the free top 50, or the whole book with Pro — and its
-`refillDeck()` cuts the deck back to size on the next load. Trimming server-side
-would mean guessing, and guessing low loses a card someone was studying.
+`refillDeck()` cuts the deck back to size on the next load. Trimming
+server-side would mean guessing, and guessing low loses a card someone was
+studying.
 
 ### Purchases — monotonic, never lowered
 
 **A purchase can be restored. It can never be revoked.**
 
-- `adsRemovedStripe` = `live OR backup`
-- `adsRemovedPlay` = `live OR backup`
-- `adsRemoved` = recomputed as the union of those two, never taken from the file
-- `adsRemovedAt` = the **earliest** grant either copy knows about, so someone Pro
-  since March is not restamped as Pro since today
+- `adsRemovedStripe` = `live OR ledger`
+- `adsRemovedPlay` = `live OR ledger`
+- `adsRemoved` = recomputed as the union of those two, never taken as-is from
+  either side
+- `adsRemovedAt` = the **earliest** grant either copy knows about, so someone
+  Pro since March is not restamped as Pro since today
 - `stripeSessionId`, `revenueCatEventId`, `adsRemovedSource` = live value wins;
-  the backup only fills a blank, so a current reference is never replaced by a
+  the ledger only fills a blank, so a current reference is never replaced by a
   superseded one
 
 Two cases fall out, and both are the point:
 
-- Someone bought Pro **after** the file was downloaded. Restoring does not take
-  it away.
-- Someone's record was **destroyed**. Restoring gives it back.
+- Someone bought Pro **after** the ledger last matched `users/{uid}`. A restore
+  does not take it away.
+- `users/{uid}` was **damaged or destroyed**. A restore gives the purchase back
+  from the ledger, even if the whole document is gone.
 
-A refund or an expiry is the webhooks' business (`_entitlements.mjs`), never a
-restore's.
+A refund or an expiry is the webhooks' business (`setSourceEntitlement`), never
+a restore's.
 
 Documents written before the per-source split — `adsRemoved: true` with no
 source flags — are read as legacy Stripe grants using the very same `readFlag`
-the entitlement code uses. It is imported rather than copied: a second, drifting
-copy would quietly revoke ad removal from everyone who bought on the web before
-the split.
-
-### The ad whitelist
-
-Restored on a full run only, and only where an entry is missing. Never deleted.
-Losing it puts ads back for people who were promised none.
+the entitlement code uses. It is imported rather than copied: a second,
+drifting copy would quietly revoke ad removal from everyone who bought on the
+web before the split.
 
 ## Restoring
 
-Menu → **💾 Backup & Restore (admin)** → choose the file.
+Menu → **🛟 Restore Progress (admin)**.
 
-- **Preview** reads and compares and writes nothing. Do this first. It reports
-  exactly what would change.
-- **Restore** does it.
+- Put an account's **email address or uid** in the box to restore just them —
+  the case that actually comes up, when someone writes in having lost their
+  progress. Matching on email means support never has to ask for a uid nobody
+  knows; it is resolved through Firebase Auth (`getUserByEmail`), not guessed
+  from anything client-supplied.
+- Leave it blank to restore **every** account. The server pages through
+  `users/{uid}` 100 at a time, ordered by document id, and the client
+  (`src/admin-restore.js`) follows the cursor automatically.
 
-Each user is written in its own transaction, for the same reason
-`setSourceEntitlement` uses one: the Stripe and RevenueCat webhooks write to
-these documents at unpredictable moments, and a read-modify-write without a
-transaction could drop a purchase that landed mid-restore.
+**Preview** reads and compares and writes nothing — do this first. **Restore**
+does it. Each account is written in its own transaction, for the same reason
+`setSourceEntitlement` uses one: the webhooks write to these documents at
+unpredictable moments, and a read-modify-write without a transaction could drop
+a purchase that landed mid-restore.
 
 Restored documents carry `restoredAt`, `restoredBy` and `restoredFrom` as an
 audit trail. They are server-owned; no client can write or clear them.
 
-### One person
-
-Put their **email address or uid** in the box before pressing Preview or
-Restore. Blank restores everyone.
-
-This is the case that actually comes up: someone writes in having lost their
-progress, and you restore only them. Matching on email means support never has
-to ask for a uid nobody knows.
-
-## Accounts that predate high-water marks
-
-An account that has not saved since this shipped has no mark yet. The export
-merges the mark with the live document and takes the best of both, so those
-accounts export at their current state and heal to a true high-water mark the
-first time they save. No migration, no backfill.
-
 ## Account deletion
 
-`delete-account.mjs` removes `highWater/{uid}` alongside `users/{uid}`. It has
-to: the mark is a second copy of the same progress, and deleting an account
-without it would leave the data behind and let a later restore bring it back.
+`delete-account.mjs` removes `highWater/{uid}` and `purchaseLedger/{uid}`
+alongside `users/{uid}`. It has to: both are second copies of data this
+endpoint exists to erase, and leaving either behind would let a later restore
+bring it straight back.
 
 ## Tests
 
@@ -234,10 +179,21 @@ npm test
 
 `_backup.test.mjs` covers the rules directly — that the mark cannot be walked
 backwards by a wipe, that `growsFrom` catches every kind of shrink, that the
-merge is commutative, associative and idempotent, that a stale file cannot un-Pro
-anyone, that a destroyed record comes back, and that a legacy grant survives.
+merge is commutative, associative and idempotent, that a purchase can never be
+revoked, and that a legacy grant survives.
 
 `_restore.e2e.test.mjs` drives the real client half against a fake Firestore of
-250 accounts — enough that paging and chunking both engage — through the case
-this design exists for: an account peaks, is wiped the next day, and is
-downloaded the day after that. The file carries the peak.
+250 accounts — enough that the server's cursor paging engages — with no file
+anywhere in it: an account peaks and is wiped and is restored straight from
+what was already there; a `users/{uid}` document is deleted outright and its
+purchase comes back from the ledger alone; a purchase made after the last
+restore survives running it again; one account is restored by the email
+address it wrote in from; an unknown email is rejected.
+
+## What this is not
+
+Point-in-time recovery. `highWater` and `purchaseLedger` hold the best and the
+true, not a history — they cannot show what an account looked like last March,
+only its peak and its current entitlement. If you need that, enable Firestore
+PITR in the Firebase console; it is separate, always on, and does not replace
+this.
