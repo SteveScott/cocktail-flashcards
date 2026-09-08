@@ -5,8 +5,8 @@
 // purchaseLedger or highWater is behind users/{uid} in some way nobody
 // anticipated -- so they get a regression guard even though the project
 // carries no test framework. Plain node, no runner, no dependency.
-import { mergePurchase, describeChange } from "./_backup.mjs";
-import { mergeProgress, growsFrom, sameProgress } from "../../src/progress-merge.js";
+import { mergePurchase, describeChange } from "../netlify/functions/_backup.mjs";
+import { mergeProgress, growsFrom, sameProgress } from "../src/progress-merge.js";
 
 let fail = 0;
 const eq = (name, got, want) => {
