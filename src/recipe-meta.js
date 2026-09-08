@@ -401,13 +401,19 @@ export function summarize(c) {
   return `A ${method} cocktail made with ${named}, served in ${glassPhrase(c.glass)}.`;
 }
 
-// ── The codex: every ingredient the corpus knows, and how often ─────────────
+// ── The ingredient lexicon and its sampling distribution ───────────────────
 //
-// Used to draw plausible wrong answers for the "86 It" quiz. Frequency is the
-// whole point: an ingredient in 73 recipes is a far better impostor than one
-// that appears once, because the question worth asking is "does this belong in
-// THIS drink", not "have you ever heard of this". Half of all ingredient
-// mentions come from the top 21 items, so weighting keeps the game hard.
+// The vocabulary of the recipe corpus — every distinct ingredient name — with a
+// unigram distribution over it, used to draw plausible wrong answers for the
+// "86 It" quiz. Frequency is the whole point: an ingredient in 74 recipes is a
+// far better wrong answer than one that appears once, because the question
+// worth asking is "does this belong in THIS drink", not "have you ever heard of
+// this".
+//
+// (The assessment-theory term for a wrong option is a *distractor*. This file
+// says "impostor" throughout because that is the game's own word — the menu
+// button reads "86 It — Spot the Impostors" — and one vocabulary for the
+// feature beats a more correct one that no longer matches the screen.)
 
 // An impostor has to read as an ingredient on its own. These do not: stated
 // alternatives ("Bourbon or Rye"), and entries carrying an instruction
@@ -434,7 +440,36 @@ export function ingredientLabels(c) {
   return seen;
 }
 
-export function buildCodex(recipes) {
+// Sampling straight from the unigram distribution is not sharp enough, and the
+// shape of the corpus is why. 242 types share 1211 tokens, but 124 of those
+// types are hapax legomena — they occur exactly once — and drawn in proportion
+// to their frequency that tail takes 10% of every draw between them. Two
+// impostors a question, ten questions a round, and a player meets roughly two
+// ingredients-from-nowhere per round, which is how Tawny Port at 1/1211 on its
+// own still turns up often enough to look like no weighting at all.
+//
+// The standard remedy is to sample from a power-smoothed unigram distribution:
+// raise each probability to an exponent and renormalise. It is the same
+// transform word2vec uses to pick negative samples, at U(w)^0.75 — and this is
+// the same problem, drawing plausible wrong answers from a term distribution.
+// The sign of the correction is the difference: an exponent below 1 flattens
+// the distribution to give rare terms more of the draw, which is what word2vec
+// wants; above 1 it sharpens, which is what this quiz wants. Equivalently it is
+// a temperature of 1/ALPHA = 0.67, below 1 and so peaked.
+//
+// The ranking never changes, only the gaps. At 1.5 the hapax tail falls from
+// 10% of draws to 2.4% — one obscure ingredient every other round rather than
+// two a round — while Fresh Lemon Juice doubles to 12%. Push ALPHA higher and
+// the head of the distribution starts repeating instead, which reads just as
+// mechanical as the tail did.
+const ALPHA = 1.5;
+
+// The lexicon: one row per type, carrying `count` (its token count), `frequency`
+// (the unigram MLE, count/tokens) and `probability` (the power-smoothed
+// distribution the draw actually samples from). Both `frequency` and
+// `probability` lie in 0..1 and both sum to 1 across the lexicon — the first
+// describes the corpus, the second describes the game.
+export function buildLexicon(recipes) {
   const freq = new Map();
   for (const c of recipes) {
     for (const label of ingredientLabels(c)) {
@@ -442,7 +477,16 @@ export function buildCodex(recipes) {
       freq.set(label, (freq.get(label) || 0) + 1);
     }
   }
-  return [...freq].map(([label, count]) => ({ label, count }));
+  const mentions = [...freq.values()].reduce((s, n) => s + n, 0) || 1;
+  const table = [...freq].map(([label, count]) => ({
+    label,
+    count,
+    frequency: count / mentions,
+  }));
+  const smoothed = table.map(e => Math.pow(e.frequency, ALPHA));
+  const partition = smoothed.reduce((s, w) => s + w, 0) || 1;
+  table.forEach((e, i) => { e.probability = smoothed[i] / partition; });
+  return table;
 }
 
 // Two names clash when either contains the other. "Gin" cannot be an impostor
@@ -454,20 +498,27 @@ function clashes(a, b) {
   return x.includes(y) || y.includes(x);
 }
 
-// Draw n impostors, weighted by how common each is in the codex. Anything that
-// clashes with a real ingredient — or with an impostor already drawn — is out
-// of the pool before the draw, so a question can never offer the same thing
-// twice under two names.
-export function drawImpostors(codex, realLabels, n, rand = Math.random) {
+// Sample n impostors from the lexicon without replacement. Anything that clashes
+// with a real ingredient — or with an impostor already drawn — is removed from
+// the support before the draw, so a question can never offer the same thing
+// twice under two names. That leaves the remaining mass summing to less than 1,
+// hence the partition function recomputed per draw.
+//
+// The sampler is inverse-CDF (roulette-wheel) selection: walk the support
+// accumulating mass until it exceeds a uniform draw. Each type therefore owns an
+// interval as wide as its probability, which is what makes equal probabilities
+// equally likely regardless of where they sit in the array — see the --verify
+// mode of scripts/ingredient-frequency.mjs, which measures those widths.
+export function drawImpostors(lexicon, realLabels, n, rand = Math.random) {
   const out = [];
-  let pool = codex.filter(e => !realLabels.some(r => clashes(e.label, r)));
-  for (let i = 0; i < n && pool.length > 0; i++) {
-    const total = pool.reduce((s, e) => s + e.count, 0);
-    let r = rand() * total;
-    let pick = pool[pool.length - 1];
-    for (const e of pool) { r -= e.count; if (r <= 0) { pick = e; break; } }
+  let support = lexicon.filter(e => !realLabels.some(r => clashes(e.label, r)));
+  for (let i = 0; i < n && support.length > 0; i++) {
+    const partition = support.reduce((s, e) => s + e.probability, 0);
+    let r = rand() * partition;
+    let pick = support[support.length - 1];
+    for (const e of support) { r -= e.probability; if (r <= 0) { pick = e; break; } }
     out.push(pick.label);
-    pool = pool.filter(e => !clashes(e.label, pick.label));
+    support = support.filter(e => !clashes(e.label, pick.label));
   }
   return out;
 }
@@ -482,9 +533,9 @@ export function eightySixEligible(c) {
 // One question: the drink's real ingredients plus one, two or three impostors
 // (equally likely), shuffled together. The cocktail is spread in so callers can
 // keep treating a question as a recipe — `name` and `rank` still read.
-export function buildEightySixQuestion(c, codex, rand = Math.random) {
+export function buildEightySixQuestion(c, lexicon, rand = Math.random) {
   const real = ingredientLabels(c);
-  const impostors = drawImpostors(codex, real, 1 + Math.floor(rand() * 3), rand);
+  const impostors = drawImpostors(lexicon, real, 1 + Math.floor(rand() * 3), rand);
   const options = [
     ...real.map(label => ({ label, real: true })),
     ...impostors.map(label => ({ label, real: false })),
