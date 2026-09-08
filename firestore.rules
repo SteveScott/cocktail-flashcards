@@ -16,8 +16,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Accounts allowed to manage the ad whitelist. This must be kept in step
-    // with VITE_ADMIN_EMAILS in .env — that variable only hides the admin UI,
-    // it grants nothing. Lowercase entries only.
+    // with VITE_ADMIN_EMAILS in .env by hand — that variable grants nothing
+    // HERE, in the rules, however it is set. (It does gate the admin restore
+    // endpoint, which runs on the Admin SDK and so never reaches these rules at
+    // all — see netlify/functions/_adminAuth.mjs.) Lowercase entries only.
     function admins() {
       return ['stevescott517@gmail.com'];
     }
@@ -62,6 +64,72 @@ service cloud.firestore {
 
       // Purchase history should not be erasable by the buyer.
       allow delete: if false;
+    }
+
+    // Each account's HIGH-WATER MARK: the best state it has ever reached. The
+    // app raises it on every save (App.jsx -> saveHighWater), and the admin
+    // backup exports these rather than the live documents, which is what lets
+    // one file hold every user at their maximum without any snapshot schedule.
+    //
+    // Two rules make it worth trusting, and both are enforced here rather than
+    // left to the client that writes it:
+    //
+    //   1. PROGRESS ONLY. A restore pushes this document back into users/{uid}.
+    //      An entitlement riding along in a document its own owner can write
+    //      would be one any user could grant themselves — write
+    //      `adsRemoved: true` here, wait for a restore, and Pro is free. hasOnly
+    //      is what stops it, and it is a whitelist rather than a denylist so a
+    //      field added later is refused by default rather than silently allowed.
+    //
+    //   2. IT ONLY GROWS. The mark is worthless if the same bug that empties a
+    //      live document can empty this one after it. Every list must still
+    //      contain what it contained before, so the wipe that started all this —
+    //      a starter deck written over a full one — is rejected outright.
+    //      Per-score values cannot be compared without iterating, which rules
+    //      cannot do; the client takes the max, and the key set is held here.
+    function highWaterKeysOk() {
+      return request.resource.data.keys().hasOnly(['progress', 'updatedAt']);
+    }
+
+    function highWaterGrows() {
+      let before = resource.data.progress;
+      let after = request.resource.data.progress;
+      return after.learned.hasAll(before.get('learned', []))
+        && after.tried.hasAll(before.get('tried', []))
+        && after.scores.keys().hasAll(before.get('scores', {}).keys())
+        // `active` is deliberately not checked: a mastered cocktail leaves the
+        // deck, so it is the one list that legitimately shrinks.
+        && (before.get('masterMode', false) == false || after.masterMode == true);
+    }
+
+    match /highWater/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      // Reading the collection would expose every user's progress.
+      allow list: if false;
+
+      allow create: if isSignedIn() && request.auth.uid == uid && highWaterKeysOk();
+      allow update: if isSignedIn() && request.auth.uid == uid && highWaterKeysOk() && highWaterGrows();
+
+      // A high-water mark that its owner can delete is not one. Account
+      // deletion goes through the Admin SDK, which ignores these rules.
+      allow delete: if false;
+    }
+
+    // A second, independent copy of every account's purchase fields, kept in
+    // lockstep with users/{uid} by setSourceEntitlement (_entitlements.mjs) —
+    // same transaction, same values, every time a purchase is granted or
+    // revoked. It exists so a restore has something to read even if users/{uid}
+    // itself is ever damaged: see docs/backup-restore.md.
+    //
+    // No client access at all, in either direction — not even a GET of your own
+    // entitlement, which users/{uid} already serves. A collection no client can
+    // reach is one a client cannot corrupt, race, or leak from; only the Admin
+    // SDK (the webhooks, and the restore endpoint) ever touches it. The
+    // catch-all at the bottom of this file would deny it anyway; it is repeated
+    // here, explicitly, because silence on a collection this security-sensitive
+    // would read as an oversight rather than a decision.
+    match /purchaseLedger/{uid} {
+      allow read, write: if false;
     }
 
     match /adWhitelist/{email} {

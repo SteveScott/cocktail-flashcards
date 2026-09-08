@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "create-pro-product": "node scripts/create-pro-product.mjs",
     "icons": "node scripts/icons.mjs",
-    "ingredient-frequency": "node scripts/ingredient-frequency.mjs"
+    "test": "node netlify/functions/_backup.test.mjs && node netlify/functions/_restore.e2e.test.mjs",
+    "ingredient-frequency": "node scripts/ingredient-frequency.mjs",
+    "backfill-purchase-ledger": "node scripts/backfill-purchase-ledger.mjs"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.1.0",

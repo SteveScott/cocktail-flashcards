@@ -5,9 +5,11 @@ import { getAdmin } from "./_firebaseAdmin.mjs";
 // form asks for the URL where that happens.
 //
 // This has to run server-side. firestore.rules sets `allow delete: if false` on
-// users/{uid} so a buyer cannot erase their own purchase record, and the client
-// SDK's deleteUser() additionally fails with auth/requires-recent-login for
-// anyone who signed in more than a few minutes ago. The Admin SDK bypasses both:
+// users/{uid} so a buyer cannot erase their own purchase record, the same on
+// highWater/{uid} — a high-water mark its owner can delete is not one — and
+// purchaseLedger/{uid} is denied to every client outright. The client SDK's
+// deleteUser() additionally fails with auth/requires-recent-login for anyone
+// who signed in more than a few minutes ago. The Admin SDK bypasses all of it:
 // it ignores security rules and does not care how old the session is.
 //
 // Order matters. The Firestore documents go first — if the auth user were
@@ -54,6 +56,12 @@ export async function handler(event) {
     const db = admin.firestore();
     const batch = db.batch();
     batch.delete(db.collection("users").doc(uid));
+    // Both of this account's second copies. Each exists so progress and
+    // purchases survive damage to users/{uid} — deleting the account without
+    // them would leave that data sitting in two other collections, for a later
+    // restore to bring straight back.
+    batch.delete(db.collection("highWater").doc(uid));
+    batch.delete(db.collection("purchaseLedger").doc(uid));
     if (email) batch.delete(db.collection(AD_WHITELIST_COLLECTION).doc(email));
     await batch.commit();
   } catch (e) {

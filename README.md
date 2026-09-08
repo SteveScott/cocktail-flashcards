@@ -682,10 +682,16 @@ hold handles on fresh files; `emptyOutDir` stays `false`.
 - **`firestore.rules` is the boundary.** Clients ship all the monetization code
   and every `VITE_` value is inlined into the bundle by design; none of that is
   secret and none of it is trusted.
-- Clients may write only `progress` and `updatedAt` on their own document.
-  Entitlement flags are written only by server functions using the Admin SDK.
-- `VITE_ADMIN_EMAILS` only hides the admin UI. The real gate is the `admins()`
-  list in `firestore.rules`, which must be kept in step with it.
+- Clients may write only `progress` and `updatedAt` on their own document, and
+  only `progress`/`updatedAt` on their own `highWater` mark — which rules also
+  forbid from shrinking. Entitlement flags, and the whole `purchaseLedger`
+  collection, are written only by server functions using the Admin SDK.
+- `VITE_ADMIN_EMAILS` names the administrators. It hides the admin UI, and
+  `netlify/functions/_adminAuth.mjs` checks the same list before the restore
+  endpoint will do anything. Being in the bundle costs nothing — an address
+  there only matters to someone already holding a verified Firebase ID token
+  minted for it. Ad-whitelist writes are gated separately by the `admins()`
+  list in `firestore.rules`, which must be kept in step with it by hand.
 - Server secrets (`STRIPE_*`, `REVENUECAT_WEBHOOK_SECRET`, `FIREBASE_*` service
   account) live in Netlify's environment and are never prefixed `VITE_`.
 - Webhooks verify their caller: Stripe by signature, RevenueCat by a
@@ -796,3 +802,4 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 | [docs/mobile-google-signin.md](docs/mobile-google-signin.md) | Native Google sign-in for the Capacitor build, and diagnosing failures. |
 | [docs/mobile-monetization.md](docs/mobile-monetization.md) | AdMob, Play Billing and RevenueCat setup, phase by phase. |
 | [docs/store-listing.md](docs/store-listing.md) | The Play listing copy — app name, short and full description — and the claims it is allowed to make. |
+| [docs/backup-restore.md](docs/backup-restore.md) | The high-water mark and purchase ledger behind every account, and how a restore merges them back — no file, no download, progress by union, purchases never revoked. |

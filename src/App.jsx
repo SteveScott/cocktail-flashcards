@@ -7,6 +7,8 @@ import {
   isEmailAdWhitelisted, addEmailToAdWhitelist, removeEmailFromAdWhitelist, listAdWhitelist,
 } from "./firebase";
 import cocktailData from './cocktails.json';
+import { restoreProgress } from "./admin-restore.js";
+import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
 import { norm, getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
@@ -459,6 +461,14 @@ export default function App() {
   const [whitelist, setWhitelist] = useState([]);
   const [whitelistInput, setWhitelistInput] = useState("");
   const [whitelistMsg, setWhitelistMsg] = useState("");
+  const [showBackup, setShowBackup] = useState(false);
+  const [backupBusy, setBackupBusy] = useState("");
+  const [backupMsg, setBackupMsg] = useState("");
+  const [backupErr, setBackupErr] = useState("");
+  // Blank restores everyone; an address or uid restores that one account, which
+  // is the case that actually comes up — someone writes in having lost theirs.
+  const [restoreWho, setRestoreWho] = useState("");
+  const [restoreResult, setRestoreResult] = useState(null);
   // Ad removal has two independent sources and they must never overwrite each
   // other: `adsRemovedCloud` is the account-wide flag in Firestore (written
   // server-side by the Stripe and RevenueCat webhooks — the cross-platform
@@ -524,6 +534,10 @@ export default function App() {
   // keeps the live value reachable in there, so a merge can never narrow the pool
   // of someone who has already been confirmed as Pro.
   const proRef = useRef(false);
+  // This account's high-water mark: everything it has ever had, held here so a
+  // save does not have to read it back first. Seeded from highWater/{uid} at
+  // sign-in, raised on every save, never lowered — see saveHighWater().
+  const highWaterRef = useRef(null);
   useEffect(() => { proRef.current = isPro; }, [isPro]);
 
   // Is this visitor actually being served web ads right now? It no longer
@@ -604,6 +618,9 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       stopDoc();
+      // Whoever signs in next has their own mark; one account's must never be
+      // written to another's document.
+      highWaterRef.current = null;
       // A new subscription has to re-do the handshake before this device may
       // write again, whichever user it turns out to be.
       setSyncedUid(null);
@@ -661,6 +678,20 @@ export default function App() {
                 .catch(e => console.error("Cloud sync failed", e));
               return stamped;
             });
+            // Seed the high-water mark before the first save can raise it. Read
+            // separately from users/{uid}: it is a different document, and on a
+            // device that has never saved it is the only place this account's
+            // best state exists. A failure here is not fatal — the mark starts
+            // from what this device knows and grows from there, and the rules
+            // reject any write that would lower it. Nor is arriving after a save
+            // has already raised it: merging into whatever the ref holds, rather
+            // than assigning over it, is what makes the two orders agree.
+            getDoc(doc(db, "highWater", u.uid))
+              .then(hw => {
+                highWaterRef.current = mergeProgress(
+                  highWaterRef.current, hw.exists() ? hw.data()?.progress : null, u.uid);
+              })
+              .catch(e => console.error("Could not read the high-water mark", e));
             // The account's own progress is now folded in, so the autosave effect
             // below is free to write. Before this point it would have been
             // writing whatever this device happened to hold.
@@ -758,6 +789,37 @@ export default function App() {
     }
   }, []);
 
+  // Raise this account's high-water mark alongside the ordinary save.
+  //
+  // users/{uid} holds the CURRENT state and so follows it down: a reset, or a
+  // bug of the kind that emptied accounts, writes the emptied state straight
+  // over the full one. highWater/{uid} is the same progress under a different
+  // rule — it only ever grows — so the best an account has ever reached
+  // survives whatever happens to the live document. Admin restore reads this
+  // document directly, so the peak is already backed up the moment it is
+  // reached — there is no export step and nothing to schedule.
+  //
+  // Progress only. This document is client-written and a restore pushes it back
+  // into users/{uid}, so an entitlement riding along here would be one any user
+  // could grant themselves. firestore.rules refuses any other field.
+  function saveHighWater(uid, progress) {
+    const raised = mergeProgress(highWaterRef.current, progress, uid);
+    if (!raised) return;
+    if (!growsFrom(highWaterRef.current, raised)) {
+      // Unreachable unless the merge itself is wrong: the rules would reject
+      // this write anyway, so fail loudly here rather than silently there.
+      console.error("High-water merge would lose progress; not writing", uid);
+      return;
+    }
+    // Nothing new to record: skip the write rather than spend one saying so.
+    // Studying re-reads and re-saves constantly, and the mark only moves when
+    // something is actually learned, tried or scored higher.
+    if (sameProgress(highWaterRef.current, raised)) return;
+    highWaterRef.current = raised;
+    setDoc(doc(db, "highWater", uid), { progress: raised, updatedAt: Date.now() }, { merge: true })
+      .catch(e => console.error("High-water save failed", e));
+  }
+
   // Push progress to the cloud whenever it changes and a user is signed in.
   useEffect(() => {
     if (!firebaseEnabled || !user) return;
@@ -773,6 +835,7 @@ export default function App() {
       // merge:true so autosaving progress never clobbers server-owned fields
       // like `adsRemoved` (set by the Stripe webhook via the Admin SDK).
       setDoc(doc(db, "users", user.uid), { progress: st, updatedAt: Date.now() }, { merge: true }).catch(e => console.error("Cloud save failed", e));
+      saveHighWater(user.uid, st);
     }, 800);
     return () => clearTimeout(t);
   }, [st, user, syncedUid]);
@@ -958,6 +1021,40 @@ export default function App() {
     // a session Firebase dropped on its own.
     signOutIntent.current = true;
     signOut(auth).catch(e => { signOutIntent.current = false; console.error("Sign-out failed", e); });
+  }
+
+  // Restore one account, or every account, to its best known state. No file is
+  // involved: the server reads highWater/{uid} and purchaseLedger/{uid} — both
+  // already durable, already current, already in Firestore — and merges them
+  // into users/{uid} directly. See netlify/functions/admin-restore.mjs.
+  //
+  // dryRun reads and compares without writing, so an operator can see what
+  // would change before it does. The restore itself can only ever add — see
+  // netlify/functions/_backup.mjs — so the confirm is a courtesy, not a guard.
+  async function runRestore(dryRun) {
+    const who = restoreWho.trim();
+    if (!dryRun && !confirm(
+      who
+        ? `Restore ${who} to their best known progress?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.`
+        : `Restore every account to its best known progress?\n\nProgress is merged, never replaced: scores keep whichever value is higher and nothing already there is removed. A purchase can only be restored, never revoked.`
+    )) return;
+
+    setBackupErr(""); setRestoreResult(null); setBackupBusy(dryRun ? "preview" : "restore");
+    try {
+      const idToken = await user.getIdToken();
+      const isUid = who && !who.includes("@");
+      const result = await restoreProgress(idToken, {
+        uid: isUid ? who : undefined,
+        email: isUid ? undefined : (who || undefined),
+        dryRun,
+        onProgress: (done) => setBackupMsg(`${dryRun ? "Checked" : "Restored"} ${done} so far…`),
+      });
+      setRestoreResult(result);
+      setBackupMsg("");
+    } catch (e) {
+      console.error("Restore failed", e);
+      setBackupMsg(""); setBackupErr(e.message || "Restore failed.");
+    } finally { setBackupBusy(""); }
   }
 
   // Deletes the cloud account and its data, then clears this device. The server
@@ -1537,6 +1634,72 @@ export default function App() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Restore. The endpoint runs on the server with the Admin SDK, because
+          firestore.rules deliberately forbids any client — an admin's included —
+          from listing the users collection or reading someone else's document.
+
+          No file changes hands. Progress and purchases are already backed up the
+          moment they happen — a high-water mark that only ever grows, and a
+          purchase ledger no client can even read — so this just merges those
+          straight into the account. A restore can only ever ADD: scores take
+          whichever value is higher, lists are unioned, and a purchase can be
+          restored but never revoked. See docs/backup-restore.md. */}
+      {isAdmin && (
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
+          <button onClick={()=>setShowBackup(v=>!v)} style={{background:"transparent",border:"none",color:C.brass,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
+            🛟 Restore Progress (admin) {showBackup ? "▲" : "▼"}
+          </button>
+          {showBackup && (
+            <div style={{marginTop:"0.75rem"}}>
+              <div style={{fontSize:"0.72rem",color:C.faint,marginBottom:"0.75rem",lineHeight:1.5}}>
+                Every account's best-ever progress, and every purchase, already
+                lives safely in Firestore. This merges that back into the account
+                — nothing to download, nothing to upload.
+              </div>
+
+              <input
+                value={restoreWho}
+                onChange={e=>setRestoreWho(e.target.value)}
+                placeholder="Email or uid — blank restores everyone"
+                style={{width:"100%",boxSizing:"border-box",padding:"0.5rem 0.75rem",borderRadius:8,background:C.ink,border:`1px solid ${C.rule}`,color:C.ivory,fontSize:"0.8rem",outline:"none",marginBottom:"0.6rem"}}
+              />
+              <div style={{display:"flex",gap:"0.5rem"}}>
+                <button onClick={()=>runRestore(true)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.peacockLite,fontWeight:600,fontSize:"0.78rem",border:`1px solid ${C.peacockEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
+                  {backupBusy === "preview" ? "Checking…" : "Preview"}
+                </button>
+                <button onClick={()=>runRestore(false)} disabled={Boolean(backupBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.brass,fontWeight:700,fontSize:"0.78rem",border:`1px solid ${C.brassEdge}`,cursor:backupBusy?"not-allowed":"pointer"}}>
+                  {backupBusy === "restore" ? "Restoring…" : "Restore"}
+                </button>
+              </div>
+
+              {backupMsg && <div style={{fontSize:"0.75rem",color:C.muted,marginTop:"0.6rem"}}>{backupMsg}</div>}
+              {backupErr && <div style={{fontSize:"0.75rem",color:C.ember,marginTop:"0.6rem"}}>{backupErr}</div>}
+
+              {restoreResult && (
+                <div style={{marginTop:"0.75rem",background:C.ink,borderRadius:8,padding:"0.6rem 0.75rem"}}>
+                  <div style={{fontSize:"0.78rem",fontWeight:700,color:restoreResult.dryRun?C.peacockLite:C.jade,marginBottom:"0.35rem"}}>
+                    {restoreResult.dryRun ? "Preview — nothing was written" : "Restored"}
+                  </div>
+                  <div style={{fontSize:"0.75rem",color:C.muted,lineHeight:1.6}}>
+                    {restoreResult.examined} account{restoreResult.examined === 1 ? "" : "s"} checked ·{" "}
+                    {restoreResult.changed} {restoreResult.dryRun ? "would change" : "changed"}
+                    {restoreResult.proRestored > 0 && ` · ${restoreResult.proRestored} Pro ${restoreResult.dryRun ? "would be" : ""} restored`}
+                  </div>
+                  <div style={{marginTop:"0.4rem",maxHeight:150,overflowY:"auto",display:"flex",flexDirection:"column",gap:"0.25rem"}}>
+                    {restoreResult.details?.map(d => (
+                      <div key={d.uid} style={{fontSize:"0.72rem",color:C.parchment}}>
+                        {d.email || d.uid}: +{d.learnedAdded} learned, +{d.triedAdded} tried, {d.scoresRaised} scores raised
+                        {d.proRestored && <span style={{color:C.brass}}> · Pro restored</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
