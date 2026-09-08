@@ -87,21 +87,25 @@ const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || "")
 // Keep these in step with the tokens in src/index.css, which dress the page
 // around the app and carry the two font stacks.
 
-// Nav buttons are branded by hue, not by meaning, so they get their own names —
-// pointing at the role colours rather than repeating them, which is what stops
-// the 86 It button and the Clear Progress button drifting apart. The one
-// exception is navIndex: Index is the only nav colour with no second job, so it
-// is defined in the palettes above rather than aliased here.
-const withNavAliases = (t) => ({
-  ...t,
-  navStudy: t.info,
-  navQuiz: t.accentAlt,
-  navEightySix: t.danger,
-});
-
 const THEMES = {
-  retro: withNavAliases({
+  retro: {
     name: "Retro",
+    // The menu stack. Study, Self Quiz and 86 It are one gradient: a single
+    // sweep of hue at FIXED lightness and chroma (L* 0.51, C 0.087 in OKLCH),
+    // three stops 73° apart. Holding lightness is what makes that safe rather
+    // than merely pretty — the label colour is fixed, so a ramp that darkened
+    // or lightened as it went would starve one end of contrast. These sit at
+    // 5.1:1 to 5.6:1 against textOnFill, comfortably past AA, and vary only in
+    // the one channel that carries no contrast.
+    //
+    // Index is deliberately NOT on the ramp. It is not a way to practise, it is
+    // the reference shelf, and leaving it off the sweep groups the three study
+    // modes as the set they actually are. It keeps the family's lightness so it
+    // still belongs to the stack.
+    navStudy:        "#02747f",   // teal      h=207
+    navQuiz:         "#5c6097",   // violet    h=280
+    navEightySix:    "#8c506a",   // rose      h=353
+    navIndex:        "#885b2a",   // amber     h=66, off-ramp
 
     well:            "#17100a",   // darkest wood: wells, input fields, text on brass
     surfaceQuiet:    "#2b1c0d",   // quiet button faces
@@ -126,7 +130,7 @@ const THEMES = {
     successWash:     "#5f9d6b26",
     successEdge:     "#5f9d6b80",
 
-    danger:          "#9a3540",   // missed, 86 It, destructive
+    danger:          "#9a3540",   // missed, destructive
     dangerDeep:      "#6d2530",
     dangerWash:      "#9a354026",
     dangerEdge:      "#9a354066",
@@ -136,15 +140,14 @@ const THEMES = {
     dangerLite:      "#dda3a6",   // "IMPOSTOR" and the needs-work chips
     error:           "#d2848a",   // error messages
 
-    info:            "#2f7079",   // Study mode, the active deck
+    info:            "#2f7079",   // the active deck, informational
     masteryMid:      "#3d8892",   // the mid rung of the mastery scale
     infoLite:        "#78b3ba",
     infoWash:        "#4d949e26",
     infoEdge:        "#4d949e80",
 
-    navIndex:        "#8f5f2a",   // Index
 
-    accentAlt:       "#7a4464",   // Self Quiz, and the tried marker
+    accentAlt:       "#7a4464",   // the tried marker
     accentAltDeep:   "#4a2740",
     // The outline and label of an unticked Tried chip. Deliberately rosier than
     // the plum they sit against: a true tint of it comes out lilac, and one cold
@@ -165,10 +168,17 @@ const THEMES = {
       btn: {},
       glow: false,
     },
-  }),
+  },
 
-  future: withNavAliases({
+  future: {
     name: "Future",
+    // The same construction in Future's own spectrum: blue through violet to
+    // magenta, L* 0.54 and C 0.225, which is the most chroma sRGB will hold
+    // across this arc without clipping — the neon survives. 5.1:1 to 5.4:1.
+    navStudy:        "#315cef",   // blue      h=266
+    navQuiz:         "#9336d0",   // violet    h=308
+    navEightySix:    "#c40181",   // magenta   h=350
+    navIndex:        "#187a96",   // cyan      h=223, off-ramp and held quiet
     well:            "#05070f",   // near-black blue: wells, input fields, text on cyan
     surfaceQuiet:    "#0d1426",   // quiet button faces
     surfaceDisabled: "#182a4a",   // disabled faces
@@ -192,7 +202,7 @@ const THEMES = {
     successWash:     "#3dff9226",
     successEdge:     "#3dff9280",
 
-    danger:          "#d1155e",   // missed, 86 It, destructive
+    danger:          "#d1155e",   // missed, destructive
     dangerDeep:      "#7d0d39",
     dangerWash:      "#ff2d7a26",
     dangerEdge:      "#ff2d7a66",
@@ -202,15 +212,13 @@ const THEMES = {
     dangerLite:      "#ffa3c4",   // "IMPOSTOR" and the needs-work chips
     error:           "#ff7aad",   // error messages
 
-    info:            "#2f5cff",   // Study mode, the active deck
+    info:            "#2f5cff",   // the active deck, informational
     masteryMid:      "#4f8bff",   // the mid rung of the mastery scale
     infoLite:        "#8fb6ff",
     infoWash:        "#4f8bff26",
     infoEdge:        "#4f8bff80",
 
-    navIndex:        "#0e7490",   // Index — deep enough not to read as the accent
-
-    accentAlt:       "#7b2fe0",   // Self Quiz, and the tried marker
+    accentAlt:       "#7b2fe0",   // the tried marker
     accentAltDeep:   "#45197d",
     accentAltEdge:   "#a78bfa5c",
     accentAltLite:   "#c9b3ff",
@@ -227,7 +235,7 @@ const THEMES = {
       btn: { textTransform: "uppercase", letterSpacing: "0.09em", fontSize: "0.92rem" },
       glow: true,
     },
-  }),
+  },
 };
 
 // How the scheme picker paints each choice. Literals rather than lookups into
