@@ -370,10 +370,48 @@ on the top 50 in both quizzes.
 
 **Self Quiz** grading is self-reported and does not touch study scores. **86 It**
 grades itself: right only when every real ingredient survives and every impostor
-is gone. Its impostors are drawn from `CODEX`, a frequency-weighted index of every
-ingredient in the corpus — deliberately the whole corpus and not the player's
-pool, because an impostor is an ingredient name rather than a recipe, and a
-smaller draw would make the free game easier rather than smaller.
+is gone. Its impostors are sampled from `LEXICON`, the vocabulary of the recipe
+corpus with a distribution over it — deliberately the whole corpus and not the
+player's pool, because an impostor is an ingredient name rather than a recipe,
+and a smaller support would make the free game easier rather than smaller.
+(*Distractor* is the assessment-theory term for a wrong option; the code says
+"impostor" because that is the game's own word, on the menu button.)
+
+`buildLexicon()` gives each type a `frequency` — the unigram MLE, its share of
+all 1211 tokens — and a `probability`, which is that frequency raised to `ALPHA`
+and renormalised. Both lie in 0–1 and both sum to 1; the first describes the
+corpus, the second is what the sampler draws from.
+
+`ALPHA` exists because the raw unigram distribution is not sharp enough. 124 of
+the 242 types are hapax legomena, and sampled in proportion to their frequency
+that tail takes 10% of every draw between them — two ingredients a round the
+player has no reason to have heard of. Power-smoothing a unigram distribution to
+pick negative samples is the same transform word2vec applies at `U(w)^0.75`; the
+sign is what differs, since an exponent below 1 flattens to favour rare terms and
+above 1 sharpens to suppress them. At `ALPHA = 1.5` (a temperature of 0.67) the
+hapax tail takes 2.4%, one every other round, and Tawny Port falls from 0.083% of
+draws to 0.019%.
+
+`npm run ingredient-frequency` prints the lexicon — recipe count, frequency,
+probability, and the empirical rate over 2000 simulated rounds. Pass a
+substring for one ingredient (`-- Port`) or `--all` for all 242. The distribution
+is the feature, so check it there rather than by playing a round: an ingredient at
+one-in-five-thousand turning up twice in an evening is bad luck, not a bug, and
+the two are indistinguishable from the table.
+
+**Ties need no tie-breaking.** The 124 hapax types carry identical probabilities,
+which raises the fair question of whether inverse-CDF selection — walking the
+support in order until the accumulated mass exceeds a uniform draw — favours
+whichever of them sits earliest. It does not. Each entry owns an interval on the
+CDF as wide as its probability, and equal probabilities are equal-width intervals
+at different offsets; the walk finds the interval containing `r`, and position is
+not an input. Adding jitter to separate tied probabilities would make this worse
+rather than better: applied once at build time it makes one type permanently
+likelier than its twin, and applied per draw it perturbs a sampler that is
+already exactly proportional. `-- --verify` proves it
+by sweeping the sampler across [0,1) on a 20M-point grid and measuring the
+interval each tied type actually receives; they come out identical to within the
+one grid point the grid cannot split.
 
 ### Tried
 
@@ -672,6 +710,7 @@ npm run build     # bundle + 322 static recipe pages + sitemap into dist/
 npm run preview   # serve dist/
 npm run lint      # eslint
 npm run icons     # redraw every icon and splash from scripts/icons.mjs
+npm run ingredient-frequency   # print the ingredient lexicon (--verify to check it)
 ```
 
 - **Colour.** Two schemes, picked at the foot of the menu screen. **Retro** is

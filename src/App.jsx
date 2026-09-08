@@ -9,7 +9,7 @@ import {
 import cocktailData from './cocktails.json';
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
-import { norm, getMethod, buildCodex, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
+import { norm, getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
 import AdSlot from './AdSlot.jsx';
@@ -44,12 +44,12 @@ const PRO_PRICE = "$7.99";
 // them; the rest is what a Pro purchase adds — see poolFor() below.
 const ALL_CARDS = [...top50, ...master150];
 
-// Every ingredient in the corpus with its frequency, for drawing impostors in
-// the 86 It quiz. Built once — the codex never changes at runtime. Deliberately
+// The vocabulary of the corpus and the distribution the 86 It quiz samples wrong
+// answers from. Built once — the lexicon never changes at runtime. Deliberately
 // the whole corpus and not the player's pool: an impostor is an ingredient name,
 // not a recipe, and drawing them from 50 drinks would make the free game easier
 // rather than smaller.
-const CODEX = buildCodex(ALL_CARDS);
+const LEXICON = buildLexicon(ALL_CARDS);
 
 const DECK_SIZE = 20;
 const MASTERY_SCORE = 6;
@@ -1188,7 +1188,7 @@ export default function App() {
     // cannot make a question.
     const eligible = shuffled(pool.filter(eightySixEligible));
     const chosen = (n ? eligible.slice(0, n) : eligible)
-      .map(c => buildEightySixQuestion(c, CODEX));
+      .map(c => buildEightySixQuestion(c, LEXICON));
     setQuizKind("86");
     setQuizLen(n ?? null);
     setQuizPool(chosen);
