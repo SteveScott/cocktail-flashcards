@@ -67,9 +67,13 @@ jobs:
       # automatic caching keys off a `packageManager` field package.json does not
       # have, and checkout's fork restrictions are about pull_request_target and
       # workflow_run, which this file does not use.
+      # Node 24, the current LTS, matching .nvmrc, package.json engines and
+      # NODE_VERSION in netlify.toml. Was 22, which is now in maintenance; the
+      # point of naming it in all four places is that the build somebody runs
+      # locally is the build that deploys.
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       # The key goes to a file by way of the environment, never a command line:
       # the CLI reads it from GOOGLE_APPLICATION_CREDENTIALS, and an argument is
