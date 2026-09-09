@@ -294,7 +294,7 @@ const GLASS_ICONS = [
   ["highball", "🥛"],
   ["collins", "🥤"],
   ["sling", "🥤"],
-  ["zombie", "🥤"],
+  ["chimney", "🥤"],
 ];
 
 // The cocktails a progress state actually studies and quizzes from. Master Mode
