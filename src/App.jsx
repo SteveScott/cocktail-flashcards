@@ -590,7 +590,9 @@ export default function App() {
   // means something is wrong; `hwSavedAt` is when the mark last MOVED, which on
   // a healthy account that hasn't learned anything new is legitimately weeks ago
   // — read as "last backed up" it would invent the false alarm this exists to
-  // prevent. `hwPeak` is what the mark actually holds, which is the reading that
+  // prevent. It is labelled "last incremented" rather than "last raised": the
+  // mark is only ever raised in this codebase's sense, but to anyone who reads
+  // code "raised" is what happens to an error. `hwPeak` is what the mark actually holds, which is the reading that
   // cannot go misleadingly stale: 0 mastered beside a live 25 is the alarm.
   const [hwErr, setHwErr] = useState("");
   const [hwSavedAt, setHwSavedAt] = useState(null);
@@ -1724,7 +1726,7 @@ export default function App() {
           : <div style={frame({borderRadius:12,padding:"0.7rem 1rem",border:`1px solid ${C.border}`,fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.25rem"})}>
               {hwPeak
                 ? <>Saved maximum: <strong style={{color:C.textBody,fontWeight:700}}>{hwPeak.learned} mastered</strong>, {hwPeak.tried} tried
-                    {hwSavedAt ? ` — last raised ${timeAgo(hwSavedAt)}.` : "."}</>
+                    {hwSavedAt ? ` — last incremented ${timeAgo(hwSavedAt)}.` : "."}</>
                 : "Nothing saved yet. Your maximum is recorded automatically as you study, and this will fill in once it is."}
             </div>
       )}
