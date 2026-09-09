@@ -39,11 +39,11 @@ the bitters are absent from the shaking step.
 | Pisco Sour | garnish ✓ | IBA calls for Amargo; Angostura is the usual substitute. |
 | Whiskey Sour | garnish — house choice | See above. Not in the IBA spec; Difford's shakes it in. |
 | Scotch Sour | garnish — house choice | Same divergence; Whisky Exchange shakes in 3 dashes. |
-| Mezcal Sour | none — diverges | Common recipes shake in 2 dashes Angostura *and* drop more on top. Ours has neither. Left alone; see below. |
+| Mezcal Sour | none ✓ | Mezcal, lemon, agave, egg white is the common published form, and it carries no bitters. |
 | Amaretto Sour | none ✓ | Morgenthaler formula: amaretto, cask-strength bourbon, lemon, syrup, egg white. |
 | Clover Club | none ✓ | Gin, lemon, raspberry syrup, egg white. |
 | Clover Leaf | none ✓ | Craddock: "the same as Clover Club, with a sprig of fresh Mint on top." |
-| New York Sour | none — see below | |
+| New York Sour | **added** | Two dashes, tagged as a garnish. Difford's shakes in one; see below. |
 | Midori Sour | none ✓ | Midori, lemon, lime, egg white. |
 | Pink Lady | none ✓ | Gin, applejack, lemon, grenadine, egg white. |
 | White Lady | none ✓ | Craddock is gin, triple sec, lemon; orange bitters only as a suggested variation. |
@@ -55,18 +55,32 @@ the bitters are absent from the shaking step.
 | Porto Flip | none ✓ | |
 | Eggnog | none ✓ | Bitters only in variants such as the Jamaican eggnog. |
 
-## Left alone deliberately
+## On the New York Sour
 
-**New York Sour.** Difford's and Imbibe both finish it with two dashes of
-Angostura on the egg-white foam. But those same sources note egg white is not
-classical in this drink at all, and our entry already departs from the IBA spec
-by including it. Adding bitters on top of that stacks one modern reading on
-another.
+Two dashes of Angostura, added at Steve's request and tagged `(garnish)` so
+they land on the foam after the wine float rather than going into the shaker.
 
-**Mezcal Sour.** The widely published version is mezcal, pineapple, lime, simple
-syrup, egg white and Angostura. Ours is mezcal, lemon, agave, egg white — a
-different drink, not a version of that one missing its bitters. Changing the
-bitters alone would be the wrong half of the fix.
+The sourcing is worth stating precisely, because it cuts the same way as the
+whiskey sour above. Difford's does call for Angostura in a New York Sour, but as
+`1 dash` shaken in with the bourbon and lemon, not dashed on top. The
+two-dashes-on-the-foam finish comes from the recipe writers who treat the drink
+as an egg-white sour and garnish it the way they garnish the rest. Our entry
+follows that second practice, consistent with how the Whiskey Sour, Scotch Sour
+and both Pisco Sours are already written here.
+
+## On the Mezcal Sour
+
+Worth recording, because a first pass got this wrong. Our build — mezcal, lemon,
+agave, egg white — looked like an outlier beside a pineapple-and-lime recipe
+carrying Angostura, and was nearly filed as a divergence. It is not. Mezcal,
+lemon, agave and egg white is the ordinary published form of the drink, and the
+sources giving it agree in carrying no bitters at all. The pineapple version is
+the variant, not the standard. Our entry is right as written.
+
+The recipe has no cited source in this repo. It arrived in `65abc2d`, the
+initial commit, among 201 recipes added under the message "done", and nothing
+was recorded about where any of them came from. The check above is the first
+time it has been held against a reference.
 
 ## Noticed while reading the specs, out of scope for bitters
 
@@ -90,5 +104,6 @@ bitters alone would be the wrong half of the fix.
 - [Wikipedia — Pink lady](https://en.wikipedia.org/wiki/Pink_lady_(cocktail))
 - [PUNCH — Brandy Flip](https://punchdrink.com/recipes/brandy-flip/)
 - [A Couple Cooks — Midori Sour](https://www.acouplecooks.com/midori-sour/)
-- [The Sage Apron — Mezcal Sour](https://thesageapron.com/mezcal-sour/)
+- [The Endless Meal — Mezcal Sour](https://www.theendlessmeal.com/mezcal-sour/)
+- [Difford's Guide — Mezcal Sour](https://www.diffordsguide.com/cocktails/recipe/8253/mezcal-sour)
 - [Fat Baby Bourbon — Millionaire](https://fatbabybourbon.com/blogs/recipe/millionaire)

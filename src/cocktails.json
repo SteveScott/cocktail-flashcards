@@ -83,7 +83,7 @@
     { "name": "Trinidad Sour", "glass": "Coupe", "order": "as-written", "serve": "up", "ingredients": "1 oz Angostura Bitters, 1 oz Orgeat, ¾ oz Fresh Lemon Juice, ½ oz Rye" },
     { "name": "Gold Rush", "glass": "Rocks", "serve": "on the rocks", "ingredients": "2 oz Bourbon, ¾ oz Fresh Lemon Juice, ¾ oz Honey Syrup" },
     { "name": "Brown Derby", "glass": "Coupe", "serve": "up", "ingredients": "2 oz Bourbon, 1 oz Fresh Grapefruit Juice, ½ oz Honey Syrup" },
-    { "name": "New York Sour", "glass": "Rocks or Coupe", "serve": "on the rocks", "ingredients": "2 oz Bourbon, ¾ oz Fresh Lemon Juice, ¾ oz Simple Syrup, ½ oz Egg White, ½ oz Dry Red Wine (float)" },
+    { "name": "New York Sour", "glass": "Rocks or Coupe", "serve": "on the rocks", "ingredients": "2 oz Bourbon, ¾ oz Fresh Lemon Juice, ¾ oz Simple Syrup, ½ oz Egg White, ½ oz Dry Red Wine (float), 2 dashes Angostura Bitters (garnish)" },
     { "name": "Kentucky Buck", "glass": "Highball", "serve": "on the rocks", "ingredients": "2 oz Bourbon, ½ oz Fresh Lemon Juice, ½ oz Simple Syrup, 1 Strawberry (muddled), Ginger Beer (top)" },
     { "name": "Mint Julep", "glass": "Julep Tin or Rocks", "serve": "over crushed ice", "ingredients": "2½ oz Bourbon, ¾ oz Simple Syrup, 8-10 Fresh Mint Leaves" },
     { "name": "Rusty Nail", "glass": "Rocks", "method": "Built", "serve": "on the rocks", "ingredients": "1½ oz Scotch, ½ oz Drambuie" },
