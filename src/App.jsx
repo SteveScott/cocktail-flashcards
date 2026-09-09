@@ -2292,9 +2292,18 @@ export default function App() {
           </div>
         </div>
 
+        {/* One button holds the bottom of the screen through both halves of a
+            question, so it is also the most direct place to report the answer.
+            Neutral until you have answered: the face was green there before,
+            which made the loudest colour on the screen the one saying nothing —
+            it was green whether the drink was about to go well or badly.
+            Afterwards it takes the same green/red the other quiz grades itself
+            with (✓ Knew It / ✗ Didn't Know, below), so "was I right" is
+            answered by the control your thumb is already on rather than only by
+            the line of text above the list. */}
         {qr
-          ? <button onClick={next86} style={{...btn(C.danger),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
-          : <button onClick={check86} style={{...btn(C.successDeep),width:"100%"}}>Check Answer</button>}
+          ? <button onClick={next86} style={{...btn(gotIt ? C.successDeep : C.danger),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
+          : <button onClick={check86} style={{...btn(C.surfaceQuiet),width:"100%",border:`1px solid ${C.borderStrong}`}}>Check Answer</button>}
       </div></div>
     );
   }
