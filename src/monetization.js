@@ -1,0 +1,521 @@
+// Native monetization for the Play Store (Capacitor) build: AdMob banner ads +
+// Google Play Billing (via RevenueCat) for the "Cocktail Flashcards Pro"
+// entitlement, which is what removes ads.
+//
+// Everything here is a no-op unless the Capacitor plugin bridge is present (see
+// isCapacitorApp — deliberately narrower than isPlayApp, which can be set by the
+// URL flag alone).
+//
+// The plugins are imported statically. Each package's top level is a single
+// registerPlugin() call whose web fallback Capacitor loads lazily, so a web
+// visitor pays a few kilobytes of registration and nothing runs.
+//
+// ONE RULE, LEARNED THE HARD WAY: never `await` a plugin object, and never
+// `return` one from an async function. A Capacitor plugin is a Proxy that turns
+// ANY property read into a native method call — @capacitor/core special-cases
+// $$typeof, toJSON and the listener methods, and nothing else. `await plugin`
+// reads `plugin.then`, gets a method wrapper back, calls it, and that is a
+// bridge call to a native method named "then" that never invokes the resolver.
+// The await hangs for ever, with no error, and every purchase on the Play build
+// sat on "Connecting…" until a timeout because loadPurchases() below used to be
+// declared `async`. Call the plugin's methods and await THOSE; hand the object
+// itself around synchronously.
+//
+// Required config. Vite inlines VITE_* at build time — and because the Capacitor
+// shell loads the deployed site (capacitor.config.json → server.url), the build
+// that reaches Play users is NETLIFY'S. Set these in the Netlify site's
+// environment variables; a local .env only affects `npm run dev`.
+//   VITE_ADMOB_BANNER_ID         AdMob banner ad unit id (ca-app-pub-…/…)
+//   VITE_REVENUECAT_ANDROID_KEY  RevenueCat public Android SDK key (goog_…)
+//   VITE_REVENUECAT_TEST_KEY     RevenueCat Test Store key (test_…), dev only
+//   VITE_REVENUECAT_ENTITLEMENT  Entitlement identifier (default cocktail_flashcards_pro)
+import { isCapacitorApp } from "./platform";
+import { AdMob, AdmobConsentStatus, AdmobConsentDebugGeography, BannerAdPosition, BannerAdSize } from "@capacitor-community/admob";
+import { Purchases as PurchasesPlugin, LOG_LEVEL, PAYWALL_RESULT } from "@revenuecat/purchases-capacitor";
+import { RevenueCatUI } from "@revenuecat/purchases-capacitor-ui";
+
+// Google's official TEST banner id — safe to ship as a fallback; it only serves
+// test ads. Replace via VITE_ADMOB_BANNER_ID for the real release.
+const ADMOB_BANNER_ID = import.meta.env.VITE_ADMOB_BANNER_ID || "ca-app-pub-3940256099942544/6300978111";
+
+// Trimmed on the way in. A key pasted into Netlify carrying a trailing newline
+// looks identical in the dashboard and is rejected by RevenueCat — one of the
+// hardest "Connecting…" failures to see. Trimming fixes it here;
+// getBillingDiagnostics() still reports that it happened, so the environment
+// variable itself gets corrected rather than silently papered over.
+const RAW_PROD_KEY = import.meta.env.VITE_REVENUECAT_ANDROID_KEY || "";
+const PROD_KEY = RAW_PROD_KEY.trim();
+const TEST_KEY = (import.meta.env.VITE_REVENUECAT_TEST_KEY || "").trim();
+// VITE_REMOVE_ADS_ENTITLEMENT is the pre-Pro name for this setting — still read
+// so an existing .env keeps working.
+export const ENTITLEMENT =
+  import.meta.env.VITE_REVENUECAT_ENTITLEMENT ||
+  import.meta.env.VITE_REMOVE_ADS_ENTITLEMENT ||
+  "cocktail_flashcards_pro";
+
+// The Test Store simulates purchases with no Play setup, but RevenueCat is
+// explicit that a test_ key must NEVER reach a submitted app. The Capacitor
+// shell loads the deployed site (capacitor.config.json → server.url), so a
+// production bundle is exactly what Play users run: refuse the test key there
+// rather than trusting ourselves to swap it before release. To use the Test
+// Store, point server.url at the Vite dev server (see docs/mobile-monetization.md).
+const IS_DEV = import.meta.env.DEV;
+function resolveApiKey() {
+  if (IS_DEV && TEST_KEY) return TEST_KEY;
+  if (PROD_KEY.startsWith("test_")) {
+    console.error(
+      "RevenueCat: refusing to configure — VITE_REVENUECAT_ANDROID_KEY holds a Test Store key (test_…). " +
+      "Set the production goog_… key before building for Play."
+    );
+    return "";
+  }
+  return PROD_KEY;
+}
+const REVENUECAT_API_KEY = resolveApiKey();
+
+// The last failure inside the billing SDK, kept so the UI can show it.
+// Purchasing breaks on a handset with no console attached — chrome://inspect
+// wants a desktop, a cable and a Chromium browser — so unless the failure is
+// readable from the phone itself it is not diagnosable at all. The UI renders
+// this through getBillingDiagnostics(); nothing else depends on it.
+let lastBillingError = null;
+
+// How far the billing handshake got. A timeout reports that nothing answered,
+// which is only half an answer: importing the plugin, configuring the SDK and
+// logging in fail for different reasons, and a stalled call cannot say which one
+// it was. This is set as each step is entered, so the last value is the step
+// that never came back.
+let billingStage = "not started";
+
+function noteBillingError(step, e) {
+  const message = (e && (e.message || e.errorMessage)) || String(e || "unknown error");
+  const code = e && (e.code !== undefined ? e.code : e.errorCode);
+  lastBillingError = { step, message, code: code === undefined || code === null ? null : String(code) };
+  console.error(`RevenueCat ${step} failed`, e);
+  return lastBillingError;
+}
+
+// Fanned out to React on every CustomerInfo change (see configurePurchases).
+const entitlementListeners = new Set();
+
+// AdMob's shared initialization, same pattern as configurePromise below and for
+// the same reason: the banner effect in App.jsx fires as soon as the ad-free
+// check settles, which can be while AdMob.initialize() is still in flight. A
+// showBanner() that went straight to the plugin would fail against an
+// uninitialized SDK, log once, and never be retried — the effect's dependencies
+// don't change again, so the user would simply never see a banner.
+let adMobPromise = null;
+
+// Whether Google's UMP SDK says we may request ads, and whether this user is
+// entitled to a "privacy options" entry point (required in the EEA/UK once
+// consent has been given, so it can be withdrawn again).
+let canRequestAds = false;
+let privacyOptionsRequired = false;
+
+export function getAdConsentState() {
+  return { canRequestAds, privacyOptionsRequired };
+}
+
+// Collect advertising consent through Google's User Messaging Platform before
+// any ad is requested. UMP is a Google-certified CMP, which is what serving ads
+// to EEA/UK users requires — a home-grown dialog would not qualify.
+//
+// Runs before AdMob.initialize: the consent status determines whether we may
+// request ads at all, and Google's guidance is to gather it first.
+async function gatherAdConsent(AdMob) {
+  try {
+    // In development, force the EEA geography and add the current test device id
+    // so we can see the consent form even if the production dashboard isn't
+    // fully configured yet; production requests consent without these overrides.
+    const debugSettings = import.meta.env.DEV ? {
+      debugGeography: AdmobConsentDebugGeography.EEA,
+      testDeviceIdentifiers: ["D4E142D0230F65BEAF25F94661D24013"],
+    } : undefined;
+
+    let info = await AdMob.requestConsentInfo(debugSettings);
+
+    // REQUIRED means this user is in a region that needs a choice and hasn't
+    // made one. NOT_REQUIRED and OBTAINED both mean don't interrupt them.
+    if (info.status === AdmobConsentStatus.REQUIRED && info.isConsentFormAvailable) {
+      info = await AdMob.showConsentForm();
+    }
+
+    canRequestAds = info.canRequestAds !== false;
+    privacyOptionsRequired = info.privacyOptionsRequirementStatus === "REQUIRED";
+  } catch (e) {
+    // A consent failure must not silently become "show ads anyway" in a region
+    // that requires consent, so fail closed.
+    console.error("Ad consent failed", e);
+    canRequestAds = false;
+    privacyOptionsRequired = false;
+  }
+}
+
+// Reopen Google's privacy options form so consent can be withdrawn or changed.
+export async function showAdPrivacyOptions() {
+  if (!isCapacitorApp) return;
+  try {
+    await AdMob.showPrivacyOptionsForm();
+    // The choice may have changed whether we can serve ads at all.
+    await gatherAdConsent(AdMob);
+  } catch (e) { console.error("privacy options form failed", e); }
+}
+
+function ensureAdMob() {
+  if (!isCapacitorApp) return Promise.resolve(false);
+  if (!adMobPromise) {
+    adMobPromise = (async () => {
+      try {
+        await gatherAdConsent(AdMob);
+        await AdMob.initialize({});
+        return true;
+      } catch (e) {
+        console.error("AdMob init failed:", e.message || e);
+        return false;
+      }
+    })().then(ok => {
+      // Don't cache a failure — the next banner call gets a fresh attempt.
+      if (!ok) adMobPromise = null;
+      return ok;
+    });
+  }
+  return adMobPromise;
+}
+
+// Deliberately NOT async — see the rule at the top of this file. Returning the
+// proxy through a promise is exactly the hang.
+function loadPurchases() {
+  return PurchasesPlugin;
+}
+
+// The single in-flight (then settled) configuration attempt. Every entry point
+// below awaits it.
+//
+// A plain `configured` boolean raced: whoever called first won, and a caller
+// that arrived a moment early — auth resolving before startup finished, say —
+// would silently no-op and never retry, because nothing re-triggers it. Worst
+// case that stranded the session on the anonymous RevenueCat id, leaving the
+// webhook no uid to attribute a purchase to. Sharing one promise makes call
+// order irrelevant: the first caller starts configuration, everyone else waits
+// for that same attempt.
+let configurePromise = null;
+
+async function configurePurchases() {
+  try {
+    billingStage = "loading SDK";
+    const Purchases = loadPurchases();
+    if (IS_DEV) await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+    // No appUserID here: at startup we usually don't know the Firebase uid yet.
+    // linkRevenueCatUser() attaches it as soon as auth resolves.
+    billingStage = "configuring SDK";
+    await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    billingStage = "attaching listener";
+    await Purchases.addCustomerInfoUpdateListener((customerInfo) => emit(customerInfo));
+    billingStage = "configured";
+    return true;
+  } catch (e) {
+    noteBillingError("configure", e);
+    return false;
+  }
+}
+
+// Resolves true once the SDK is usable. Safe to call from anywhere, any number
+// of times.
+function ensureConfigured() {
+  if (!isBillingAvailable()) return Promise.resolve(false);
+  if (!configurePromise) {
+    configurePromise = configurePurchases().then(ok => {
+      // Don't cache a failure forever — a later call gets a fresh attempt.
+      if (!ok) configurePromise = null;
+      return ok;
+    });
+  }
+  return configurePromise;
+}
+
+// RevenueCat is available (Play build, configured with a usable key).
+export function isBillingAvailable() {
+  return isCapacitorApp && Boolean(REVENUECAT_API_KEY);
+}
+
+// Everything needed to tell the "Connecting…" failures apart from the handset.
+// The SDK key is a PUBLIC client key, but only its prefix and length are
+// reported — and the length is the point: a key that reads correctly in the
+// dashboard but arrives one character long has whitespace on the end.
+export function getBillingDiagnostics() {
+  // The JS arrives from the deployed site, but the NATIVE half of each plugin
+  // ships inside the APK. When they disagree — a bundle calling a plugin the
+  // installed build does not carry — a call can wait for a bridge reply that is
+  // never coming, which is exactly what a 20s timeout with no error looks like.
+  const plugins = (typeof window !== "undefined" && window.Capacitor && window.Capacitor.Plugins) || {};
+  return {
+    stage: billingStage,
+    purchasesPlugin: Boolean(plugins.Purchases),
+    pluginList: Object.keys(plugins).sort().join(", ") || "none",
+    bridge: isCapacitorApp,
+    keySet: Boolean(REVENUECAT_API_KEY),
+    keyPrefix: REVENUECAT_API_KEY ? REVENUECAT_API_KEY.slice(0, 8) : "",
+    keyLength: REVENUECAT_API_KEY.length,
+    keyStripped: RAW_PROD_KEY.length - PROD_KEY.length,
+    entitlement: ENTITLEMENT,
+    error: lastBillingError,
+  };
+}
+
+function isActive(customerInfo) {
+  return Boolean(customerInfo?.entitlements?.active?.[ENTITLEMENT]);
+}
+
+function emit(customerInfo) {
+  const active = isActive(customerInfo);
+  for (const cb of entitlementListeners) {
+    try { cb(active, customerInfo); } catch (e) { console.error("entitlement listener failed", e); }
+  }
+}
+
+// Subscribe to entitlement changes. Returns an unsubscribe function.
+//
+// This is the piece that keeps the UI honest: a purchase can complete inside
+// the paywall or Customer Center sheet, a subscription can lapse, or a purchase
+// can transfer between accounts — all without any call of ours returning. The
+// SDK's CustomerInfo listener reports every one of those.
+export function onEntitlementChange(cb) {
+  entitlementListeners.add(cb);
+  return () => entitlementListeners.delete(cb);
+}
+
+// Initialize the ad + billing SDKs and report whether this user already owns
+// Pro. Call on app start — but nothing else has to wait for it, since every
+// entry point drives configuration itself via ensureConfigured().
+export async function initMonetization() {
+  if (!isCapacitorApp) return { adsRemoved: false };
+
+  await ensureAdMob();
+  if (!(await ensureConfigured())) return { adsRemoved: false };
+  return { adsRemoved: await hasProAccess() };
+}
+
+export async function showBanner() {
+  if (!(await ensureAdMob())) return;
+  // UMP says this user hasn't allowed ads (or consent couldn't be established).
+  // Showing one anyway would breach both the consent and Google's ad policy.
+  if (!canRequestAds) return;
+  try {
+    await AdMob.showBanner({
+      adId: ADMOB_BANNER_ID,
+      adSize: BannerAdSize.ADAPTIVE_BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+      margin: 0,
+    });
+  } catch (e) { console.error("showBanner failed", e); }
+}
+
+export async function hideBanner() {
+  if (!(await ensureAdMob())) return;
+  try {
+    await AdMob.removeBanner();
+  } catch (e) { console.error("hideBanner failed", e); }
+}
+
+// ── Customer info ───────────────────────────────────────────────────────
+// Safe to call often: the SDK caches CustomerInfo and refreshes it when the app
+// becomes active, so this usually resolves without a network round trip.
+export async function getCustomerInfo() {
+  if (!(await ensureConfigured())) return null;
+  try {
+    const Purchases = loadPurchases();
+    const { customerInfo } = await Purchases.getCustomerInfo();
+    return customerInfo;
+  } catch (e) { console.error("getCustomerInfo failed", e); return null; }
+}
+
+// True if this device's RevenueCat user owns the Pro entitlement.
+export async function hasProAccess() {
+  return isActive(await getCustomerInfo());
+}
+
+// Kept under the old name so existing callers keep reading well — ad removal is
+// what the Pro entitlement grants.
+export const hasRemovedAds = hasProAccess;
+
+// ── Identity ────────────────────────────────────────────────────────────
+// Tie the RevenueCat identity to the Firebase uid, so an entitlement bought in
+// the Play app is attached to the same account the web signs in with. This is
+// what makes cross-platform sync possible at all: the RevenueCat webhook reports
+// purchases under this app-user id, and the server writes `adsRemoved` on the
+// matching users/{uid} doc. Without it, purchases live under an anonymous
+// ($RCAnonymousID:…) id the web has no way to resolve.
+// Returns { ok, active }: whether the identity is now attached, and whether it
+// owns Pro. These are separate answers — a successful link for someone who has
+// never purchased is ok:true, active:false — and callers about to take money
+// need the first one, since a purchase made before the link lands is recorded
+// against the previous or anonymous id and can never be mapped to the account.
+// A plugin call that never calls back is indistinguishable from one still in
+// flight, and the UI waits on it for ever. Nothing below may hang: give up,
+// report it, and let the caller show the user something.
+const LINK_TIMEOUT_MS = 20000;
+
+function withTimeout(promise, label) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(
+      () => resolve({ ok: false, active: false, error: { step: label, message: `Timed out after ${LINK_TIMEOUT_MS / 1000}s with no answer from the billing SDK.`, code: "timeout" } }),
+      LINK_TIMEOUT_MS,
+    )),
+  ]);
+}
+
+export function linkRevenueCatUser(uid) {
+  return withTimeout(linkRevenueCatUserInner(uid), "logIn").catch(e => (
+    { ok: false, active: false, error: noteBillingError("logIn", e) }
+  ));
+}
+
+async function linkRevenueCatUserInner(uid) {
+  if (!uid) {
+    return { ok: false, active: false, error: { step: "identity", message: "No signed-in account to link.", code: null } };
+  }
+  if (!(await ensureConfigured())) {
+    // configurePurchases already recorded why; fall back to a description of the
+    // only other way to get here, which is a build with no usable key.
+    return {
+      ok: false, active: false,
+      error: lastBillingError || { step: "configure", message: "Billing is not available in this build.", code: null },
+    };
+  }
+  try {
+    const Purchases = loadPurchases();
+    billingStage = "logging in";
+    const { customerInfo } = await Purchases.logIn({ appUserID: uid });
+    billingStage = "linked";
+    lastBillingError = null;
+    emit(customerInfo);
+    return { ok: true, active: isActive(customerInfo) };
+  } catch (e) {
+    return { ok: false, active: false, error: noteBillingError("logIn", e) };
+  }
+}
+
+// Detach on sign-out. RevenueCat falls back to an anonymous id, which may still
+// own an entitlement purchased before the user ever signed in — so report what
+// that id actually owns rather than assuming false.
+export async function unlinkRevenueCatUser() {
+  if (!(await ensureConfigured())) return { ok: false, active: false };
+  try {
+    const Purchases = loadPurchases();
+    // logOut rejects when the current id is already anonymous, which is exactly
+    // the state at startup before anyone signs in — and this now runs then,
+    // where the old configure race used to swallow it. Nothing to detach, so
+    // just report what the anonymous id owns.
+    const anon = await Purchases.isAnonymous().catch(() => null);
+    if (anon?.isAnonymous) return { ok: true, active: await hasProAccess() };
+    const { customerInfo } = await Purchases.logOut();
+    emit(customerInfo);
+    return { ok: true, active: isActive(customerInfo) };
+  } catch (e) {
+    console.error("RevenueCat logOut failed", e);
+    return { ok: false, active: false };
+  }
+}
+
+// ── Offerings & purchasing ──────────────────────────────────────────────
+// The current Offering, whose packages are what the paywall renders. Returns
+// null when none is configured — a dashboard problem, not a user error.
+export async function getCurrentOffering() {
+  if (!(await ensureConfigured())) return null;
+  try {
+    const Purchases = loadPurchases();
+    const offerings = await Purchases.getOfferings();
+    return offerings.current || null;
+  } catch (e) { console.error("getOfferings failed", e); return null; }
+}
+
+// RevenueCat rejects on user cancellation just like on a real failure. Callers
+// must not show an error for a deliberate back-out.
+export function isUserCancelled(e) {
+  return Boolean(e?.userCancelled) || e?.code === "1" || e?.code === 1 ||
+    /cancel/i.test(e?.message || "");
+}
+
+// What came of showing the paywall. Callers need these apart: "the user said no"
+// and "there was no paywall to show" both mean not-entitled, but only the second
+// justifies falling back to a direct purchase — doing that after a cancellation
+// would shove a Play purchase dialog at someone who just backed out.
+export const PAYWALL_OUTCOME = {
+  PURCHASED: "purchased",
+  CANCELLED: "cancelled",
+  UNAVAILABLE: "unavailable",
+  ERROR: "error",
+};
+
+// Present the RevenueCat-hosted paywall (configured in the dashboard, so pricing
+// and copy change without an app release). Prefer this over a hand-rolled
+// purchase button.
+export async function presentPaywall() {
+  if (!(await ensureConfigured())) return PAYWALL_OUTCOME.UNAVAILABLE;
+  const { result } = await RevenueCatUI.presentPaywall();
+  switch (result) {
+    case PAYWALL_RESULT.PURCHASED:
+    case PAYWALL_RESULT.RESTORED:
+      return PAYWALL_OUTCOME.PURCHASED;
+    case PAYWALL_RESULT.NOT_PRESENTED:
+      // Nothing to show — almost always a missing Offering or no paywall
+      // attached to it in the dashboard.
+      console.error("Paywall not presented — check the Offering + paywall config");
+      return PAYWALL_OUTCOME.UNAVAILABLE;
+    case PAYWALL_RESULT.CANCELLED:
+      return PAYWALL_OUTCOME.CANCELLED;
+    default:
+      return PAYWALL_OUTCOME.ERROR;
+  }
+}
+
+// Same, but the SDK skips the paywall when the entitlement is already active —
+// the right call for gating a Pro feature at the point of use.
+export async function presentPaywallIfNeeded() {
+  if (!(await ensureConfigured())) return false;
+  const { result } = await RevenueCatUI.presentPaywallIfNeeded({
+    requiredEntitlementIdentifier: ENTITLEMENT,
+  });
+  return result === PAYWALL_RESULT.PURCHASED
+    || result === PAYWALL_RESULT.RESTORED
+    || result === PAYWALL_RESULT.NOT_PRESENTED; // already entitled
+}
+
+// Customer Center: RevenueCat's built-in "manage my purchase" sheet — restore,
+// refund requests, subscription management, support. Play requires a restore
+// path, and this provides it plus the self-service flows that otherwise become
+// support email.
+export async function presentCustomerCenter() {
+  if (!(await ensureConfigured())) return false;
+  try {
+    await RevenueCatUI.presentCustomerCenter();
+    // The sheet can change entitlement state (restore, refund) without telling
+    // us directly — re-read so the UI settles on the truth. The CustomerInfo
+    // listener normally fires too; this makes it deterministic.
+    return await hasProAccess();
+  } catch (e) { console.error("presentCustomerCenter failed", e); return false; }
+}
+
+// Direct purchase of the first package in the current Offering — the fallback
+// for when no paywall is configured in the dashboard. Throws so callers can
+// distinguish cancellation from failure via isUserCancelled().
+export async function purchaseRemoveAds() {
+  if (!(await ensureConfigured())) return false;
+  const Purchases = loadPurchases();
+  const offerings = await Purchases.getOfferings();
+  const pkg = offerings.current?.availablePackages?.[0];
+  if (!pkg) throw new Error("No RevenueCat offering configured");
+  const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
+  return isActive(customerInfo);
+}
+
+// Restore a previous purchase (required by Play — users who reinstall or switch
+// devices must be able to get their Pro access back without paying again).
+export async function restorePurchases() {
+  if (!(await ensureConfigured())) return false;
+  const Purchases = loadPurchases();
+  const { customerInfo } = await Purchases.restorePurchases();
+  emit(customerInfo);
+  return isActive(customerInfo);
+}

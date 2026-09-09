@@ -1,0 +1,365 @@
+/* Self-hosted so the PWA keeps its headings offline and we add no third-party
+   request to the consent story. One variable file per subset, weight axis
+   400-900 — `font-synthesis: none` below means a static face would silently
+   flatten the 700/800 headings to regular. */
+@font-face {
+  font-family: 'Bodoni Moda';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/bodoni-moda-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Bodoni Moda';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/bodoni-moda-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/playfair-display-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/playfair-display-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* The Future scheme's faces. Self-hosted for the same two reasons as the pair
+   above: the PWA keeps its headings offline, and the app makes no third-party
+   request that would need its own consent story.
+
+   A woff2 is fetched only when a rule actually matches the family, which splits
+   these two. Exo 2 is the body face and 71KB across both subsets, and nothing
+   asks for it until someone switches to Future — so a Retro user never pays for
+   it. Orbitron is 12KB and everybody gets it, because the scheme picker letters
+   its Future button in Orbitron whichever scheme is running; that is the point
+   of the button, and it is the cheaper of the two to spend.
+
+   Orbitron ships latin only; Exo 2 carries the extended set the recipe names
+   need for the accented spirits. */
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/orbitron-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Exo 2';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/exo2-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Exo 2';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/exo2-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* The palette is taken from the bar photograph behind the app (assets/
+   bg-cocktails.jpg): walnut bar top, whiskey, and the brass of the back-bar
+   lights. Nothing here is a cool grey — a slate UI floating over a warm
+   photograph reads as two designs stacked, which is what this replaced. The
+   same names are mirrored as a JS object in App.jsx (see THEMES there), since
+   the app screens are styled inline rather than from this sheet.
+
+   Two schemes live here. Retro is the default and needs no attribute; Future is
+   selected by data-theme="future" on <html>, set before first paint by the boot
+   script in index.html so the page never flashes the wrong one. Every value a
+   scheme owns is a custom property — nothing below this block hardcodes a
+   colour or a face. */
+:root {
+  --text: #5c4a35;
+  --text-h: #1c1208;
+  --bg: #fdf8ef;
+  --border: #e6dccb;
+  --code-bg: #f4efe3;
+  --accent: #8a6a24;
+  --accent-bg: rgba(138, 106, 36, 0.1);
+  --accent-border: rgba(138, 106, 36, 0.5);
+  --social-bg: rgba(244, 239, 227, 0.5);
+  --bg-overlay: rgba(253, 248, 239, 0.88);
+  --shadow:
+    rgba(23, 16, 10, 0.14) 0 10px 15px -3px, rgba(23, 16, 10, 0.07) 0 4px 6px -2px;
+  /* The tint on the reading column, and the wash over the photograph behind it.
+     Both are properties rather than literals because the two schemes disagree
+     about them more than about anything else. */
+  --column: rgba(26, 17, 9, 0.42);
+  --photo: transparent;
+  --photo-blend: normal;
+  --photo-opacity: 0;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  /* Both faces are loaded above while we settle on one — swap the first name to
+     'Bodoni Moda' to go back. Playfair is the easier read: lower stroke contrast
+     and a taller x-height, which matters at the 0.9-1.1rem index-card sizes. */
+  --heading: 'Playfair Display', 'Bodoni Moda', Didot, Georgia, serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 18px/145% var(--sans);
+  letter-spacing: 0.18px;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="future"]) {
+    --text: #b09a78;
+    --text-h: #f6ecd9;
+    --bg: #1b1209;
+    --border: #3a2a17;
+    --code-bg: #241708;
+    --accent: #d6b46a;
+    --accent-bg: rgba(214, 180, 106, 0.15);
+    --accent-border: rgba(214, 180, 106, 0.5);
+    --social-bg: rgba(58, 42, 23, 0.5);
+    --bg-overlay: rgba(27, 18, 9, 0.86);
+    --shadow:
+      rgba(0, 0, 0, 0.45) 0 10px 15px -3px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
+  }
+
+  #social .button-icon {
+    filter: invert(1) brightness(2);
+  }
+}
+
+/* ── Future ────────────────────────────────────────────────────────────────
+   Where Retro takes its colours off the bar photograph, this scheme fights it:
+   electric cyan on near-black blue, with magenta and acid green for the states
+   that were oxblood and jade. It commits to one dark world — there is no light
+   Future, because a cyberpunk palette on a white ground is just a bright page —
+   so it needs no prefers-color-scheme pair, only this block. */
+:root[data-theme="future"] {
+  --text: #7fa8c4;
+  --text-h: #eafcff;
+  --bg: #05070f;
+  --border: #14304a;
+  --code-bg: #0c1226;
+  --accent: #22d3ee;
+  --accent-bg: rgba(34, 211, 238, 0.14);
+  --accent-border: rgba(34, 211, 238, 0.5);
+  --social-bg: rgba(20, 48, 74, 0.5);
+  --bg-overlay: rgba(5, 7, 15, 0.86);
+  --shadow:
+    rgba(34, 211, 238, 0.16) 0 0 24px -2px, rgba(0, 0, 0, 0.55) 0 10px 15px -3px;
+  --column: rgba(5, 9, 22, 0.52);
+
+  /* The photograph stays — the same bar, after hours, under different signage.
+     `color` blending takes hue and saturation from this gradient and luminance
+     from the photograph underneath, so the whiskey and the wood go cold while
+     the bottles keep their shape. Repainting the background outright would have
+     meant a second 200KB image for a scheme most people will never switch to. */
+  --photo: linear-gradient(155deg, #0b1030 0%, #14063a 48%, #04222f 100%);
+  --photo-blend: color;
+  --photo-opacity: 0.95;
+
+  --sans: 'Exo 2', 'Segoe UI', system-ui, sans-serif;
+  --heading: 'Orbitron', 'Exo 2', ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  background: url("./assets/bg-cocktails.jpg") center / cover no-repeat fixed;
+}
+
+/* Sits over the photograph and under the reading column. Inert in Retro, where
+   --photo-opacity is 0 and there is nothing to see. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--photo);
+  mix-blend-mode: var(--photo-blend);
+  opacity: var(--photo-opacity);
+}
+
+#root {
+  /* Above body::before, which is what makes the wash read as being *in* the
+     photograph rather than over the whole app. */
+  position: relative;
+  z-index: 1;
+  width: 1126px;
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  border-inline: 1px solid var(--border);
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  /* A tint that lets the bar photo (body background) show through, rather than
+     an opaque panel. In Retro it is the photo's own shadow colour, so the
+     column reads as a darker part of the same room. */
+  background: var(--column);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: var(--shadow);
+}
+
+/* h3 included: the index cards and the results screen head with h3, and they
+   should match the rest of the headings. */
+h1,
+h2,
+h3 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+  font-optical-sizing: auto;
+}
+
+h1 {
+  font-size: 56px;
+  /* Bodoni's hairlines need air where the old sans wanted tightening, and the
+     app renders h1 at 1.8rem rather than 56px — em keeps that in proportion. */
+  letter-spacing: -0.01em;
+  margin: 32px 0;
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  letter-spacing: 0;
+  margin: 0 0 8px;
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}
+
+/* Fireworks, shown only for a clean sweep on the quiz results screen. Kept in
+   CSS rather than a rAF/canvas loop so the burst costs nothing on the JS thread
+   and stops dead when the screen unmounts. The overlay is inert -- the results
+   buttons underneath stay clickable. */
+.fw {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* One shell = one burst origin, mounted by JS at a random spot and unmounted
+   once spent. It drifts downward for the life of the burst so the sparks arc
+   instead of flying out in a flat, obviously-geometric ring. */
+.fw-shell {
+  position: absolute;
+  width: 0;
+  height: 0;
+  animation: fw-fall 2.4s ease-in forwards;
+}
+
+/* Sparks sit on top of each other at the origin; --fw-a is the only thing that
+   separates them, so the burst is a rotate-then-translate fan. `forwards` holds
+   the final frame -- without it a spent spark snaps back to full opacity for the
+   moment between the animation ending and React unmounting it. */
+.fw-spark {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--fw-c);
+  box-shadow: 0 0 8px 1px var(--fw-c);
+  animation: fw-spark 2.4s ease-out forwards;
+}
+
+@keyframes fw-spark {
+  0% {
+    transform: rotate(var(--fw-a)) translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--fw-a)) translateY(var(--fw-d)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+@keyframes fw-fall {
+  0%,
+  6% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(34px);
+  }
+}
+
+/* The burst is decoration, not information -- the percentage already says 100%.
+   Anyone who has asked for less motion just doesn't get it. (The component also
+   declines to launch, so this is belt and braces.) */
+@media (prefers-reduced-motion: reduce) {
+  .fw {
+    display: none;
+  }
+}

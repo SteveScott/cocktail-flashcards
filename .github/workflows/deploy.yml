@@ -1,0 +1,106 @@
+# One signal for one release: publish the Firestore rules, then wait for
+# Netlify's build of the same commit and answer for both.
+#
+# THE RULES. firestore.rules has always been in the repo. That is not the same
+# as being in force: Firestore evaluates a ruleset stored inside the Firebase
+# PROJECT, and the copy in git is inert text until something uploads it. For
+# most of this repo's life that upload was a command somebody had to remember,
+# and it went unremembered long enough that the deployed ruleset still predated
+# b9a59d4 — the commit adding `match /highWater/{uid}`. Everything unmatched
+# falls to the catch-all deny, so every high-water write was refused for weeks,
+# silently, because the client reports that failure to the console and nowhere
+# else. The backup feature was built, reviewed, tested, shipped, and doing
+# nothing, and it was found out on the day somebody needed to restore.
+#
+# THE SITE. Netlify's git integration still starts the build; this job watches
+# it. The site's `stop_builds` setting must stay OFF — turning it on does not
+# hand the trigger to CI, it switches Netlify's build system off entirely and
+# expects deploys to be uploaded from elsewhere, which is a much larger change
+# than joining two signals together. What is gained here is that one Actions run
+# is green or red for the whole release instead of for half of it.
+#
+# ORDERING is a consequence of the timings, not an interlock. Publishing rules
+# takes seconds; a site build takes minutes. So the rules are live well before
+# the code that depends on them, which is the safe direction for a change that
+# WIDENS what is allowed — new rules plus the code needing them, which is what
+# b9a59d4 was. It is the wrong direction for a change that TIGHTENS, where the
+# restriction would land before the code that accommodates it. There is one
+# production Firestore and no per-branch rulesets, so this is inherent to the
+# setup rather than something CI introduces: ship a tightening change as two
+# merges, code first and rules second.
+name: Deploy
+
+on:
+  # A manual run proves the Firebase credential without needing a rules change
+  # to hang the test on, and re-asserts the repo's ruleset after somebody edits
+  # it in the Firebase console. It deploys the rules and stops there — there is
+  # no pushed commit for a Netlify deploy to belong to.
+  workflow_dispatch:
+  # Every push, with no paths filter. The job now reports on the site deploy as
+  # well, so it has to run whatever changed; and re-running the rules deploy
+  # costs nothing when they did not change, because firebase-tools compares the
+  # files against the latest ruleset and skips the upload when they are equal
+  # (rulesDeploy.ts — "already up to date, skipping upload").
+  push:
+    branches: [master]
+
+# One release at a time. Two merges landing together must not race to publish
+# rulesets: the one finishing last wins silently, and it need not be the later
+# commit. Never cancel a run in progress — a half-finished deploy is worse than
+# a queued one, and cancelling the wait would abandon a build Netlify is still
+# running rather than stopping it.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned to the current majors: v4 of both target the Node 20 runtime,
+      # which GitHub now force-runs on Node 24 and warns about on every run.
+      # Neither major's breaking changes reach this workflow — setup-node's
+      # automatic caching keys off a `packageManager` field package.json does not
+      # have, and checkout's fork restrictions are about pull_request_target and
+      # workflow_run, which this file does not use.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # The key goes to a file by way of the environment, never a command line:
+      # the CLI reads it from GOOGLE_APPLICATION_CREDENTIALS, and an argument is
+      # the one place a secret can still surface in a log or a process listing.
+      - name: Authenticate to Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT is not set. Add the service account JSON as a repository secret."
+            exit 1
+          fi
+          printf '%s\n' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/service-account.json" >> "$GITHUB_ENV"
+
+      # Pinned to a major, unlike the `@latest` a person at a keyboard is told to
+      # use. This runs unattended, so a major release changing how a production
+      # ruleset is published is something to opt into deliberately rather than to
+      # discover during an incident.
+      #
+      # --project is passed explicitly even though .firebaserc names the same
+      # one: a service account has no "active project" the way an interactive
+      # login does, and CI is the worst place to learn which the CLI wanted.
+      - name: Deploy Firestore rules
+        run: npx --yes firebase-tools@15 deploy --only firestore:rules --project cocktail-flashcards --non-interactive
+
+      # Skipped on a manual run, which has no pushed commit to match a deploy to.
+      - name: Wait for the Netlify deploy
+        if: github.event_name == 'push'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: node scripts/wait-for-netlify.mjs

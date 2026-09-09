@@ -1,0 +1,11 @@
+# Cocktail Flashcards — https://cocktailflashcards.com/
+#
+# Everything here is public and crawlable. Note there is deliberately no
+# Disallow for /?platform=play (the Capacitor shell's launch URL): blocking it
+# would stop crawlers reading the rel=canonical in index.html that consolidates
+# it into the homepage, which is the outcome we actually want.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://cocktailflashcards.com/sitemap.xml
