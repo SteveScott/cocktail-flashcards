@@ -18,6 +18,7 @@ now named for the step that actually differs:
 | `Stirred` | mixing glass | stirred, strained out |
 | `Built, Stirred` | the serving vessel | stirred where it stands |
 | `Built, Not Stirred` | the serving vessel | nothing — the pour is the mixing |
+| `Built, Swizzled` | the serving vessel | churned with a swizzle stick |
 | `Rolled` | between two tins | poured back and forth |
 | `Layered` | the serving vessel | kept apart on purpose |
 
@@ -32,16 +33,25 @@ Sombrero is `Built, Not Stirred` with a cream float. The Baby Guinness is the
 case that looks like an exception and is not: its cream is a float *and* stays
 as its own unmixed band, which is the whole drink, so it is `Layered`.
 
-**Swizzling is not its own method.** It is a real and distinct technique — a
-swizzle stick spun between the palms, churning crushed ice up through the drink
-until the vessel frosts, which chills harder and faster than stirring cubes
-past each other. But it is a way of stirring in the glass, so a swizzled drink
-is `Built, Stirred` and the churn is spelled out in its generated steps rather
-than adding a word to the card that a learner would have to look up.
+**Swizzling is a method, and it is rarer than crushed ice.** A swizzle is a
+stick sunk to the bottom of crushed ice and spun between the palms, driving the
+ice up through the drink until a thick frost forms on the outside of the glass.
+It chills harder and faster than stirring cubes past each other.
 
-Eleven drinks are swizzles, and the three that say so in their names —
-Queen's Park, Chartreuse, Bermuda Rum — need overrides, because the shake rule
-reaches their citrus before the crushed-ice rule reaches their ice.
+Exactly three drinks in the deck are swizzles, and each says so in its name:
+Queen's Park, Chartreuse, Bermuda Rum. All three need an override, because the
+shake rule reaches their citrus before the crushed-ice rule reaches their ice.
+
+**Crushed ice is not the test, and this was got wrong once.** Eight further
+drinks are built over crushed ice and stirred with a bar spoon, not swizzled,
+and they briefly shared the swizzle instruction:
+
+| Drink | What it actually asks for |
+|---|---|
+| Mojito, Mojito (Dark Rum) | Stirred with a bar spoon, lifting from the bottom to bring the mint up. The [Cuban original](https://en.wikipedia.org/wiki/Mojito) is built on cubes, not crushed ice at all |
+| Mint Julep | Stirred hard with a long-handled spoon for 15–20 seconds until the cup frosts, then packed and mounded. The frost is the same tell as a swizzle; the tool and the motion are not |
+| Caipirinha, Caipiroska | Muddled, then stirred |
+| Sherry Cobbler, Planter's Punch, Absinthe Frappé | Churned with a spoon over crushed ice |
 
 It is wrong for a specific, knowable set of them, because a method is a fact
 about a recipe, not a function of its ingredients. Nothing in "bourbon, sugar,
@@ -84,9 +94,6 @@ is assembled — and stirred — in the glass it is served in.
 | Seven & Seven | A two-ingredient highball, built over ice |
 | Oaxacan Old Fashioned | The same build as the Old Fashioned it is named for. It carried no override and inferred to `Stirred`, so it alone of the four told the reader to use a mixing glass and strain |
 | Shirley Temple | Poured over ice and stirred. Its lime and grenadine trip the sour rule, but half an ounce of each under four ounces of ginger ale is not a sour ([Difford's](https://www.diffordsguide.com/cocktails/recipe/1546/shirley-temple)) |
-| Queen's Park Swizzle | Swizzled, never shaken: the stick goes to the bottom of the crushed ice and is spun between the palms until a thick frost forms on the glass, which also keeps the mint, ice and bitters in their three bands ([Wikipedia](https://en.wikipedia.org/wiki/Queen%27s_Park_Swizzle), [PUNCH](https://punchdrink.com/recipes/queens-park-swizzle/)) |
-| Chartreuse Swizzle | Marcovaldo Dionysos, Tres Agaves, San Francisco, 2002. Churned with crushed ice until the glass frosts — "it's not a Swizzle without the ice, and that ice best be crushed" ([Imbibe](https://imbibemagazine.com/recipe/chartreuse-swizzle-recipe/)) |
-| Bermuda Rum Swizzle | Traditionally swizzled with a stick cut from an allspice tree, spun between the palms until the drink froths ([Wikipedia](https://en.wikipedia.org/wiki/Rum_swizzle), [The Bermudian](https://www.thebermudian.com/food-a-drink/recipes/traditional-bermuda-rum-swizzle/)). A shaker is a common modern substitute, but the island method is the one the drink is named for |
 
 A build's last step reads the narrower `CARBONATED` list to decide whether
 stirring costs you bubbles. `stout` was added to it for Nico's Bloody Mary: a
@@ -95,6 +102,18 @@ base, but the list only named `beer` — which "Guinness Stout" does not contain
 so the drink was being told to stir briefly rather than gently. It changes the
 generated steps of no other recipe; every other stout in the deck (Black Velvet,
 Snakebite, Baby Guinness) is `Layered` and never reaches that branch.
+
+## Built, Swizzled
+
+Three drinks, each named for the technique. The stick goes to the bottom of the
+crushed ice and is spun between the palms until the glass frosts over.
+
+| Drink | Source |
+|---|---|
+| Queen's Park Swizzle | Swizzled, never shaken: the stick goes to the bottom of the crushed ice and is spun between the palms until a thick frost forms on the glass, which also keeps the mint, ice and bitters in their three bands ([Wikipedia](https://en.wikipedia.org/wiki/Queen%27s_Park_Swizzle), [PUNCH](https://punchdrink.com/recipes/queens-park-swizzle/)) |
+| Chartreuse Swizzle | Marcovaldo Dionysos, Tres Agaves, San Francisco, 2002. Churned with crushed ice until the glass frosts — "it's not a Swizzle without the ice, and that ice best be crushed" ([Imbibe](https://imbibemagazine.com/recipe/chartreuse-swizzle-recipe/)) |
+| Bermuda Rum Swizzle | Traditionally swizzled with a stick cut from an allspice tree, spun between the palms until the drink froths ([Wikipedia](https://en.wikipedia.org/wiki/Rum_swizzle), [The Bermudian](https://www.thebermudian.com/food-a-drink/recipes/traditional-bermuda-rum-swizzle/)). A shaker is a common modern substitute, but the island method is the one the drink is named for |
+
 
 ## Built, Not Stirred
 

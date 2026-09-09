@@ -158,7 +158,8 @@ ingredients string
    ├─ parseIngredients()  ──►  components [{measure, item, text, role}] + garnishes
    │                             role ∈ float | rinse | null
    ├─ getMethod()         ──►  Shaken | Stirred | Built, Stirred | Built, Not Stirred
-   │                            | Rolled | Blended | Layered | (override)
+   │                            | Built, Swizzled | Rolled | Blended | Layered
+   │                            | (override)
    ├─ inBuildOrder()      ──►  components sorted liquor → citrus → syrup → juice → last
    ├─ buildSteps()        ──►  numbered instructions, using method + serve + roles
    ├─ summarize()         ──►  one-line description (meta description / lede)
@@ -203,7 +204,10 @@ are supposed to sit on top of. The placement table is in
 | 8 | Ingredients mention crushed ice, or `serve` is `over crushed ice` | `Built, Stirred` |
 | 9 | Otherwise — spirit and sugar | `Stirred` |
 
-`Built, Not Stirred` and `Dropped` are override-only; nothing infers them.
+`Built, Not Stirred`, `Built, Swizzled` and `Dropped` are override-only; nothing
+infers them. A swizzle is three drinks, all named for the technique — crushed
+ice alone is not the test, since eight further drinks are built over it and
+stirred with a spoon.
 
 Two details are deliberate. Rule 1 matches the *technique as written*, not the
 bare word "blend", because *Blended Scotch* and *Blended Whiskey* are spirits

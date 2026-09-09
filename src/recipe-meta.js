@@ -258,6 +258,7 @@ const METHOD_ADJECTIVE = {
   "Dropped": "bomb-style",
   "Built, Stirred": "built",
   "Built, Not Stirred": "built",
+  "Built, Swizzled": "swizzled",
 };
 
 function methodAdjective(method) {
@@ -355,7 +356,8 @@ export function buildSteps(c) {
     steps.push(`Add ${list} to a mixing glass.`);
     steps.push("Fill with ice and stir for 20–30 seconds, until well chilled and properly diluted.");
     steps.push(`Strain into ${serveTarget(c, glass)}.`);
-  } else if (method === "Built, Stirred" || method === "Built, Not Stirred") {
+  } else if (method === "Built, Stirred" || method === "Built, Not Stirred"
+             || method === "Built, Swizzled") {
     // Both builds are assembled in the serving vessel and differ only in the
     // last step, so they share everything up to it. Within that, a soda
     // highball, a muddled Old Fashioned and a hot toddy still do not start the
@@ -421,10 +423,19 @@ export function buildSteps(c) {
         steps.push(fizzy
           ? "Do not stir — the pour mixes it, and stirring would cost the bubbles."
           : "Do not stir. Serve as poured.");
+      } else if (method === "Built, Swizzled") {
+        // The stick goes to the bottom of the crushed ice and is spun between
+        // the palms, driving the ice up through the drink. Frost on the outside
+        // of the glass is how you know it is done.
+        steps.push("Insert a swizzle stick to the bottom of the glass and spin it between your palms, drawing the crushed ice up through the drink, until a thick frost forms on the outside. Top with more crushed ice.");
+      } else if (crushed && fizzy) {
+        // A Mojito is stirred, not swizzled: a slow lift from the bottom to
+        // bring the mint up, gentle enough to leave the soda its bubbles.
+        steps.push("Stir gently from the bottom up to lift the mint, without knocking out the carbonation. Top with more crushed ice.");
       } else if (crushed) {
-        // Crushed ice is churned, not stirred around: the swizzle stick goes in
-        // and is spun between the palms, drawing the ice up through the drink.
-        steps.push("Churn with a swizzle stick or bar spoon, drawing the crushed ice up through the drink, until the outside of the glass frosts. Top with more crushed ice.");
+        // A julep is stirred hard rather than swizzled, but wants the same
+        // tell: keep going until the outside of the cup frosts over.
+        steps.push("Stir vigorously for 15–20 seconds, until the outside of the vessel frosts. Pack with more crushed ice, mounding it over the top.");
       } else if (neat) {
         steps.push("Stir briefly to combine, and serve as it is — no ice, at room temperature.");
       } else if (fizzy) {
