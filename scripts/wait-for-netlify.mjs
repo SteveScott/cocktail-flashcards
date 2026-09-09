@@ -56,13 +56,40 @@ async function api(path) {
   return res.json();
 }
 
-// The production deploy of this exact commit. Filtered on context as well as
-// commit_ref: a single commit can carry several deploys — a branch deploy, a
-// preview from the pull request it merged — and the one this release is about
-// is the one that reaches the public site.
-async function findDeploy() {
+// The production deploy of this exact commit, and not one that merely looks
+// like it. Three conditions, and the third is the one learned the hard way.
+//
+// commit_ref and context are the obvious pair: a single commit can carry several
+// deploys — a branch deploy, a preview from the pull request it merged — and the
+// release is the one that reaches the public site.
+//
+// createdAfter is the guard. On the first real run this matched a deploy raised
+// a quarter of an hour BEFORE the push it was supposed to be waiting for, and
+// reported the release live in under a second. A deploy of a commit cannot
+// predate the commit, so anything older than this run is something else wearing
+// the same fields, and a wait that answers instantly is not a wait. Whatever
+// produced it — a re-run, a rebuild of an earlier deploy carrying the reference
+// forward — the run went green without ever watching a build, which is worse
+// than going red.
+//
+// The slack is for clock skew between this runner and Netlify's records only. It
+// is deliberately small: its whole job is to be narrower than the fifteen-minute
+// gap that exposed this.
+const CREATED_SLACK_MS = 2 * 60 * 1000;
+
+async function findDeploy(createdAfter) {
   const deploys = await api(`/sites/${siteId}/deploys?per_page=50`);
-  return deploys.find((d) => d.commit_ref === sha && d.context === "production") || null;
+  const forCommit = deploys.filter((d) => d.commit_ref === sha && d.context === "production");
+
+  // Logged before the age filter, and logged whether or not anything survives
+  // it: the previous version printed an id and a url and nothing else, so when
+  // the match turned out to be wrong there was no way to see WHY from the run
+  // that did it. These four fields are the entire question.
+  for (const d of forCommit) {
+    console.log(`  candidate ${d.id} — state=${d.state} created=${d.created_at} skipped=${Boolean(d.skipped)}`);
+  }
+
+  return forCommit.find((d) => new Date(d.created_at).getTime() >= createdAfter - CREATED_SLACK_MS) || null;
 }
 
 async function main() {
@@ -74,7 +101,7 @@ async function main() {
   let deploy = null;
 
   while (!deploy) {
-    deploy = await findDeploy();
+    deploy = await findDeploy(startedAt);
     if (deploy) break;
     if (Date.now() - startedAt > APPEAR_TIMEOUT_MS) {
       fail(`No Netlify production deploy appeared for ${sha} within ${APPEAR_TIMEOUT_MS / 60000} minutes. ` +
@@ -85,7 +112,13 @@ async function main() {
     await sleep(POLL_MS);
   }
 
-  console.log(`Netlify deploy ${deploy.id} — ${deploy.admin_url || deploy.deploy_url || "(no url)"}`);
+  console.log(`Watching Netlify deploy ${deploy.id} (created ${deploy.created_at}, state ${deploy.state}) — ` +
+    `${deploy.admin_url || deploy.deploy_url || "(no url)"}`);
+  // A build Netlify chose not to run leaves the previously published deploy in
+  // place. Not a failure — there was nothing to do — but it means this commit's
+  // code did not ship in this deploy, which is not what a green tick usually
+  // promises, so it is said out loud rather than passed over.
+  if (deploy.skipped) console.log("::warning::Netlify skipped this build; the previously published deploy is still live.");
 
   let state = deploy.state;
   while (state !== DONE && state !== FAILED) {
