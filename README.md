@@ -266,9 +266,9 @@ Every override is recorded in [docs/methods.md](docs/methods.md) with the text
 it came from — the IBA specification where one exists, otherwise the originating
 bartender or the standard reference. Add a row there when you add an override.
 
-### `method` — 36 recipes
+### `method` — 37 recipes
 
-Twenty-four are drinks built in the serving vessel — the Old Fashioned family,
+Twenty-five are drinks built in the serving vessel — the Old Fashioned family,
 Champagne Cocktail, Irish Coffee, Black Russian, Rusty Nail, Kir, Treacle, Ti'
 Punch, the hot drinks — which read as spirit-and-sugar and would otherwise be
 called Stirred (all but the Hot Toddy, which the shake rule sent to a shaker

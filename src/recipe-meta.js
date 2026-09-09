@@ -45,7 +45,7 @@ const SHAKE_TRIGGERS = /fresh (lime|lemon|grapefruit|orange|pineapple) juice|(li
 //
 // This was moved out of App.jsx, and the shake rule was tightened on the way.
 // The old version shook anything containing a syrup, which mislabelled 13
-// all-spirit classics — a Sazerac, both Old Fashioned variants, the Toronto,
+// all-spirit classics — a Sazerac, the Old Fashioned variants, the Toronto,
 // the Japanese Cocktail. The real bar rule is what's encoded now: shake only
 // for citrus, egg, dairy, purée or espresso; stir anything spirit-and-sugar.
 // Drinks served on crushed ice (julep, cobbler, frappé) are built in the glass.

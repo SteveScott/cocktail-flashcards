@@ -54,7 +54,7 @@
   "master150": [
     { "name": "Hemingway Daiquiri", "glass": "Coupe", "serve": "up", "ingredients": "2 oz White Rum, ½ oz Maraschino Liqueur, ¾ oz Fresh Lime Juice, ½ oz Fresh Grapefruit Juice" },
     { "name": "Old Cuban", "glass": "Coupe", "serve": "up", "ingredients": "1½ oz Aged Rum, ¾ oz Fresh Lime Juice, ¾ oz Simple Syrup, 6 Mint Leaves, 2 dashes Angostura Bitters, 2 oz Champagne (float)" },
-    { "name": "Oaxacan Old Fashioned", "glass": "Rocks", "serve": "on the rocks", "ingredients": "1½ oz Reposado Tequila, ½ oz Mezcal, 1 Barspoon Agave Nectar, 2 dashes Mole Bitters, Orange peel (garnish)" },
+    { "name": "Oaxacan Old Fashioned", "glass": "Rocks", "method": "Built", "serve": "on the rocks", "ingredients": "1½ oz Reposado Tequila, ½ oz Mezcal, 1 Barspoon Agave Nectar, 2 dashes Mole Bitters, Orange peel (garnish)" },
     { "name": "White Negroni", "glass": "Rocks", "serve": "on the rocks", "ingredients": "1½ oz Gin, 1 oz Lillet Blanc, ¾ oz Suze" },
     { "name": "Sbagliato", "glass": "Rocks or Wine", "serve": "on the rocks", "ingredients": "1 oz Campari, 1 oz Sweet Vermouth, 1 oz Prosecco, Orange slice (garnish)" },
     { "name": "Adonis", "glass": "Coupe or Nick & Nora", "serve": "up", "ingredients": "2 oz Dry Sherry, 1 oz Sweet Vermouth, 1 dash Orange Bitters" },
