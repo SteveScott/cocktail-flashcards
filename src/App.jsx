@@ -394,6 +394,32 @@ function progressEqual(a, b) {
   return true;
 }
 
+// How long ago, in the coarsest unit that still says something. Only ever shown
+// against the high-water mark's own updatedAt, which is a plain Date.now() from
+// this same client (saveHighWater) — no server clock and no Firestore Timestamp
+// to unwrap, so a rounded local difference is honest. Computed at render rather
+// than ticked on a timer: nobody watches this line change.
+function timeAgo(ts) {
+  const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (secs < 60) return "moments ago";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+// The two numbers from a high-water mark worth showing a person: how much it
+// holds, in the same units the tiles above it count. Null for "there is no mark",
+// which is a different statement from a mark holding nothing and has to stay
+// tellable apart — the first is a new account, the second is the shape the bug
+// left behind.
+function peakCounts(progress) {
+  if (!progress) return null;
+  return { learned: progress.learned?.length || 0, tried: progress.tried?.length || 0 };
+}
+
 // Deliberately NOT drawn from C. Everything else on screen is walnut and brass
 // because it is furniture in a dark room, but these are pyrotechnics and real
 // ones are saturated — sodium gold, strontium red, barium green, copper blue,
@@ -551,6 +577,24 @@ export default function App() {
   const [selfBusy, setSelfBusy] = useState(false);
   const [selfMsg, setSelfMsg] = useState("");
   const [selfErr, setSelfErr] = useState("");
+
+  // The high-water mark's own health, for the readout on Backup & Reset.
+  //
+  // This screen promises the account "keeps your maximum progress", and until
+  // now it made that promise with no way to see whether it was true. It was not:
+  // the rules denying every write failed into console.error alone (saveHighWater,
+  // and the seed read below), so a backup that had never once succeeded looked
+  // identical to a healthy one for weeks.
+  //
+  // Health and age are kept apart on purpose. `hwErr` is the only thing that
+  // means something is wrong; `hwSavedAt` is when the mark last MOVED, which on
+  // a healthy account that hasn't learned anything new is legitimately weeks ago
+  // — read as "last backed up" it would invent the false alarm this exists to
+  // prevent. `hwPeak` is what the mark actually holds, which is the reading that
+  // cannot go misleadingly stale: 0 mastered beside a live 25 is the alarm.
+  const [hwErr, setHwErr] = useState("");
+  const [hwSavedAt, setHwSavedAt] = useState(null);
+  const [hwPeak, setHwPeak] = useState(null);
   // The uid whose cloud progress this device has actually read back and
   // reconciled with. Until it matches the signed-in user, `st` is only what this
   // device happened to be holding, and nothing may be written up from it.
@@ -657,8 +701,11 @@ export default function App() {
       setUser(u);
       stopDoc();
       // Whoever signs in next has their own mark; one account's must never be
-      // written to another's document.
+      // written to another's document — nor have another's health reported
+      // under it. A stale permission-denied from the previous account, shown
+      // beside this one's progress, is its own diagnostic wild goose chase.
       highWaterRef.current = null;
+      setHwErr(""); setHwSavedAt(null); setHwPeak(null);
       // A new subscription has to re-do the handshake before this device may
       // write again, whichever user it turns out to be.
       setSyncedUid(null);
@@ -728,8 +775,19 @@ export default function App() {
               .then(hw => {
                 highWaterRef.current = mergeProgress(
                   highWaterRef.current, hw.exists() ? hw.data()?.progress : null, u.uid);
+                // This read is the better health signal of the two, and the
+                // reason the readout is trustworthy on arrival: it runs on every
+                // sign-in, where a write only happens once something has actually
+                // been learned. Through the broken weeks this failed every single
+                // time while writes were sporadic.
+                setHwErr("");
+                setHwSavedAt(hw.exists() ? hw.data()?.updatedAt || null : null);
+                setHwPeak(peakCounts(highWaterRef.current));
               })
-              .catch(e => console.error("Could not read the high-water mark", e));
+              .catch(e => {
+                console.error("Could not read the high-water mark", e);
+                setHwErr(e?.code || "unavailable");
+              });
             // The account's own progress is now folded in, so the autosave effect
             // below is free to write. Before this point it would have been
             // writing whatever this device happened to hold.
@@ -846,7 +904,11 @@ export default function App() {
     if (!growsFrom(highWaterRef.current, raised)) {
       // Unreachable unless the merge itself is wrong: the rules would reject
       // this write anyway, so fail loudly here rather than silently there.
+      // A different fault from a denied write — a bug, not a permission — but
+      // the same invisibility, and the same consequence for the person relying
+      // on the mark, so it reaches the readout by the same route.
       console.error("High-water merge would lose progress; not writing", uid);
+      setHwErr("merge-guard");
       return;
     }
     // Nothing new to record: skip the write rather than spend one saying so.
@@ -854,8 +916,13 @@ export default function App() {
     // something is actually learned, tried or scored higher.
     if (sameProgress(highWaterRef.current, raised)) return;
     highWaterRef.current = raised;
-    setDoc(doc(db, "highWater", uid), { progress: raised, updatedAt: Date.now() }, { merge: true })
-      .catch(e => console.error("High-water save failed", e));
+    const at = Date.now();
+    setDoc(doc(db, "highWater", uid), { progress: raised, updatedAt: at }, { merge: true })
+      .then(() => { setHwErr(""); setHwSavedAt(at); setHwPeak(peakCounts(raised)); })
+      .catch(e => {
+        console.error("High-water save failed", e);
+        setHwErr(e?.code || "unavailable");
+      });
   }
 
   // Push progress to the cloud whenever it changes and a user is signed in.
@@ -1122,6 +1189,7 @@ export default function App() {
         return;
       }
       highWaterRef.current = peak;
+      setHwPeak(peakCounts(peak));
 
       // Counted against this render's state, for the message only; the write
       // below re-merges from `prev` so nothing that lands in between is lost.
@@ -1635,6 +1703,31 @@ export default function App() {
           </div>
         ))}
       </div>
+
+      {/* What the saved copy actually holds, under the tiles saying what this
+          device holds. The two being readable together is the whole point: the
+          failure this screen could not show was a mark stuck at nothing beside a
+          live account with real progress in it, and side by side that is obvious
+          at a glance in a way no timestamp or status word would have been.
+
+          Only for a signed-in user of a Firebase-configured build. There is no
+          account to have a mark in otherwise, and the copy below already covers
+          being signed out. */}
+      {firebaseEnabled && user && (
+        hwErr
+          ? <div role="alert" style={frame({borderRadius:12,padding:"0.75rem 1rem",border:`1px solid ${C.dangerTextEdge}`,fontSize:"0.78rem",color:C.error,lineHeight:1.55,marginBottom:"1.25rem"})}>
+              <strong style={{fontWeight:700}}>Your maximum isn't being saved.</strong>{" "}
+              Everything you have is still safe on this device, but new progress
+              is not reaching your account, so there may be nothing to restore
+              from. ({hwErr})
+            </div>
+          : <div style={frame({borderRadius:12,padding:"0.7rem 1rem",border:`1px solid ${C.border}`,fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.25rem"})}>
+              {hwPeak
+                ? <>Saved maximum: <strong style={{color:C.textBody,fontWeight:700}}>{hwPeak.learned} mastered</strong>, {hwPeak.tried} tried
+                    {hwSavedAt ? ` — last raised ${timeAgo(hwSavedAt)}.` : "."}</>
+                : "Nothing saved yet. Your maximum is recorded automatically as you study, and this will fill in once it is."}
+            </div>
+      )}
 
       <button
         onClick={restoreOwnProgress}
