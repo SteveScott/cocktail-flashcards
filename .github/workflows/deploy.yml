@@ -59,9 +59,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      # Pinned to the current majors: v4 of both target the Node 20 runtime,
+      # which GitHub now force-runs on Node 24 and warns about on every run.
+      # Neither major's breaking changes reach this workflow — setup-node's
+      # automatic caching keys off a `packageManager` field package.json does not
+      # have, and checkout's fork restrictions are about pull_request_target and
+      # workflow_run, which this file does not use.
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
