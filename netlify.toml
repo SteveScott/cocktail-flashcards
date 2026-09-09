@@ -26,7 +26,14 @@
 # the exemption the scanner finds it in dist/assets and fails every build with exit
 # code 2.
 [build.environment]
-  SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID,VITE_ADMIN_EMAILS"
+  # Node 24 (current LTS). Netlify would otherwise pick its own default, which
+  # is a version nobody here chose and can change under us on their schedule.
+  # Kept in step with .nvmrc, package.json engines and the setup-node step in
+  # .github/workflows/deploy.yml — four places, one version, and Vite 8 refuses
+  # anything below 20.19 anyway.
+  NODE_VERSION = "24"
+
+  SECRETS_SCAN_OMIT_KEYS ="VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID,VITE_ADMIN_EMAILS"
 
 # The Android app config carries the same kind of public Firebase client key, but as a
 # literal in a committed file rather than an env var — so SECRETS_SCAN_OMIT_KEYS above
