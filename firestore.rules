@@ -2,7 +2,15 @@ rules_version = '2';
 
 // Firestore security rules for Cocktail Flashcards.
 //
-// Deploy with:  firebase deploy --only firestore:rules
+// Deployed automatically on merge to master, by
+// .github/workflows/deploy.yml. Being in this file is not the same as
+// being in force — Firestore evaluates a ruleset stored in the project, not
+// this text — and the gap between the two once went unnoticed for weeks. To
+// publish by hand anyway, or from a clone:
+//
+//   npx firebase-tools@latest deploy --only firestore:rules
+//
+// (`firebase` alone assumes a global install; .firebaserc supplies the project.)
 //
 // These rules are the ONLY thing stopping a user from granting themselves ad
 // removal. The client deliberately ships the monetization code (see
