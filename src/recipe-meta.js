@@ -32,6 +32,19 @@ const CARBONATED = /\bsoda\b|tonic|ginger beer|ginger ale|coca-cola|\bcola\b|spa
 
 const SHAKE_TRIGGERS = /fresh (lime|lemon|grapefruit|orange|pineapple) juice|(lime|lemon|grapefruit|orange|pineapple|cranberry|tomato|passion ?fruit) juice|sour mix|egg white|egg\b|heavy cream|cream of coconut|coconut cream|purée|puree|half-and-half|espresso/;
 
+// A sour base: citrus AND a sweetener. This is the pair that has to be shaken
+// to marry, and it is what separates a Tom Collins from a Gin Rickey. Both are
+// gin, citrus and soda in a collins glass; only the Collins carries the syrup,
+// and only the Collins is shaken and then topped.
+const CITRUS = /(lime|lemon|grapefruit|orange|pineapple) juice/;
+const SWEETENER = /syrup|sugar|honey|orgeat|grenadine|agave nectar|cordial|falernum/;
+// Emulsifiers shake on their own account, with or without citrus — a Colorado
+// Bulldog is cream and cola and still belongs in a tin.
+const EMULSIFIER = /egg white|egg\b|heavy cream|\bcream\b|cream of coconut|coconut cream|purée|puree|half-and-half|espresso/;
+// A tomato base is rolled, not stirred and not shaken: shaking froths it and
+// bruises the seasoning, stirring in the glass never mixes it.
+const ROLLED_BASE = /tomato juice|clamato/;
+
 // Shaken / Stirred / Built / Blended / Layered, inferred from the recipe, or
 // taken verbatim from an explicit `method` on the recipe itself. Overrides may
 // also name a technique the inference has no rule for at all: Flash Blend,
@@ -63,9 +76,21 @@ export function getMethod(c) {
 
   if (/blend|frozen/.test(name) || /blended with|\(blended\)/.test(ing)) return "Blended";
   if (/layered/.test(ing)) return "Layered";
-  if (BUILT_GLASSES.test(glass) && BUILT_MIXERS.test(ing)) return "Built";
+  if (ROLLED_BASE.test(ing)) return "Rolled";
+  // Crushed ice is settled at the bottom of this function, not here: a Mai Tai
+  // and a Hurricane are shaken and then poured over it. But it does exempt a
+  // drink from the two sour rules below, which would otherwise send a Mojito
+  // and a Caipirinha — citrus and sugar both — to a tin they never see.
+  const crushed = /crushed ice/.test(ing) || c.serve === "over crushed ice";
+  // Before the build rule, not after it. A fizz, a collins and a Long Island
+  // are all sours that happen to be finished with soda in a tall glass, and
+  // testing the glass first called every one of them a build — which left a
+  // Ramos Gin Fizz, raw egg white and cream, being stirred in the glass.
+  if (!crushed && CITRUS.test(ing) && SWEETENER.test(ing)) return "Shaken";
+  if (!crushed && EMULSIFIER.test(ing)) return "Shaken";
+  if (BUILT_GLASSES.test(glass) && BUILT_MIXERS.test(ing)) return "Built, Stirred";
   if (SHAKE_TRIGGERS.test(ing)) return "Shaken";
-  if (/crushed ice/.test(ing) || c.serve === "over crushed ice") return "Built";
+  if (crushed) return "Built, Stirred";
   return "Stirred";
 }
 
@@ -219,8 +244,15 @@ export function baseSpirit(c) {
 }
 
 // The method names double as adjectives in prose ("a shaken cocktail", "a
-// stirred cocktail"). Only the flash blend needs its participle spelled out.
-const METHOD_ADJECTIVE = { "Flash Blend": "flash-blended", "Dropped": "bomb-style" };
+// stirred cocktail"). Most are already participles; these are not. Both builds
+// flatten back to "built" here — the stirred/not-stirred split is a fact about
+// the last step, and "a built, not stirred cocktail" is not a sentence.
+const METHOD_ADJECTIVE = {
+  "Flash Blend": "flash-blended",
+  "Dropped": "bomb-style",
+  "Built, Stirred": "built",
+  "Built, Not Stirred": "built",
+};
 
 function methodAdjective(method) {
   return METHOD_ADJECTIVE[method] || method.toLowerCase();
@@ -270,8 +302,8 @@ export function buildSteps(c) {
   // float IS the layering, so leave it in sequence.
   const layered = method === "Layered";
   // A layered drink with a float has a base and something set on top of it — a
-  // True Blood's wine, a Baby Guinness's cream. Only a drink whose every
-  // component is a layer gets poured over the back of a spoon.
+  // Baby Guinness's cream. Only a drink whose every component is a layer gets
+  // poured over the back of a spoon.
   const floats = parsed.filter(x => x.role === "float");
   const rinses = layered ? [] : parsed.filter(x => x.role === "rinse");
   // A topper only needs pulling out when the drink is mixed somewhere else and
@@ -305,11 +337,12 @@ export function buildSteps(c) {
     steps.push(`Add ${list} to a mixing glass.`);
     steps.push("Fill with ice and stir for 20–30 seconds, until well chilled and properly diluted.");
     steps.push(`Strain into ${serveTarget(c, glass)}.`);
-  } else if (method === "Built") {
-    // "Built" covers a wider range than it looks: a soda highball, a muddled
-    // Old Fashioned and a hot toddy are all assembled in the serving vessel,
-    // but they do not start the same way. Ice is wrong for a hot drink, and
-    // the sugar has to be dealt with before the ice goes in.
+  } else if (method === "Built, Stirred" || method === "Built, Not Stirred") {
+    // Both builds are assembled in the serving vessel and differ only in the
+    // last step, so they share everything up to it. Within that, a soda
+    // highball, a muddled Old Fashioned and a hot toddy still do not start the
+    // same way: ice is wrong for a hot drink, and the sugar has to be dealt
+    // with before the ice goes in.
     const fizzy = CARBONATED.test(c.ingredients);
     const hot = c.serve === "hot";
     const crushed = c.serve === "over crushed ice";
@@ -317,6 +350,9 @@ export function buildSteps(c) {
     const iced = c.serve === "on the rocks" || crushed;
     const SWEETENER = /sugar|syrup|bitters|disc of lime/i;
     const muddled = /sugar cube|muddle|disc of lime/i.test(c.ingredients);
+    // An all-spirit build — no juice, no mixer, nothing to marry — is stirred
+    // for dilution and nothing else, which takes as long as any mixing glass.
+    const spiritForward = !fizzy && !CITRUS.test(c.ingredients.toLowerCase());
 
     if (hot) {
       steps.push(`Preheat ${glass} by rinsing it with boiling water, then discard.`);
@@ -339,12 +375,37 @@ export function buildSteps(c) {
         if (iced) steps.push(`Fill ${glass} with ${crushed ? "crushed ice" : "fresh ice"}.`);
         steps.push(`Add ${list} directly to ${iced ? "the glass" : glass}, in order.`);
       }
-      steps.push(neat
-        ? "Stir briefly to combine, and serve as it is — no ice, at room temperature."
-        : fizzy
-          ? "Stir gently once or twice to combine without knocking out the carbonation."
-          : iced ? "Stir briefly to combine and chill." : "Stir briefly to combine.");
+      // Not every build is stirred, and saying so where it is false ruins the
+      // drink: stirring a Kir or a Champagne Cocktail costs the bubbles, and
+      // stirring a Sombrero pulls the cream down through the coffee liqueur.
+      if (method === "Built, Not Stirred") {
+        steps.push(fizzy
+          ? "Do not stir — the pour mixes it, and stirring would cost the bubbles."
+          : "Do not stir. Serve as poured.");
+      } else if (crushed) {
+        // Crushed ice is churned, not stirred around: the swizzle stick goes in
+        // and is spun between the palms, drawing the ice up through the drink.
+        steps.push("Churn with a swizzle stick or bar spoon, drawing the crushed ice up through the drink, until the outside of the glass frosts. Top with more crushed ice.");
+      } else if (neat) {
+        steps.push("Stir briefly to combine, and serve as it is — no ice, at room temperature.");
+      } else if (fizzy) {
+        steps.push("Stir gently once or twice to combine without knocking out the carbonation.");
+      } else if (iced && spiritForward) {
+        // An Old Fashioned's stir IS its dilution, and it takes as long in the
+        // glass as it would in a mixing glass. "Briefly" is what you do to a
+        // rum and coke.
+        steps.push("Stir for 20–30 seconds, until well chilled and properly diluted.");
+      } else {
+        steps.push(iced ? "Stir briefly to combine and chill." : "Stir briefly to combine.");
+      }
     }
+  } else if (method === "Rolled") {
+    // Rolling is the Bloody Mary answer to a base that neither shaking nor
+    // stirring suits: shaking whips the tomato juice to a froth and blunts the
+    // seasoning, and stirring in the glass never mixes it at all.
+    steps.push(`Add ${list} to a shaker tin with ice.`);
+    steps.push("Pour the drink from one tin to the other in a long, slow stream, four or five times, until it is mixed and chilled without being aerated.");
+    steps.push(`Strain into ${serveTarget(c, glass)}.`);
   } else if (method === "Blended") {
     steps.push(`Add ${list} to a blender along with about a cup of crushed ice.`);
     steps.push("Blend on high until completely smooth, with no ice shards left.");
@@ -371,11 +432,24 @@ export function buildSteps(c) {
   } else if (method === "Chased") {
     steps.push(`Pour the spirit into ${glass} and the chaser into a second one. Nothing is mixed.`);
     steps.push("Drink the spirit first, then the chaser immediately behind it.");
-  } else if (floats.length) {
-    steps.push(`Pour ${list} into ${serveTarget(c, glass)}.`);
+  } else if (method === "Layered") {
+    // A layered drink with a float has a base with something set on top of it —
+    // a Baby Guinness's cream. Only a drink whose every component is a layer is
+    // poured over the back of a spoon; the float is added further down.
+    if (floats.length) {
+      steps.push(`Pour ${list} into ${serveTarget(c, glass)}.`);
+    } else {
+      steps.push(`Pour ${list} slowly over the back of a bar spoon, in the order listed.`);
+      steps.push(`Take care to keep each layer distinct in ${glass}.`);
+    }
   } else {
-    steps.push(`Pour ${list} slowly over the back of a bar spoon, in the order listed.`);
-    steps.push(`Take care to keep each layer distinct in ${glass}.`);
+    // Every method above is matched by name. Reaching here means a recipe
+    // carries a `method` no branch handles — a typo, or a technique added to
+    // the data before its steps were written. This used to fall into the
+    // layering branch, so a misspelt method quietly instructed the reader to
+    // pour a Mint Julep over the back of a bar spoon. Say nothing rather than
+    // something wrong.
+    steps.push(`Combine ${list} and serve in ${glass}.`);
   }
 
   for (const t of toppers) {
