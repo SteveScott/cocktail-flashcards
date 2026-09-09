@@ -194,7 +194,7 @@ are supposed to sit on top of. The placement table is in
 | 0 | The recipe carries an explicit `method` | that method |
 | 1 | Name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
 | 2 | Ingredients contain `layered` | `Layered` |
-| 3 | Glass is a tall build (`highball`, `collins`, `copper mug`, `pint`, `wine`, `sling`, `chimney`) **and** ingredients contain a mixer (`soda`, `tonic`, `ginger beer/ale`, `cola`, `tomato juice`, `clamato`, `beer`, `champagne`, `prosecco`, `lemonade`…) | `Built` |
+| 3 | Glass is a tall build (`highball`, `collins`, `copper mug`, `pint`, `wine`, `sling`, `zombie`) **and** ingredients contain a mixer (`soda`, `tonic`, `ginger beer/ale`, `cola`, `tomato juice`, `clamato`, `beer`, `champagne`, `prosecco`, `lemonade`…) | `Built` |
 | 4 | Ingredients contain something that must be shaken: citrus juice, egg, cream, purée, espresso | `Shaken` |
 | 5 | Ingredients mention crushed ice, or `serve` is `over crushed ice` | `Built` |
 | 6 | Otherwise — spirit and sugar | `Stirred` |

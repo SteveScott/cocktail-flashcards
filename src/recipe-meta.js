@@ -20,7 +20,7 @@ export function slugify(name) {
   return norm(name).replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-const BUILT_GLASSES = /highball|collins|copper mug|pint|wine|sling|chimney/;
+const BUILT_GLASSES = /highball|collins|copper mug|pint|wine|sling|zombie/;
 const BUILT_MIXERS = /\bsoda\b|tonic|ginger beer|ginger ale|coca-cola|\bcola\b|tomato juice|clamato|beer|champagne|prosecco|tequila blanco|lemonade/;
 
 // Anything that must be shaken to emulsify or aerate: citrus, egg, dairy,
