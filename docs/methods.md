@@ -50,7 +50,6 @@ is assembled in the glass it is served in.
 | Sombrero | Coffee liqueur poured over ice, cream floated on top — the cream sitting on the liqueur "like a hat" is the whole drink |
 | Prairie Fire | Built in the shot glass |
 | Seven & Seven | A two-ingredient highball, built over ice |
-| True Blood | Built in the glass and topped with wine. `BUILT_MIXERS` does not list wine, so inference falls through to Shaken on the cranberry juice — which would shake the wine through the drink instead of leaving it on top. Adding wine to that list would reclassify Sangria as a side effect, so this is an override rather than a rule change. |
 
 A build's last step reads the narrower `CARBONATED` list to decide whether
 stirring costs you bubbles. `stout` was added to it for Nico's Bloody Mary: a
