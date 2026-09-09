@@ -531,9 +531,14 @@ export default function App() {
   const [kept, setKept] = useState([]);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
-  // "all" | "tried" | "untried" — index-only, deliberately not persisted: it is a
-  // way of looking at the list, not progress worth syncing between devices.
-  const [triedFilter, setTriedFilter] = useState("all");
+  // The index's two filter dimensions. Both are index-only and deliberately not
+  // persisted: a way of looking at the list, not progress worth syncing between
+  // devices. They stack — every active one has to pass — so "☐ Not tried" plus
+  // "📖 Studied" asks the question neither can alone: what have I learned but
+  // never actually drunk. Tried is one three-way choice rather than two toggles
+  // because a drink cannot be both, so selecting both could only ever be empty.
+  const [triedFilter, setTriedFilter] = useState("all"); // "all" | "tried" | "untried"
+  const [studiedOnly, setStudiedOnly] = useState(false);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(!firebaseEnabled);
   // The whitelist answer, stamped with the address it was an answer ABOUT.
@@ -2193,14 +2198,38 @@ export default function App() {
     // so "pina" finds "Piña Colada" and "rum" finds every drink containing rum.
     const matches = q ? ALL_CARDS.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_CARDS;
     const triedSet = new Set(st.tried || []);
-    const results = triedFilter === "all"
-      ? matches
-      : matches.filter(c => triedSet.has(c.name) === (triedFilter === "tried"));
+    // "Studied" is progress made, not deck membership — the row's own
+    // "✓ In Study" button already says what is in the deck. A cocktail counts
+    // once its score has actually gone up: still sitting at 0 is not studied.
+    // Deliberately not scoped to the pool. A cocktail mastered with the library
+    // on stays studied after it is switched back off, which is the same call
+    // `learned` itself makes (see toggleMaster) — switching the library off is a
+    // change of scope, not a reset, and here there is no lock on the row to
+    // explain a disappearance. `learned` is unioned in as cheap insurance: a
+    // mastered score is >= MASTERY_SCORE so it is normally redundant, but
+    // mergeProgress unions `learned` and maxes `scores` separately, so a copy
+    // arriving with one and not the other still reads as studied.
+    const learnedSet = new Set(st.learned || []);
+    const studied = c => (st.scores?.[c.name] || 0) > 0 || learnedSet.has(c.name);
+    // Every active dimension has to pass. Written as guards rather than one
+    // boolean so a third dimension is a line, not a rewrite.
+    const filtered = triedFilter !== "all" || studiedOnly;
+    const results = matches.filter(c => {
+      if (triedFilter === "tried" && !triedSet.has(c.name)) return false;
+      if (triedFilter === "untried" && triedSet.has(c.name)) return false;
+      if (studiedOnly && !studied(c)) return false;
+      return true;
+    });
+    // One tally per active dimension, so a stacked filter explains both numbers.
+    const tallies = [
+      ...(triedFilter !== "all" ? [`${triedSet.size} tried`] : []),
+      ...(studiedOnly ? [`${ALL_CARDS.filter(studied).length} studied`] : []),
+    ];
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.textMuted,cursor:"pointer"}}>← Menu</button>
-          <span style={{color:C.textMuted,fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
+          <span style={{color:C.textMuted,fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{tallies.length ? ` · ${tallies.join(" · ")}` : ""}</span>
         </div>
         <input
           autoFocus
@@ -2209,13 +2238,23 @@ export default function App() {
           placeholder="Search name or ingredient…"
           style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:`1px solid ${C.border}`,color:C.textStrong,fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
-        <div style={{display:"flex",gap:"0.5rem",marginBottom:isPro?"1.25rem":"0.6rem"}}>
-          {[["all","All"],["tried","☑ Tried"],["untried","☐ Not tried"]].map(([k,label])=>(
-            <button key={k} onClick={()=>setTriedFilter(k)} aria-pressed={triedFilter===k}
-              style={{flex:1,borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
-                border: triedFilter===k ? "none" : `1px solid ${C.borderStrong}`,
-                background: triedFilter===k ? C.accentAlt : "transparent",
-                color: triedFilter===k ? C.textOnFill : C.textMuted}}>{label}</button>
+        {/* Four of these do not fit one row at this column's 480px cap, let
+            alone on a 360px phone, so they are a fixed 2x2 rather than a wrap
+            that would re-break as a label or font changed. Each one toggles:
+            tapping the lit chip clears it, and "All" clears every dimension at
+            once, which is the only way back from a stack in one tap. */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:"0.5rem",marginBottom:isPro?"1.25rem":"0.6rem"}}>
+          {[
+            ["All",         !filtered,                  ()=>{setTriedFilter("all");setStudiedOnly(false);}],
+            ["☑ Tried",     triedFilter==="tried",      ()=>setTriedFilter(f=>f==="tried"?"all":"tried")],
+            ["☐ Not tried", triedFilter==="untried",    ()=>setTriedFilter(f=>f==="untried"?"all":"untried")],
+            ["📖 Studied",  studiedOnly,                ()=>setStudiedOnly(v=>!v)],
+          ].map(([label,on,onClick])=>(
+            <button key={label} onClick={onClick} aria-pressed={on}
+              style={{borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
+                border: on ? "none" : `1px solid ${C.borderStrong}`,
+                background: on ? C.accentAlt : "transparent",
+                color: on ? C.textOnFill : C.textMuted}}>{label}</button>
           ))}
         </div>
         {/* The Index is the whole book either way — the lock says which of these
@@ -2228,7 +2267,7 @@ export default function App() {
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
           {results.length === 0 && (
-            <div style={{color:C.textFaint,textAlign:"center",padding:"2rem 0"}}>{triedFilter === "tried" ? "No tried cocktails match." : triedFilter === "untried" ? "Nothing left untried here." : "No cocktails found."}</div>
+            <div style={{color:C.textFaint,textAlign:"center",padding:"2rem 0"}}>{!filtered ? "No cocktails found." : studiedOnly && triedFilter === "all" ? "Nothing studied here yet." : !studiedOnly && triedFilter === "tried" ? "No tried cocktails match." : !studiedOnly && triedFilter === "untried" ? "Nothing left untried here." : "Nothing matches both filters."}</div>
           )}
           {results.map(c=>{
             // Outside the pool the cocktail is readable but not studiable: Pro

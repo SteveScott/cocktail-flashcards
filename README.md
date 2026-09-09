@@ -432,9 +432,38 @@ one grid point the grid cannot split.
 
 A drink can be marked tried from the card or from the index. This is a fact
 about the drinker, independent of study: it touches neither deck nor scores,
-and a drink can be tried without ever having been studied. The index filter
-(All / Tried / Not tried) is component state, not persisted — a way of looking
-at the list, not progress.
+and a drink can be tried without ever having been studied. The index filters
+are component state, not persisted — a way of looking at the list, not progress.
+
+### The index filters
+
+Two independent dimensions that **stack**: every active one has to pass.
+
+- **Tried** — a three-way choice: All / ☑ Tried / ☐ Not tried. One choice rather
+  than two toggles because a drink cannot be both, so selecting both could only
+  ever be empty.
+- **📖 Studied** — an independent toggle, AND-ed on top of whatever Tried is set
+  to.
+
+Stacking is the point: ☐ Not tried + 📖 Studied asks what neither can alone —
+what have I learned but never actually drunk. Every chip toggles off when tapped
+lit, and **All** clears both dimensions in one tap.
+
+**Studied** is the one filter reading progress rather than the tried marks: a
+cocktail counts once its score has actually gone up, or it is in `learned`. A
+score that has never left 0 is not studied — that is the intended reading, not a
+gap. This is progress *made*, not deck membership; the row's own "✓ In Study"
+button already says what is in the deck.
+
+It is deliberately **not** scoped to the study pool. A cocktail mastered with the
+full library on stays studied after the library is switched back off — the same
+call `learned` itself makes in `toggleMaster`, where switching the library off is
+a change of scope rather than a reset. (Pro is a lifetime purchase, so there is
+no path back to the free tier that could strand out-of-pool progress behind a 🔒
+row.) `learned` is unioned in as cheap insurance: a mastered score is already
+`>= MASTERY_SCORE`, so it is normally redundant, but `mergeProgress` unions
+`learned` and maxes `scores` as separate steps, so a copy arriving with one and
+not the other still reads correctly.
 
 ## Storage and sync
 
@@ -538,7 +567,7 @@ Each of these fails silently, and none shows up in a build or a lint:
   client SDK refuses to delete a session more than a few minutes old. Firestore
   documents are deleted *before* the auth user, so a failure cannot orphan data
   under a uid that can never sign in again. Local progress is cleared too.
-- **Not stored anywhere:** the index's tried filter, quiz state, the current
+- **Not stored anywhere:** the index's filter chips, quiz state, the current
   screen, the card index. All of it is component state.
 
 ## Platforms: web, PWA, Play Store
