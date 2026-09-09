@@ -39,6 +39,10 @@ past each other. But it is a way of stirring in the glass, so a swizzled drink
 is `Built, Stirred` and the churn is spelled out in its generated steps rather
 than adding a word to the card that a learner would have to look up.
 
+Eleven drinks are swizzles, and the three that say so in their names —
+Queen's Park, Chartreuse, Bermuda Rum — need overrides, because the shake rule
+reaches their citrus before the crushed-ice rule reaches their ice.
+
 It is wrong for a specific, knowable set of them, because a method is a fact
 about a recipe, not a function of its ingredients. Nothing in "bourbon, sugar,
 bitters" says an Old Fashioned is assembled in the glass rather than a mixing
@@ -80,6 +84,9 @@ is assembled — and stirred — in the glass it is served in.
 | Seven & Seven | A two-ingredient highball, built over ice |
 | Oaxacan Old Fashioned | The same build as the Old Fashioned it is named for. It carried no override and inferred to `Stirred`, so it alone of the four told the reader to use a mixing glass and strain |
 | Shirley Temple | Poured over ice and stirred. Its lime and grenadine trip the sour rule, but half an ounce of each under four ounces of ginger ale is not a sour ([Difford's](https://www.diffordsguide.com/cocktails/recipe/1546/shirley-temple)) |
+| Queen's Park Swizzle | Swizzled, never shaken: the stick goes to the bottom of the crushed ice and is spun between the palms until a thick frost forms on the glass, which also keeps the mint, ice and bitters in their three bands ([Wikipedia](https://en.wikipedia.org/wiki/Queen%27s_Park_Swizzle), [PUNCH](https://punchdrink.com/recipes/queens-park-swizzle/)) |
+| Chartreuse Swizzle | Marcovaldo Dionysos, Tres Agaves, San Francisco, 2002. Churned with crushed ice until the glass frosts — "it's not a Swizzle without the ice, and that ice best be crushed" ([Imbibe](https://imbibemagazine.com/recipe/chartreuse-swizzle-recipe/)) |
+| Bermuda Rum Swizzle | Traditionally swizzled with a stick cut from an allspice tree, spun between the palms until the drink froths ([Wikipedia](https://en.wikipedia.org/wiki/Rum_swizzle), [The Bermudian](https://www.thebermudian.com/food-a-drink/recipes/traditional-bermuda-rum-swizzle/)). A shaker is a common modern substitute, but the island method is the one the drink is named for |
 
 A build's last step reads the narrower `CARBONATED` list to decide whether
 stirring costs you bubbles. `stout` was added to it for Nico's Bloody Mary: a
@@ -305,10 +312,10 @@ anywhere — so its sequence here was never his to preserve.
 - The sour rule needs citrus *and* a sweetener named in the ingredients, so a
   drink sweetened only by a liqueur reads as unsweetened. That is why the three
   Iced Teas need overrides their Long Island sibling does not.
-- Queen's Park Swizzle and Chartreuse Swizzle are `Shaken`. Both are swizzles by
-  name and by technique, and both are shaken here because their crushed ice is
-  reached only after the shake rule has already claimed them. Left alone for now
-  rather than changed silently.
+- Mint is never muddled by the generated steps. The muddle rule looks for a
+  sugar cube or the word "muddle", so a Mojito, a Mint Julep and a Queen's Park
+  Swizzle all list their mint as an ingredient to pour in rather than a leaf to
+  press. The swizzles make this more visible, not worse.
 - Other unmeasured parts still land in the garnish bucket where they are really
   ingredients or instructions: a Whiskey Sour's bare "Angostura Bitters", a Mint
   Julep's "Crushed Ice", a Caipirinha's "add cachaça", a Carajillo's "layer
