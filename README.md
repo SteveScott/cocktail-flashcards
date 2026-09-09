@@ -465,6 +465,35 @@ row.) `learned` is unioned in as cheap insurance: a mastered score is already
 `learned` and maxes `scores` as separate steps, so a copy arriving with one and
 not the other still reads correctly.
 
+### Backup & Reset: two kinds of progress, two of everything
+
+Because being tried is a fact about the drinker rather than about study, the
+Backup & Reset screen keeps the two apart. It is two accordions of the same
+shape — **📚 Study Progress** and **🥃 Tried Marks** — each with its own restore
+and its own clear. Only one opens at a time: the panels are tall, and a
+destructive button scrolled half off the screen is how the wrong one gets
+pressed.
+
+- **Clear Study Progress** drops every score, every mastered cocktail and the
+  deck, and carries `tried` across untouched.
+- **Clear Tried Marks** unmarks every drink and leaves scores, mastery and the
+  deck alone.
+
+Both clears confirm in-app rather than through `confirm()`, with a real Cancel
+beside the destructive button. The copy changes with the situation: for a
+signed-in account `highWater/{uid}` only ever grows, so a clear cannot lower it
+and the matching restore puts it straight back; signed out there is no such copy
+and the panel says so. A warning that overstated the risk for one user would
+understate it for the other.
+
+The restore split has one non-obvious consequence. `mergeStates()` unions
+`tried` along with everything else — it must, because the sign-in handshake uses
+it to reconcile two devices and neither may un-know a drink the other has had.
+Restore Study Progress therefore puts `tried` back from `prev` after the merge,
+rather than giving `mergeStates()` a flag its other callers would have to care
+about. Without that, Restore Tried Marks could never report anything to bring
+back, because the study restore would already have brought it.
+
 ## Storage and sync
 
 ### The progress object

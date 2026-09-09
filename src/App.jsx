@@ -613,7 +613,16 @@ export default function App() {
   // The Progress screen's own busy flag and result line, for the restore a user
   // runs on their own account. Separate from the admin panel's `backupBusy`:
   // both live on this screen now, and one running must not grey out the other.
-  const [selfBusy, setSelfBusy] = useState(false);
+  // "" | "progress" | "tried" — which restore is in flight, so the two buttons
+  // can show their own spinner instead of both greying out together.
+  const [selfBusy, setSelfBusy] = useState("");
+  // Which Backup & Reset accordion is open, and which destructive action is
+  // waiting on its in-app confirm ("" | "progress" | "tried"). Both start
+  // collapsed: the two restores are separate actions on separate presses, so
+  // opening neither by default puts them on an equal footing and keeps a
+  // destructive button off the screen until it is asked for.
+  const [openSection, setOpenSection] = useState("");
+  const [confirming, setConfirming] = useState("");
   const [selfMsg, setSelfMsg] = useState("");
   const [selfErr, setSelfErr] = useState("");
 
@@ -1238,8 +1247,11 @@ export default function App() {
   // ever ADDS. A score already higher here stays, a cocktail learned since the
   // mark was last raised is kept, and pressing it twice does nothing the second
   // time. The autosave effect writes the result up as it would any other change.
-  async function restoreOwnProgress() {
-    setSelfErr(""); setSelfMsg(""); setSelfBusy(true);
+  // Study progress and tried marks restore separately, but they read the same
+  // mark and fail the same three ways, so the fetch and the diagnosis live here
+  // once and each caller only says what to do with the peak it gets.
+  async function withPeak(kind, apply) {
+    setSelfErr(""); setSelfMsg(""); setSelfBusy(kind);
     try {
       const snap = await getDoc(doc(db, "highWater", user.uid));
       // Unioned with the mark already in memory rather than taken raw: this
@@ -1252,22 +1264,7 @@ export default function App() {
       }
       highWaterRef.current = peak;
       setHwPeak(peakCounts(peak));
-
-      // Counted against this render's state, for the message only; the write
-      // below re-merges from `prev` so nothing that lands in between is lost.
-      const merged = mergeStates(st, peak, proRef.current);
-      const learnedBack = (merged.learned?.length || 0) - (st.learned?.length || 0);
-      const triedBack = (merged.tried?.length || 0) - (st.tried?.length || 0);
-      const scoresBack = Object.keys(merged.scores || {})
-        .filter((n) => (Number(merged.scores[n]) || 0) > (Number(st.scores?.[n]) || 0)).length;
-
-      setSt(prev => ({ ...mergeStates(prev, peak, proRef.current), uid: user.uid }));
-      setDi(0); setRevealed(false);
-
-      const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-      setSelfMsg(learnedBack || triedBack || scoresBack
-        ? `Restored to your maximum progress \u2014 ${plural(learnedBack, "cocktail")} mastered, ${plural(triedBack, "tried mark")} and ${plural(scoresBack, "score")} brought back.`
-        : "Your progress is already at its maximum — there was nothing to bring back.");
+      apply(peak);
     } catch (e) {
       console.error("Restore failed", e);
       // Name the fault instead of guessing at it. This read fails three ways
@@ -1275,8 +1272,9 @@ export default function App() {
       // `unauthenticated` is a session whose token expired underneath a UI that
       // still looks signed in, and `permission-denied` means the rules the
       // project is running do not grant an owner `get` on highWater/{uid} —
-      // firestore.rules is deployed by hand (see its header), so it can lag the
-      // code that depends on it. Only the first is helped by checking your
+      // firestore.rules deploys from CI now, but a push that fails at the rules
+      // step still leaves the project running the previous ruleset, so it can
+      // lag the code that depends on it. Only the first is helped by checking your
       // signal, and sending the other two there points at the one part that is
       // working. Same reasoning as startCheckout() below: surface the specific
       // reason so the failure is diagnosable rather than always showing one
@@ -1287,7 +1285,61 @@ export default function App() {
       setSelfErr(denied
         ? `Your account wasn't allowed to read its saved progress (${e.code}). Try signing out and back in — if that doesn't help it's a problem on our end, not yours, and nothing you have done here has lost anything.`
         : `Could not reach your saved progress${e?.code ? ` (${e.code})` : ""}. Check your connection and try again.`);
-    } finally { setSelfBusy(false); }
+    } finally { setSelfBusy(""); }
+  }
+
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+  // Study progress only. mergeStates() unions `tried` along with everything else
+  // — it has to, because the sign-in handshake uses it to reconcile two devices
+  // and neither may un-know a drink the other has had. Here that union is the one
+  // thing we do not want, so `tried` is put back from `prev` afterwards rather
+  // than by giving mergeStates a flag its other two callers would have to care
+  // about. Without this the Tried accordion could never report anything to bring
+  // back, because this button would already have brought it.
+  async function restoreOwnProgress() {
+    return withPeak("progress", (peak) => {
+      // Counted against this render's state, for the message only; the write
+      // below re-merges from `prev` so nothing that lands in between is lost.
+      const merged = mergeStates(st, peak, proRef.current);
+      const learnedBack = (merged.learned?.length || 0) - (st.learned?.length || 0);
+      const scoresBack = Object.keys(merged.scores || {})
+        .filter((n) => (Number(merged.scores[n]) || 0) > (Number(st.scores?.[n]) || 0)).length;
+
+      setSt(prev => ({ ...mergeStates(prev, peak, proRef.current), tried: prev.tried || [], uid: user.uid }));
+      setDi(0); setRevealed(false);
+
+      // Splitting the restore in two means this button can succeed and still
+      // leave the account's tried marks sitting in the mark, unmentioned. Say so
+      // here, or "Restored to your maximum study progress" reads as if the whole
+      // job is done and the second accordion is never found.
+      const have = new Set(st.tried || []);
+      const triedWaiting = (peak.tried || []).filter(n => !have.has(n)).length;
+      const alsoTried = triedWaiting
+        ? ` Your account also has ${plural(triedWaiting, "tried mark")} saved — Restore Tried Marks brings those back.`
+        : "";
+      setSelfMsg((learnedBack || scoresBack
+        ? `Restored to your maximum study progress \u2014 ${plural(learnedBack, "cocktail")} mastered and ${plural(scoresBack, "score")} brought back.`
+        : "Your study progress is already at its maximum — there was nothing to bring back.") + alsoTried);
+    });
+  }
+
+  // Tried marks only: a union, never a replacement, so a drink marked on this
+  // device since the mark was last raised survives a restore that does not yet
+  // know about it.
+  async function restoreOwnTried() {
+    return withPeak("tried", (peak) => {
+      const have = new Set(st.tried || []);
+      const back = (peak.tried || []).filter(n => !have.has(n)).length;
+      setSt(prev => ({
+        ...prev,
+        tried: Array.from(new Set([...(prev.tried || []), ...(peak.tried || [])])),
+        uid: user.uid,
+      }));
+      setSelfMsg(back
+        ? `Restored ${plural(back, "tried mark")}.`
+        : "Your tried marks are already at their maximum — there was nothing to bring back.");
+    });
   }
 
   // Deletes the cloud account and its data, then clears this device. The server
@@ -1613,46 +1665,38 @@ export default function App() {
       return refillDeck({...p, scores, masterMode:m}, np);
     });
   }
-  // Clearing drops every score, every mastered cocktail and every tried mark,
-  // and the autosave effect then writes that emptied state over the copy held
-  // under the account. "Reset all progress?" was far too easy to wave through,
-  // so the confirm names each thing that goes and counts it.
+  // Clearing and restoring are split in two, because study progress and tried
+  // marks are two different facts. Marking a drink tried says something about the
+  // drinker, not about study — toggleTried touches neither deck nor scores — so
+  // wiping what you have learned has no business un-drinking anything. Clear
+  // Study Progress therefore carries `tried` across untouched, and tried marks
+  // get their own button.
   //
-  // What it no longer claims is that the loss is permanent. For a signed-in
-  // account it is not: highWater/{uid} keeps the maximum progress ever reached
-  // and only ever grows, so clearing cannot lower it and Restore Progress puts
-  // it straight back. Signed out there is no such copy, and the warning says so
-  // — the same button really is irreversible in that case, and a confirm that
-  // overstated the risk for one user would understate it for the other.
-  function reset() {
-    const mastered = st.learned?.length || 0;
-    const triedCount = st.tried?.length || 0;
-    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-    const recoverable = Boolean(firebaseEnabled && user);
-    const warning = [
-      recoverable
-        ? "\u26a0\ufe0f  CLEAR ALL PROGRESS  \u26a0\ufe0f"
-        : "\u26a0\ufe0f  WARNING \u2014 THIS CANNOT BE UNDONE  \u26a0\ufe0f",
-      "",
-      "This erases ALL of your progress: on this device, and the copy saved to your account.",
-      "",
-      `  \u2022 ${plural(mastered, "cocktail")} mastered`,
-      `  \u2022 ${plural(triedCount, "drink")} marked as tried`,
-      "  \u2022 every quiz score you have earned",
-      "  \u2022 your current study deck",
-      "",
-      recoverable
-        ? "Your account keeps your maximum progress \u2014 the best you have ever reached. Restore Progress will bring it back."
-        : "You are not signed in, so there is no saved copy to restore from. None of it can be recovered.",
-      "",
-      "Clear your progress now?",
-    ].join("\n");
-    if (!confirm(warning)) return;
-    setSt(initState(masterOn)); setDi(0); setRevealed(false);
-    setSelfErr(""); setSelfMsg(recoverable
-      ? "Progress cleared. Restore Progress will bring back your maximum progress."
-      : "Progress cleared.");
+  // Neither confirm claims the loss is permanent when it is not. For a signed-in
+  // account highWater/{uid} keeps the maximum ever reached and only ever grows,
+  // so clearing cannot lower it and the matching Restore puts it straight back.
+  // Signed out there is no such copy — the same button really is irreversible
+  // then, and a warning that overstated the risk for one user would understate
+  // it for the other. That is why these are in-app panels rather than confirm():
+  // the copy changes with the situation, and a real Cancel sits beside it.
+  const recoverable = Boolean(firebaseEnabled && user);
+
+  function clearProgress() {
+    setSt(p => ({ ...initState(masterOn), tried: p.tried || [] }));
+    setDi(0); setRevealed(false); setConfirming(""); setSelfErr("");
+    setSelfMsg(recoverable
+      ? "Study progress cleared. Restore Study Progress will bring back your maximum."
+      : "Study progress cleared.");
   }
+
+  function clearTried() {
+    setSt(p => ({ ...p, tried: [] }));
+    setConfirming(""); setSelfErr("");
+    setSelfMsg(recoverable
+      ? "Tried marks cleared. Restore Tried Marks will bring them back."
+      : "Tried marks cleared.");
+  }
+
   // Add or remove a cocktail from the study deck (st.active) by name. Adding a
   // cocktail also gives it a starting score and pulls it out of `learned` so it
   // reappears in study. The deck keeps its chosen size either way: an added card
@@ -1791,26 +1835,115 @@ export default function App() {
             </div>
       )}
 
-      <button
-        onClick={restoreOwnProgress}
-        disabled={!firebaseEnabled || !user || selfBusy}
-        style={{...btn(C.successDeep),width:"100%",marginBottom:"0.5rem",opacity:(!firebaseEnabled||!user||selfBusy)?0.5:1,cursor:(!firebaseEnabled||!user||selfBusy)?"not-allowed":"pointer"}}>
-        {selfBusy ? "Restoring…" : "♻️ Restore Progress"}
-      </button>
-      <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.75rem"}}>
-        {firebaseEnabled && user
-          ? "Brings back your maximum progress. Nothing you have now is removed or lowered — anything already ahead of the saved copy is kept, so this is safe to press at any time."
-          : "Sign in to restore. Your maximum progress is kept with your account, so there is nothing saved to restore from while you are signed out."}
-      </div>
+      {/* Two accordions, one per kind of progress. They are the same shape on
+          purpose: a restore that only ever adds, then a clear guarded by an
+          in-app confirm. Only one opens at a time — the panels are tall, and a
+          destructive button scrolled half off the screen is how the wrong one
+          gets pressed. */}
+      {[
+        {
+          key: "study",
+          title: "📚 Study Progress",
+          sub: `${learned} mastered · ${deck.length} in deck`,
+          restoreLabel: "♻️ Restore Study Progress",
+          restoreNote: firebaseEnabled && user
+            ? "Brings back your maximum scores and mastered cocktails. Nothing you have now is removed or lowered — anything already ahead of the saved copy is kept, so this is safe to press at any time."
+            : "Sign in to restore. Your maximum progress is kept with your account, so there is nothing saved to restore from while you are signed out.",
+          clearLabel: "⚠️ Clear Study Progress",
+          clearNote: <>Erases every score, every cocktail you have mastered and your
+            current study deck — on this device and in your account. Your tried
+            marks are kept.{" "}
+            {recoverable
+              ? "Your maximum is kept, so Restore Study Progress can bring this back."
+              : "You are signed out, so there is no saved copy and this cannot be undone."}</>,
+          confirmTitle: recoverable ? "Clear all study progress?" : "⚠️ This cannot be undone",
+          confirmLines: [
+            `${plural(learned, "cocktail")} mastered`,
+            "every quiz score you have earned",
+            "your current study deck",
+          ],
+          confirmTail: recoverable
+            ? "Your account keeps your maximum progress — the best you have ever reached. Restore Study Progress will bring it back."
+            : "You are not signed in, so there is no saved copy to restore from. None of it can be recovered.",
+        },
+        {
+          key: "tried",
+          title: "🥃 Tried Marks",
+          sub: plural(st.tried?.length || 0, "drink"),
+          restoreLabel: "♻️ Restore Tried Marks",
+          restoreNote: firebaseEnabled && user
+            ? "Brings back every drink your account has ever had marked as tried. Marks are added, never removed — anything you have marked since is kept."
+            : "Sign in to restore. Your tried marks are kept with your account, so there is nothing saved to restore from while you are signed out.",
+          clearLabel: "⚠️ Clear Tried Marks",
+          clearNote: <>Unmarks every drink you have marked as tried. Scores, mastered
+            cocktails and your study deck are all kept.{" "}
+            {recoverable
+              ? "Your maximum is kept, so Restore Tried Marks can bring these back."
+              : "You are signed out, so there is no saved copy and this cannot be undone."}</>,
+          confirmTitle: recoverable ? "Clear all tried marks?" : "⚠️ This cannot be undone",
+          confirmLines: [`${plural(st.tried?.length || 0, "drink")} marked as tried`],
+          confirmTail: recoverable
+            ? "Your account keeps every tried mark you have ever had. Restore Tried Marks will bring them back."
+            : "You are not signed in, so there is no saved copy to restore from. None of it can be recovered.",
+        },
+      ].map(sec => {
+        const open = openSection === sec.key;
+        const busy = selfBusy === sec.key;
+        const restoreOff = !firebaseEnabled || !user || Boolean(selfBusy);
+        return (
+        <div key={sec.key} style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"0.75rem"})}>
+          <button
+            onClick={()=>{setOpenSection(open ? "" : sec.key); setConfirming("");}}
+            aria-expanded={open}
+            style={{display:"flex",width:"100%",justifyContent:"space-between",alignItems:"center",gap:"0.5rem",background:"transparent",border:"none",padding:0,cursor:"pointer",textAlign:"left"}}>
+            <span style={{color:C.textStrong,fontWeight:800,fontSize:"0.95rem"}}>{sec.title}</span>
+            <span style={{color:C.textFaint,fontSize:"0.75rem",whiteSpace:"nowrap"}}>{sec.sub} {open ? "▲" : "▼"}</span>
+          </button>
 
-      <button onClick={reset} style={{...btn(C.danger),width:"100%",marginBottom:"0.5rem"}}>⚠️ Clear Progress</button>
-      <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.25rem"}}>
-        Erases every score, every cocktail you have mastered and every drink you
-        have marked as tried — on this device and in your account.{" "}
-        {firebaseEnabled && user
-          ? "Your maximum progress is kept, so Restore Progress can bring this back."
-          : "You are signed out, so there is no saved copy and this cannot be undone."}
-      </div>
+          {open && (
+            <div style={{marginTop:"0.9rem"}}>
+              <button
+                onClick={sec.key === "study" ? restoreOwnProgress : restoreOwnTried}
+                disabled={restoreOff}
+                style={{...btn(C.successDeep),width:"100%",marginBottom:"0.5rem",opacity:restoreOff?0.5:1,cursor:restoreOff?"not-allowed":"pointer"}}>
+                {busy ? "Restoring…" : sec.restoreLabel}
+              </button>
+              <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.25rem"}}>
+                {sec.restoreNote}
+              </div>
+
+              {confirming === sec.key ? (
+                <div role="alertdialog" aria-label={sec.confirmTitle} style={{borderRadius:12,padding:"0.9rem 1rem",border:`1px solid ${C.dangerTextEdge}`,background:C.well}}>
+                  <div style={{color:C.error,fontWeight:800,fontSize:"0.85rem",marginBottom:"0.5rem"}}>{sec.confirmTitle}</div>
+                  <div style={{fontSize:"0.75rem",color:C.textBody,lineHeight:1.6,marginBottom:"0.5rem"}}>
+                    This erases, on this device and in your account:
+                    <div style={{margin:"0.4rem 0"}}>
+                      {sec.confirmLines.map(l => <div key={l}>• {l}</div>)}
+                    </div>
+                    {sec.confirmTail}
+                  </div>
+                  <div style={{display:"flex",gap:"0.5rem",marginTop:"0.75rem"}}>
+                    <button onClick={()=>setConfirming("")} style={{flex:1,padding:"0.6rem",borderRadius:8,background:"transparent",color:C.textMuted,fontWeight:700,fontSize:"0.8rem",border:`1px solid ${C.borderStrong}`,cursor:"pointer"}}>
+                      Cancel
+                    </button>
+                    <button onClick={sec.key === "study" ? clearProgress : clearTried} style={{flex:1,padding:"0.6rem",borderRadius:8,background:C.danger,color:C.textOnFill,fontWeight:700,fontSize:"0.8rem",border:"none",cursor:"pointer"}}>
+                      Yes, clear
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button onClick={()=>{setSelfMsg("");setSelfErr("");setConfirming(sec.key);}} style={{...btn(C.danger),width:"100%",marginBottom:"0.5rem"}}>{sec.clearLabel}</button>
+                  <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55}}>{sec.clearNote}</div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        );
+      })}
+
+      <div style={{height:"1rem"}} />
 
       {selfMsg && <div role="status" style={frame({borderRadius:12,padding:"0.75rem 1rem",border:`1px solid ${C.successEdge}`,fontSize:"0.78rem",color:C.textBody,lineHeight:1.55,marginBottom:"1.25rem"})}>{selfMsg}</div>}
       {selfErr && <div role="alert" style={frame({borderRadius:12,padding:"0.75rem 1rem",border:`1px solid ${C.dangerTextEdge}`,fontSize:"0.78rem",color:C.error,lineHeight:1.55,marginBottom:"1.25rem"})}>{selfErr}</div>}
