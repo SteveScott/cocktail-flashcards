@@ -29,7 +29,6 @@ is assembled in the glass it is served in.
 | Old Fashioned | [IBA](https://iba-world.com/iba-cocktail/old-fashioned/): "Place sugar cube in old fashioned glass and saturate with bitter… Fill the glass with ice cubes and add whiskey. Stir gently." |
 | Rum Old Fashioned | Same build as the Old Fashioned |
 | Tequila Old Fashioned | Same build as the Old Fashioned |
-| Oaxacan Old Fashioned | Same build as the Old Fashioned |
 | Champagne Cocktail | [IBA](https://iba-world.com/iba-cocktail/champagne-cocktail/): "Place the sugar cube with 2 dashes of bitters in a large Champagne glass, add the cognac. Pour gently chilled Champagne." |
 | Irish Coffee | [IBA](https://iba-world.com/iba-cocktail/irish-coffee/): coffee poured into a preheated glass, whiskey and sugar stirred in, cream floated over the back of a spoon |
 | Horse's Neck | [IBA](https://iba-world.com/iba-cocktail/horses-neck/): "Pour Cognac and ginger ale directly into highball glass with ice cubes. Stir gently." |
