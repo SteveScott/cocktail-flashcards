@@ -1140,7 +1140,23 @@ export default function App() {
         : "Your progress is already at its maximum — there was nothing to bring back.");
     } catch (e) {
       console.error("Restore failed", e);
-      setSelfErr("Could not reach your saved progress. Check your connection and try again.");
+      // Name the fault instead of guessing at it. This read fails three ways
+      // that are not the same problem: `unavailable` is the connection,
+      // `unauthenticated` is a session whose token expired underneath a UI that
+      // still looks signed in, and `permission-denied` means the rules the
+      // project is running do not grant an owner `get` on highWater/{uid} —
+      // firestore.rules is deployed by hand (see its header), so it can lag the
+      // code that depends on it. Only the first is helped by checking your
+      // signal, and sending the other two there points at the one part that is
+      // working. Same reasoning as startCheckout() below: surface the specific
+      // reason so the failure is diagnosable rather than always showing one
+      // message. The code rides along in the text so a screenshot is enough to
+      // tell the three apart, which is what was missing the first time this
+      // failed in the wild.
+      const denied = e?.code === "permission-denied" || e?.code === "unauthenticated";
+      setSelfErr(denied
+        ? `Your account wasn't allowed to read its saved progress (${e.code}). Try signing out and back in — if that doesn't help it's a problem on our end, not yours, and nothing you have done here has lost anything.`
+        : `Could not reach your saved progress${e?.code ? ` (${e.code})` : ""}. Check your connection and try again.`);
     } finally { setSelfBusy(false); }
   }
 
@@ -2292,9 +2308,18 @@ export default function App() {
           </div>
         </div>
 
+        {/* One button holds the bottom of the screen through both halves of a
+            question, so it is also the most direct place to report the answer.
+            Neutral until you have answered: the face was green there before,
+            which made the loudest colour on the screen the one saying nothing —
+            it was green whether the drink was about to go well or badly.
+            Afterwards it takes the same green/red the other quiz grades itself
+            with (✓ Knew It / ✗ Didn't Know, below), so "was I right" is
+            answered by the control your thumb is already on rather than only by
+            the line of text above the list. */}
         {qr
-          ? <button onClick={next86} style={{...btn(C.danger),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
-          : <button onClick={check86} style={{...btn(C.successDeep),width:"100%"}}>Check Answer</button>}
+          ? <button onClick={next86} style={{...btn(gotIt ? C.successDeep : C.danger),width:"100%"}}>{qi+1 >= quizPool.length ? "See Results" : "Next →"}</button>
+          : <button onClick={check86} style={{...btn(C.surfaceQuiet),width:"100%",border:`1px solid ${C.borderStrong}`}}>Check Answer</button>}
       </div></div>
     );
   }
