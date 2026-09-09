@@ -3,7 +3,7 @@ rules_version = '2';
 // Firestore security rules for Cocktail Flashcards.
 //
 // Deployed automatically on merge to master, by
-// .github/workflows/firestore-rules.yml. Being in this file is not the same as
+// .github/workflows/deploy.yml. Being in this file is not the same as
 // being in force — Firestore evaluates a ruleset stored in the project, not
 // this text — and the gap between the two once went unnoticed for weeks. To
 // publish by hand anyway, or from a clone:
