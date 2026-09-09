@@ -3,7 +3,55 @@
 `getMethod()` in [`src/recipe-meta.js`](../src/recipe-meta.js) infers a method from
 the ingredient list. The inference is a bar rule of thumb — shake for citrus,
 egg, dairy, purée or espresso; stir anything spirit-and-sugar; build anything
-tall with a mixer in it — and it is right for most of the 321 recipes.
+tall with a mixer in it — and it is right for most of the 322 recipes.
+
+## The vocabulary
+
+**"Built" on its own was ambiguous and is gone.** It named where a drink is
+assembled and said nothing about what you then do to it, which put a Gin & Tonic,
+an Old Fashioned, a Mint Julep and a Sombrero under one word. The two builds are
+now named for the step that actually differs:
+
+| Method | Where it is mixed | What you do to it |
+|---|---|---|
+| `Shaken` | tin | shaken hard, strained out |
+| `Stirred` | mixing glass | stirred, strained out |
+| `Built, Stirred` | the serving vessel | stirred where it stands |
+| `Built, Not Stirred` | the serving vessel | nothing — the pour is the mixing |
+| `Built, Swizzled` | the serving vessel | churned with a swizzle stick |
+| `Rolled` | between two tins | poured back and forth |
+| `Layered` | the serving vessel | kept apart on purpose |
+
+Two notes on the edges of that table.
+
+**A float is not a layer.** A drink is `Layered` only when components that make
+up its *body* must stay separate — a B-52, a Black Velvet. Something set on top
+of a finished drink is a float, it carries `role: "float"` from
+`parseIngredients()`, and it gets its own closing step; the method describes the
+rest of the drink underneath it. A Mai Tai is `Shaken` with a rum float, a
+Sombrero is `Built, Not Stirred` with a cream float. The Baby Guinness is the
+case that looks like an exception and is not: its cream is a float *and* stays
+as its own unmixed band, which is the whole drink, so it is `Layered`.
+
+**Swizzling is a method, and it is rarer than crushed ice.** A swizzle is a
+stick sunk to the bottom of crushed ice and spun between the palms, driving the
+ice up through the drink until a thick frost forms on the outside of the glass.
+It chills harder and faster than stirring cubes past each other.
+
+Four drinks in the deck are swizzles: Queen's Park, Chartreuse and Bermuda Rum,
+which say so in their names, and the Ti' Punch, which is swizzled with a
+swizzle stick without saying so. All four need an override.
+
+**Crushed ice is not the test, and this was got wrong once.** Eight further
+drinks are built over crushed ice and stirred with a bar spoon, not swizzled,
+and they briefly shared the swizzle instruction:
+
+| Drink | What it actually asks for |
+|---|---|
+| Mojito, Mojito (Dark Rum) | Stirred with a bar spoon, lifting from the bottom to bring the mint up. The [Cuban original](https://en.wikipedia.org/wiki/Mojito) is built on cubes, not crushed ice at all |
+| Mint Julep | Stirred hard with a long-handled spoon for 15–20 seconds until the cup frosts, then packed and mounded. The frost is the same tell as a swizzle; the tool and the motion are not |
+| Caipirinha, Caipiroska | Muddled, then stirred |
+| Sherry Cobbler, Planter's Punch, Absinthe Frappé | Churned with a spoon over crushed ice |
 
 It is wrong for a specific, knowable set of them, because a method is a fact
 about a recipe, not a function of its ingredients. Nothing in "bourbon, sugar,
@@ -18,39 +66,33 @@ method from the drink's governing authority — the IBA's official specification
 where it has one, otherwise the originating bartender or the standard reference
 for that drink. Add to this table when you add an override.
 
-## Built in the serving vessel
+## Built, Stirred
 
 The largest group, and the one the rule of thumb gets wrong most often: these
 read as spirit-and-sugar drinks, so inference calls them Stirred, but every one
-is assembled in the glass it is served in.
+is assembled — and stirred — in the glass it is served in.
 
 | Drink | Source |
 |---|---|
 | Old Fashioned | [IBA](https://iba-world.com/iba-cocktail/old-fashioned/): "Place sugar cube in old fashioned glass and saturate with bitter… Fill the glass with ice cubes and add whiskey. Stir gently." |
 | Rum Old Fashioned | Same build as the Old Fashioned |
 | Tequila Old Fashioned | Same build as the Old Fashioned |
-| Champagne Cocktail | [IBA](https://iba-world.com/iba-cocktail/champagne-cocktail/): "Place the sugar cube with 2 dashes of bitters in a large Champagne glass, add the cognac. Pour gently chilled Champagne." |
 | Irish Coffee | [IBA](https://iba-world.com/iba-cocktail/irish-coffee/): coffee poured into a preheated glass, whiskey and sugar stirred in, cream floated over the back of a spoon |
 | Horse's Neck | [IBA](https://iba-world.com/iba-cocktail/horses-neck/): "Pour Cognac and ginger ale directly into highball glass with ice cubes. Stir gently." |
 | Black Russian | [IBA](https://iba-world.com/iba-cocktail/black-russian/): "Pour the ingredients into the old fashioned glass filled with ice cubes. Stir gently." |
 | Rusty Nail | [IBA](https://iba-world.com/iba-cocktail/rusty-nail/): "Pour all ingredients directly into an old fashioned glass filled with ice. Stir gently." |
-| Kir | [IBA](https://iba-world.com/iba-cocktail/kir/): "Pour Crème de Cassis into glass, top up with white wine." |
-| Kir Royale | IBA, as the Kir Royal variant of the above: "Use Champagne instead of white wine" |
 | Godfather | Poured into an ice-filled old fashioned glass and stirred ([Difford's](https://www.diffordsguide.com/cocktails/recipe/864/godfather-cocktail)) |
 | Godmother | The vodka counterpart, same build ([Difford's](https://www.diffordsguide.com/cocktails/recipe/9219/godmother)) |
 | Milano Torino | Built in an old fashioned glass over ice, stirred briefly ([Difford's](https://www.diffordsguide.com/cocktails/recipe/3495/milano-torino-mi-to-cocktail)) |
 | Whisky Mac | Poured into the glass and swirled — traditionally with no ice at all ([Master of Malt](https://www.masterofmalt.com/blog/post/whisky-mac-cocktail-recipe/)) |
-| Death in the Afternoon | Hemingway, *So Red the Nose* (1935): "Pour one jigger absinthe into a Champagne glass. Add iced Champagne until it attains the proper opalescent milkiness." |
-| Ti' Punch | Built in the glass, traditionally without ice, roused with a *bois lélé* ([Imbibe](https://imbibemagazine.com/introduction-ti-punch/)) |
 | Treacle | Dick Bradsell built it in the serving glass — "rather than use a stirring glass, Dick made this cocktail directly in the glass" ([Difford's](https://www.diffordsguide.com/cocktails/recipe/1983/treacle-no1)) |
 | Hot Toddy | Built in a preheated mug; you do not shake boiling water |
 | Hot Buttered Rum | Batter into a preheated mug, then rum and hot water, stirred to melt ([Saveur](https://www.saveur.com/article/Wine-and-Drink/Hot-Buttered-Rum)) |
 | Tom & Jerry | Batter into a warmed mug, then spirit and hot milk, stirred to a foam ([Saveur](https://www.saveur.com/article/Recipes/Tom-and-Jerry)) |
 | Spanish Coffee | Built and flamed in the glass tableside at Huber's, Portland ([PUNCH](https://punchdrink.com/articles/hubers-spanish-coffee-hot-cocktail/)) |
-| Sombrero | Coffee liqueur poured over ice, cream floated on top — the cream sitting on the liqueur "like a hat" is the whole drink |
-| Prairie Fire | Built in the shot glass |
 | Seven & Seven | A two-ingredient highball, built over ice |
-| True Blood | Built in the glass and topped with wine. `BUILT_MIXERS` does not list wine, so inference falls through to Shaken on the cranberry juice — which would shake the wine through the drink instead of leaving it on top. Adding wine to that list would reclassify Sangria as a side effect, so this is an override rather than a rule change. |
+| Oaxacan Old Fashioned | The same build as the Old Fashioned it is named for. It carried no override and inferred to `Stirred`, so it alone of the four told the reader to use a mixing glass and strain |
+| Shirley Temple | Poured over ice and stirred. Its lime and grenadine trip the sour rule, but half an ounce of each under four ounces of ginger ale is not a sour ([Difford's](https://www.diffordsguide.com/cocktails/recipe/1546/shirley-temple)) |
 
 A build's last step reads the narrower `CARBONATED` list to decide whether
 stirring costs you bubbles. `stout` was added to it for Nico's Bloody Mary: a
@@ -59,6 +101,58 @@ base, but the list only named `beer` — which "Guinness Stout" does not contain
 so the drink was being told to stir briefly rather than gently. It changes the
 generated steps of no other recipe; every other stout in the deck (Black Velvet,
 Snakebite, Baby Guinness) is `Layered` and never reaches that branch.
+
+## Built, Swizzled
+
+A drink is swizzled if it is stirred with a purpose-made swizzle stick, or if
+the technique is in its name. Four qualify. Three announce themselves; the
+fourth is the Ti' Punch, which is swizzled with a swizzle stick and simply does
+not name the technique.
+
+The motion is the same throughout: the spur end to the bottom of the glass, the
+handle spun between the palms as if starting a fire. Only the crushed-ice
+drinks give you a frost to stop at.
+
+| Drink | Source |
+|---|---|
+| Queen's Park Swizzle | Swizzled, never shaken: the stick goes to the bottom of the crushed ice and is spun between the palms until a thick frost forms on the glass, which also keeps the mint, ice and bitters in their three bands ([Wikipedia](https://en.wikipedia.org/wiki/Queen%27s_Park_Swizzle), [PUNCH](https://punchdrink.com/recipes/queens-park-swizzle/)) |
+| Chartreuse Swizzle | Marcovaldo Dionysos, Tres Agaves, San Francisco, 2002. Churned with crushed ice until the glass frosts — "it's not a Swizzle without the ice, and that ice best be crushed" ([Imbibe](https://imbibemagazine.com/recipe/chartreuse-swizzle-recipe/)) |
+| Bermuda Rum Swizzle | Traditionally swizzled with a stick cut from an allspice tree, spun between the palms until the drink froths ([Wikipedia](https://en.wikipedia.org/wiki/Rum_swizzle), [The Bermudian](https://www.thebermudian.com/food-a-drink/recipes/traditional-bermuda-rum-swizzle/)). A shaker is a common modern substitute, but the island method is the one the drink is named for |
+| Ti' Punch | Swizzled with a swizzle stick, the spur end in the glass and the handle spun between the palms ([Imbibe](https://imbibemagazine.com/introduction-ti-punch/), [Uncommon Caribbean](https://www.uncommoncaribbean.com/martinique/uncommon-buy-le-bois-lele-the-authentic-caribbean-swizzle-stick/)). Traditionally no ice at all, so there is nothing to churn and no frost to stop at — the swizzle just dissolves the cane syrup |
+
+
+## Built, Not Stirred
+
+Assembled in the serving vessel like the group above, and then left alone. The
+reason is usually carbonation — stirring a Kir or a Champagne Cocktail pours the
+bead away — but it can also be that there is nothing to mix, or that mixing is
+the one thing that would ruin the drink.
+
+| Drink | Source |
+|---|---|
+| Champagne Cocktail | [IBA](https://iba-world.com/iba-cocktail/champagne-cocktail/): "Place the sugar cube with 2 dashes of bitters in a large Champagne glass, add the cognac. Pour gently chilled Champagne." — no stir; the pour is the mixing, and stirring costs the bead |
+| Kir | [IBA](https://iba-world.com/iba-cocktail/kir/): "Pour Crème de Cassis into glass, top up with white wine." The wine going in mixes it |
+| Kir Royale | IBA, as the Kir Royal variant of the above: "Use Champagne instead of white wine" |
+| Death in the Afternoon | Hemingway, *So Red the Nose* (1935): "Pour one jigger absinthe into a Champagne glass. Add iced Champagne until it attains the proper opalescent milkiness." The louche spreading through the glass *is* the mixing |
+| Sombrero | Coffee liqueur poured over ice, cream floated on top — the cream sitting on the liqueur "like a hat" is the whole drink, and stirring it destroys it |
+| True Blood | Built over ice and not stirred, with the red wine floated on top. The float is a float, not a layer: the method describes the vodka, raspberry liqueur and cranberry underneath it |
+| Prairie Fire | Built in the shot glass; the hot sauce disperses on its own |
+
+**The True Blood is a house cocktail from QXT's, and has no external source.**
+Searching for it turns up an unrelated drink of the same name — vodka, rum,
+peach schnapps, orange juice and grenadine — which is not this recipe. Do not
+reconcile this entry against it. The measurements here are the house build, and
+the owner of the recipe is the authority on them.
+
+## Rolled
+
+Poured back and forth between two tins. Inferred rather than overridden: a
+tomato or Clamato base is the whole rule, and it is the only base in the deck
+that suits neither tin nor glass. Shaking whips tomato juice to a froth and
+blunts the seasoning; stirring it in the glass never mixes it at all.
+
+Four drinks: Bloody Mary, Bloody Caesar, Nico's Bloody Mary, Virgin Mary.
+
 
 ## Layered
 
@@ -69,13 +163,12 @@ Poured over the back of a spoon so the layers hold.
 | Black Velvet | Champagne first, stout floated over a spoon to keep the bands distinct ([Wikipedia](https://en.wikipedia.org/wiki/Black_velvet_(cocktail))) |
 | Snakebite | Cider first, lager poured over the back of a spoon ([Craft Beering](https://www.craftbeering.com/snakebite-drink-beer-cider/)) |
 | Baby Guinness | Irish cream floated over coffee liqueur to make the miniature pint's head ([Wikipedia](https://en.wikipedia.org/wiki/Baby_Guinness)) |
-| True Blood | The base is built over ice and the red wine set on top as its own layer. Inference cannot see it: BUILT_MIXERS does not list wine, so the cranberry juice sends the drink to Shaken, which would mix the wine straight through. |
 
-**The True Blood is a house cocktail from QXT's, and has no external source.**
-Searching for it turns up an unrelated drink of the same name — vodka, rum,
-peach schnapps, orange juice and grenadine — which is not this recipe. Do not
-reconcile this entry against it. The measurements here are the house build, and
-the owner of the recipe is the authority on them.
+The Baby Guinness is the one place the float rule bends, and deliberately. Its
+cream is written as a float and behaves as one, but it also stays put as its own
+unmixed band, and that band is the entire drink — the head on the miniature
+pint. Compare the Buttery Nipple and Slippery Nipple, identical in shape and
+already `Layered`. A float that is the point of the drink is a layer.
 
 ## Shaken
 
@@ -86,6 +179,9 @@ half-and-half rather than plain milk or cream.
 |---|---|
 | Brandy Milk Punch | Shaken hard with ice and strained ([Saveur](https://www.saveur.com/article/recipes/brennans-brandy-milk-punch-recipe/)) |
 | Toasted Almond | Shaken to chill and froth the dairy |
+| Long Beach Iced Tea | The Long Island is shaken and its three siblings are built, for no reason but the data: only the Long Island writes a simple syrup into its ingredients, and the sour rule needs both citrus and a sweetener. The sweetness here is in the curaçao and the cranberry, but the drink is the same drink |
+| Tokyo Tea | As above, sweetened with Midori |
+| Adios Motherfucker | As above, sweetened with blue curaçao |
 
 ## Blended
 
@@ -103,6 +199,7 @@ These needed new method values, and each has its own branch in `buildSteps()`.
 | Blue Blazer | Thrown | Jerry Thomas, *How to Mix Drinks* (1862): ignite, then pour the blazing stream between two mugs four or five times |
 | Mulled Wine | Heated | Warmed in a saucepan below a simmer; not a cocktail technique at all |
 | Jägerbomb | Dropped | A [bomb shot](https://en.wikipedia.org/wiki/Bomb_shot) — the shot glass is dropped into the mixer |
+| Boilermaker | Dropped | The same [bomb shot](https://en.wikipedia.org/wiki/Bomb_shot), whiskey into beer. Its ingredient string used to hedge "alongside or dropped"; the alongside form is a `Chased` drink, so the data now names one |
 | Pickleback | Chased | Nothing is mixed: the whiskey is drunk, then the brine ([Wikipedia](https://en.wikipedia.org/wiki/Pickleback)) |
 
 ## Checked and deliberately left alone
@@ -177,11 +274,12 @@ each carries a `role` saying where it goes in the sequence:
 | `float`, `drizzle` | Last, on the finished drink: a Mai Tai's dark rum, a Penicillin's Islay, a Bramble's crème de mûre. |
 | `top`, `splash` | After straining, but only for a drink mixed somewhere else. In a build the topper is already last in the list and goes in in order. |
 
-A layered drink is not an exception. A float there marks a base with something
-set on top of it — a True Blood's wine over its vodka and cranberry, a Baby
-Guinness's cream over its coffee liqueur — and the steps say so. Only a drink
-whose every component is a layer, like a B-52 or a Black Velvet, is poured over
-the back of a spoon.
+A float is never what makes a drink `Layered`. It marks something set on top of
+a finished drink, and the method describes what is underneath: a True Blood is
+`Built, Not Stirred` with its wine floated on, a Mai Tai is `Shaken` with its
+dark rum floated on. Only a drink whose every component is a layer, like a B-52
+or a Black Velvet, is poured over the back of a spoon — and the Baby Guinness,
+where the float and the layer are the same act.
 
 This matters more than the garnish line suggests: nine of the eleven floats in
 the deck already carried a leading measure, so they parsed as ordinary
@@ -231,15 +329,49 @@ The Zombie is not pinned either. Berry's own published order lists the juice
 first and the rums last — a juice-first convention this deck does not use
 anywhere — so its sequence here was never his to preserve.
 
+## Muddling
+
+Three things are pressed rather than poured, and each wants different words —
+the instruction that dissolves sugar will destroy mint.
+
+| What | Instruction | Drinks |
+|---|---|---|
+| Sugar alone | muddle until the sugar dissolves | Old Fashioned, Champagne Cocktail |
+| Leaf herbs | press gently to release the oils, without shredding the leaves | Mojito ×2, Mint Julep, Queen's Park Swizzle, Southside, Old Cuban, Whiskey Smash, Gin Basil Smash, Gin-Gin Mule |
+| Pressed fruit | muddle firmly, until the sugar dissolves and the fruit gives up its juice and oils | Caipirinha, Caipiroska |
+
+**Mint and basil are always muddled**, in a shaken drink as much as a built one,
+so the shake branch presses them in the tin before the ice goes in. The test
+runs against the *parsed* ingredient, never the raw string, which is what keeps
+it off the eight drinks carrying a mint sprig or a lime wedge as a garnish — a
+Moscow Mule, a Pimm's Cup, a Jack & Coke. `parseIngredients()` has already put
+those in the garnish bucket.
+
+**Muddled fruit is a narrow rule, not a lime rule.** It matches only "Lime (cut
+into wedges)" and "Disc of Lime". Muddling a lime is irregular — it is the
+Caipirinha family and nothing else — and a general rule would reach every
+highball with a wedge on the rim.
+
+Two drinks changed in ways worth recording. The Caipirinha and Caipiroska used
+to write their method into the ingredient line ("2 tsp Sugar — muddle lime and
+sugar"), which then rendered on the card as an ingredient and left the lime to
+be poured in after the ice; the steps say it properly now and the line is just
+sugar. And the Ti' Punch no longer muddles: its disc of lime is unmeasured and
+parses as a garnish, so the old rule matched "disc of lime" in the raw string
+and then muddled the cane syrup by itself, which is not a thing you can do.
+
 ## Known gaps
 
-- `Built` reads "hot" off the ingredient text, so a drink whose name contains a
-  hot-sounding ingredient other than hot sauce could still be sent to a
-  preheated glass.
+- The build branch reads "hot" off the ingredient text, so a drink whose name
+  contains a hot-sounding ingredient other than hot sauce could still be sent to
+  a preheated glass.
+- The sour rule needs citrus *and* a sweetener named in the ingredients, so a
+  drink sweetened only by a liqueur reads as unsweetened. That is why the three
+  Iced Teas need overrides their Long Island sibling does not.
 - Other unmeasured parts still land in the garnish bucket where they are really
   ingredients or instructions: a Whiskey Sour's bare "Angostura Bitters", a Mint
-  Julep's "Crushed Ice", a Caipirinha's "add cachaça", a Carajillo's "layer
-  espresso on top". Each needs a decision about what the data should say, not a
-  parser rule.
+  Julep's "Crushed Ice", a Carajillo's "layer espresso on top", a Ti' Punch's
+  "Small Disc of Lime" — which is squeezed into the drink, not hung on the rim.
+  Each needs a decision about what the data should say, not a parser rule.
 - "Julep Tin or Rocks" and "Punch Cup or Rocks" read as "a julep tin or rocks",
   because the vessel-noun suppression fires on the first alternative.
