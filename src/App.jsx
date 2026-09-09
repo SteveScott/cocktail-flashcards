@@ -352,7 +352,11 @@ function loadLocal() {
   } catch { return null; }
 }
 function saveLocal(s) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+  // Swallowed on purpose: localStorage throws when the quota is full or when a
+  // privacy mode refuses it, and neither is worth interrupting study for. The
+  // state is still live in memory, and a signed-in account has the cloud save
+  // below as its real copy — this is the convenience one.
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch { /* progress stays in memory */ }
 }
 
 // Merge two progress states (e.g. local device + cloud account) without losing
@@ -429,6 +433,14 @@ const FIREWORK_COLORS = ["#ffc21a", "#ff3355", "#2bff85", "#22c8ff", "#b44cff", 
 const FIREWORK_SPARKS = 12;
 const BURST_MS = 2400;   // must match the .fw-spark / .fw-fall animation duration
 const LAUNCH_MS = 520;   // gap between launches; ~5 bursts alive at any moment
+
+// How Stripe Checkout hands its result back: ?purchase=success|cancelled on the
+// return URL. Read once here, before the first render, because the app strips
+// the parameter off the URL as soon as it mounts — so this is a one-shot input,
+// not something a later render could look up again. Reading it at module scope
+// is also what lets the message it produces be the initial state of purchaseMsg
+// rather than something an effect has to set after the fact.
+const CHECKOUT_RESULT = new URLSearchParams(window.location.search).get("purchase");
 
 // Fireworks for a 100% quiz. Each burst is a fresh element launched on a timer
 // at a random spot, so the display never repeats itself -- as opposed to a fixed
@@ -516,8 +528,13 @@ export default function App() {
   const [triedFilter, setTriedFilter] = useState("all");
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(!firebaseEnabled);
-  const [adWhitelisted, setAdWhitelisted] = useState(false);
-  const [adCheckDone, setAdCheckDone] = useState(!firebaseEnabled);
+  // The whitelist answer, stamped with the address it was an answer ABOUT.
+  // Carrying the email means "have we checked?" and "checked for whom?" are the
+  // same question, so a stale yes can't outlive the account that earned it:
+  // sign out of a whitelisted address and into another and the answer stops
+  // applying the moment `user` changes, without an effect racing to take it
+  // back. null until the first check resolves.
+  const [adCheck, setAdCheck] = useState(null);
   const [showAdAdmin, setShowAdAdmin] = useState(false);
   const [whitelist, setWhitelist] = useState([]);
   const [whitelistInput, setWhitelistInput] = useState("");
@@ -557,7 +574,16 @@ export default function App() {
   // symptom is a button that says "Connecting…" for ever.
   const [billingErr, setBillingErr] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
-  const [purchaseMsg, setPurchaseMsg] = useState("");
+  // Seeded from the Checkout return so the first paint already says what
+  // happened. Gated on firebaseEnabled to match the effect that follows it up:
+  // without a backend there is nothing to confirm the purchase against, so
+  // promising one would be a message the app can't stand behind.
+  const [purchaseMsg, setPurchaseMsg] = useState(
+    !firebaseEnabled ? ""
+      : CHECKOUT_RESULT === "success" ? "Thanks for your purchase! Finishing up…"
+      : CHECKOUT_RESULT === "cancelled" ? "Checkout cancelled."
+      : ""
+  );
   // Email/password sign-in exists mainly so Play Console's App access reviewers
   // have credentials that work — OAuth accounts trip Google's own security
   // challenges from a reviewer's device. Kept collapsed behind a text link so
@@ -607,6 +633,17 @@ export default function App() {
   const signOutIntent = useRef(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
+  // The whitelist question this render is asking about, and the two readings
+  // derived from the stamped answer above. Derived rather than stored so the
+  // pair can never disagree: `adCheckDone` is false for exactly as long as the
+  // answer on hand is about somebody else, which is the window in which the
+  // previous account's yes would otherwise still be reading as this one's.
+  // Without a backend nobody is whitelisted and there is nothing to wait for;
+  // with one, an address that hasn't finished signing in has nothing to check.
+  const adEmail = firebaseEnabled && authReady ? (user?.email || null) : null;
+  const adWhitelisted = Boolean(adCheck && adCheck.email === adEmail && adCheck.whitelisted);
+  const adCheckDone = !firebaseEnabled || (authReady && (!adEmail || adCheck?.email === adEmail));
+
   // One purchase — "Cocktail Flashcards Pro" — carries both halves of the
   // product: no ads, and the whole library instead of the free top 50. Two names
   // for the one flag so each call site reads as the half it is about. The ad
@@ -679,9 +716,17 @@ export default function App() {
   const total = pool.length;
   const deckSize = st.deckSize || DECK_SIZE;
 
+  // localStorage is the external system being synchronised here; the "✓" is only
+  // a flash confirming it happened. Both halves of that flash are scheduled
+  // rather than set inline, so the effect body never re-renders synchronously
+  // with the write. Clearing them on the way out also fixes a flicker: a save
+  // arriving mid-flash used to leave the previous timer running, which blanked
+  // the tick the newer save had just lit.
   useEffect(() => {
     saveLocal(st);
-    setSaved("✓"); setTimeout(() => setSaved(""), 1200);
+    const show = setTimeout(() => setSaved("✓"), 0);
+    const hide = setTimeout(() => setSaved(""), 1200);
+    return () => { clearTimeout(show); clearTimeout(hide); };
   }, [st]);
 
   // Complete a redirect-based sign-in if one is in progress (fallback for when the popup gets closed early).
@@ -856,14 +901,16 @@ export default function App() {
   // After returning from Stripe Checkout, re-check the ads-removed flag a few
   // times since the webhook that sets it runs asynchronously and may lag
   // slightly behind the redirect back to the app.
+  //
+  // What is left here is the part that genuinely belongs in an effect: the URL
+  // cleanup and the polling. Both of the messages the parameter can produce on
+  // arrival are already on screen as the initial purchaseMsg above. Note the
+  // firebaseEnabled gate comes first, so a build without a backend leaves the
+  // parameter on the URL exactly as it always has.
   useEffect(() => {
-    if (!firebaseEnabled) return;
-    const params = new URLSearchParams(window.location.search);
-    const purchase = params.get("purchase");
-    if (!purchase) return;
+    if (!firebaseEnabled || !CHECKOUT_RESULT) return;
     window.history.replaceState({}, "", window.location.pathname);
-    if (purchase === "success") {
-      setPurchaseMsg("Thanks for your purchase! Finishing up…");
+    if (CHECKOUT_RESULT === "success") {
       let attempts = 0;
       const check = async () => {
         attempts += 1;
@@ -882,8 +929,6 @@ export default function App() {
         else setPurchaseMsg("Purchase received — it may take a minute to apply.");
       };
       check();
-    } else if (purchase === "cancelled") {
-      setPurchaseMsg("Checkout cancelled.");
     }
   }, []);
 
@@ -947,17 +992,19 @@ export default function App() {
     return () => clearTimeout(t);
   }, [st, user, syncedUid]);
 
-  // Check whether the signed-in user's email is on the ad whitelist.
+  // Check whether the signed-in user's email is on the ad whitelist. Only the
+  // lookup lives here — the signed-out case needs no effect at all, because
+  // "nobody to ask about" is already what the derivation above reads as done and
+  // not whitelisted. A failed check is recorded as a no rather than left blank,
+  // so an unreachable whitelist shows ads instead of hanging the ad slots.
   useEffect(() => {
-    if (!firebaseEnabled || !authReady) return;
-    if (!user?.email) { setAdWhitelisted(false); setAdCheckDone(true); return; }
+    if (!adEmail) return;
     let cancelled = false;
-    setAdCheckDone(false);
-    isEmailAdWhitelisted(user.email)
-      .then(w => { if (!cancelled) { setAdWhitelisted(w); setAdCheckDone(true); } })
-      .catch(e => { console.error("Ad whitelist check failed", e); if (!cancelled) { setAdWhitelisted(false); setAdCheckDone(true); } });
+    isEmailAdWhitelisted(adEmail)
+      .then(w => { if (!cancelled) setAdCheck({ email: adEmail, whitelisted: w }); })
+      .catch(e => { console.error("Ad whitelist check failed", e); if (!cancelled) setAdCheck({ email: adEmail, whitelisted: false }); });
     return () => { cancelled = true; };
-  }, [authReady, user]);
+  }, [adEmail]);
 
   // Load the AdSense tag only once we know the current user isn't ad-free. Never
   // in the Play Store build, which serves AdMob instead (see monetization.js) —
