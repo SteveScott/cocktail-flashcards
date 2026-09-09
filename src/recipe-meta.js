@@ -45,6 +45,12 @@ const EMULSIFIER = /egg white|egg\b|heavy cream|\bcream\b|cream of coconut|cocon
 // bruises the seasoning, stirring in the glass never mixes it.
 const ROLLED_BASE = /tomato juice|clamato/;
 
+// Leaf herbs are always pressed before the drink is mixed — the oils are the
+// reason they are in the glass, and they do not come out on their own. This
+// tests a parsed ingredient, never the raw string, so a mint sprig sitting in
+// the garnish bucket (a Moscow Mule, a Pimm's Cup) is left alone.
+const HERBS = /\b(mint|basil)\b/i;
+
 // Shaken / Stirred / Built / Blended / Layered, inferred from the recipe, or
 // taken verbatim from an explicit `method` on the recipe itself. Overrides may
 // also name a technique the inference has no rule for at all: Flash Blend,
@@ -271,6 +277,14 @@ function serveTarget(c, glass) {
   }
 }
 
+// "6-8 Fresh Mint Leaves" reads as "the mint" in an instruction, not as its
+// measure over again. Falls back to "leaves" for a herb the test picks up but
+// this does not name.
+function herbNoun(herbs) {
+  const names = [...new Set(herbs.map(x => (x.item.match(HERBS) || [])[1]).filter(Boolean))];
+  return names.length ? names.join(" and ").toLowerCase() : "leaves";
+}
+
 function glassPhrase(glass) {
   const g = (glass || "").trim();
   if (!g) return "a chilled glass";
@@ -328,6 +342,10 @@ export function buildSteps(c) {
 
   if (method === "Shaken") {
     steps.push(`Add ${list} to a cocktail shaker.`);
+    const herbs = components.filter(x => HERBS.test(x.item));
+    if (herbs.length) {
+      steps.push(`Press the ${herbNoun(herbs)} gently with a muddler to release the oils — enough to perfume the drink, not enough to shred the leaves.`);
+    }
     if (/egg white/i.test(c.ingredients)) {
       steps.push("Dry-shake without ice for about 10 seconds to emulsify the egg white and build foam.");
     }
@@ -349,7 +367,16 @@ export function buildSteps(c) {
     const neat = c.serve === "neat";
     const iced = c.serve === "on the rocks" || crushed;
     const SWEETENER = /sugar|syrup|bitters|disc of lime/i;
-    const muddled = /sugar cube|muddle|disc of lime/i.test(c.ingredients);
+    // Fruit that is pressed rather than poured. A Caipirinha's lime is the
+    // drink, not a garnish — every other "Lime wedge" in the deck is unmeasured
+    // and parses into the garnish bucket, so it never reaches this.
+    const MUDDLED_FRUIT = /lime \(cut into wedges\)|disc of lime/i;
+    // Herbs and pressed fruit go into the muddle with the sugar, and either is
+    // enough to call for one alone: a Mint Julep has no sugar cube and is still
+    // muddled.
+    const MUDDLE_BASE = new RegExp(`${SWEETENER.source}|${HERBS.source}|${MUDDLED_FRUIT.source}`, "i");
+    const muddled = /sugar cube|muddle/i.test(c.ingredients)
+      || components.some(x => HERBS.test(x.item) || MUDDLED_FRUIT.test(x.item));
     // An all-spirit build — no juice, no mixer, nothing to marry — is stirred
     // for dilution and nothing else, which takes as long as any mixing glass.
     const spiritForward = !fizzy && !CITRUS.test(c.ingredients.toLowerCase());
@@ -359,9 +386,21 @@ export function buildSteps(c) {
       steps.push(`Add ${list} to the warmed glass and stir until the sugar has dissolved.`);
     } else {
       if (muddled) {
-        const base = components.filter(x => SWEETENER.test(x.item));
-        const rest = components.filter(x => !SWEETENER.test(x.item));
-        steps.push(`Add ${base.map(x => x.text).join(", ")} to ${glass} and muddle until the sugar dissolves.`);
+        const base = components.filter(x => MUDDLE_BASE.test(x.item));
+        const rest = components.filter(x => !MUDDLE_BASE.test(x.item));
+        // Sugar wants dissolving and leaves want bruising, and the two are not
+        // the same instruction — muddled like sugar, mint turns bitter and black.
+        const herbs = base.filter(x => HERBS.test(x.item));
+        const sweet = base.some(x => /sugar|syrup/i.test(x.item));
+        const fruit = base.some(x => MUDDLED_FRUIT.test(x.item));
+        const how = herbs.length
+          ? (sweet
+            ? `muddle gently — enough to release the oils from the ${herbNoun(herbs)} and dissolve the sugar, not enough to shred the leaves`
+            : `press gently with a muddler to release the oils, without shredding the leaves`)
+          : fruit
+            ? "muddle firmly, until the sugar has dissolved and the fruit has given up its juice and oils"
+            : "muddle until the sugar dissolves";
+        steps.push(`Add ${base.map(x => x.text).join(", ")} to ${glass} and ${how}.`);
         // A Champagne Cocktail is nothing but sugar and bitters until the wine
         // goes in, and the wine reads as a garnish — leaving nothing to add.
         if (rest.length) {

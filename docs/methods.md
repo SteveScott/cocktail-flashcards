@@ -304,6 +304,37 @@ The Zombie is not pinned either. Berry's own published order lists the juice
 first and the rums last — a juice-first convention this deck does not use
 anywhere — so its sequence here was never his to preserve.
 
+## Muddling
+
+Three things are pressed rather than poured, and each wants different words —
+the instruction that dissolves sugar will destroy mint.
+
+| What | Instruction | Drinks |
+|---|---|---|
+| Sugar alone | muddle until the sugar dissolves | Old Fashioned, Champagne Cocktail |
+| Leaf herbs | press gently to release the oils, without shredding the leaves | Mojito ×2, Mint Julep, Queen's Park Swizzle, Southside, Old Cuban, Whiskey Smash, Gin Basil Smash, Gin-Gin Mule |
+| Pressed fruit | muddle firmly, until the sugar dissolves and the fruit gives up its juice and oils | Caipirinha, Caipiroska |
+
+**Mint and basil are always muddled**, in a shaken drink as much as a built one,
+so the shake branch presses them in the tin before the ice goes in. The test
+runs against the *parsed* ingredient, never the raw string, which is what keeps
+it off the eight drinks carrying a mint sprig or a lime wedge as a garnish — a
+Moscow Mule, a Pimm's Cup, a Jack & Coke. `parseIngredients()` has already put
+those in the garnish bucket.
+
+**Muddled fruit is a narrow rule, not a lime rule.** It matches only "Lime (cut
+into wedges)" and "Disc of Lime". Muddling a lime is irregular — it is the
+Caipirinha family and nothing else — and a general rule would reach every
+highball with a wedge on the rim.
+
+Two drinks changed in ways worth recording. The Caipirinha and Caipiroska used
+to write their method into the ingredient line ("2 tsp Sugar — muddle lime and
+sugar"), which then rendered on the card as an ingredient and left the lime to
+be poured in after the ice; the steps say it properly now and the line is just
+sugar. And the Ti' Punch no longer muddles: its disc of lime is unmeasured and
+parses as a garnish, so the old rule matched "disc of lime" in the raw string
+and then muddled the cane syrup by itself, which is not a thing you can do.
+
 ## Known gaps
 
 - The build branch reads "hot" off the ingredient text, so a drink whose name
@@ -312,14 +343,10 @@ anywhere — so its sequence here was never his to preserve.
 - The sour rule needs citrus *and* a sweetener named in the ingredients, so a
   drink sweetened only by a liqueur reads as unsweetened. That is why the three
   Iced Teas need overrides their Long Island sibling does not.
-- Mint is never muddled by the generated steps. The muddle rule looks for a
-  sugar cube or the word "muddle", so a Mojito, a Mint Julep and a Queen's Park
-  Swizzle all list their mint as an ingredient to pour in rather than a leaf to
-  press. The swizzles make this more visible, not worse.
 - Other unmeasured parts still land in the garnish bucket where they are really
   ingredients or instructions: a Whiskey Sour's bare "Angostura Bitters", a Mint
-  Julep's "Crushed Ice", a Caipirinha's "add cachaça", a Carajillo's "layer
-  espresso on top". Each needs a decision about what the data should say, not a
-  parser rule.
+  Julep's "Crushed Ice", a Carajillo's "layer espresso on top", a Ti' Punch's
+  "Small Disc of Lime" — which is squeezed into the drink, not hung on the rim.
+  Each needs a decision about what the data should say, not a parser rule.
 - "Julep Tin or Rocks" and "Punch Cup or Rocks" read as "a julep tin or rocks",
   because the vessel-noun suppression fires on the first alternative.
