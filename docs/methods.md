@@ -39,8 +39,8 @@ ice up through the drink until a thick frost forms on the outside of the glass.
 It chills harder and faster than stirring cubes past each other.
 
 Four drinks in the deck are swizzles: Queen's Park, Chartreuse and Bermuda Rum,
-which say so in their names, and the Ti' Punch, which is roused with the
-*bois lélé* the rest of them are copying. All four need an override.
+which say so in their names, and the Ti' Punch, which is swizzled with a
+swizzle stick without saying so. All four need an override.
 
 **Crushed ice is not the test, and this was got wrong once.** Eight further
 drinks are built over crushed ice and stirred with a bar spoon, not swizzled,
@@ -106,8 +106,8 @@ Snakebite, Baby Guinness) is `Layered` and never reaches that branch.
 
 A drink is swizzled if it is stirred with a purpose-made swizzle stick, or if
 the technique is in its name. Four qualify. Three announce themselves; the
-fourth is the Ti' Punch, whose *bois lélé* — the dried stem of *Quararibea
-turbinata*, the swizzle stick tree — is the original article the others imitate.
+fourth is the Ti' Punch, which is swizzled with a swizzle stick and simply does
+not name the technique.
 
 The motion is the same throughout: the spur end to the bottom of the glass, the
 handle spun between the palms as if starting a fire. Only the crushed-ice
@@ -118,7 +118,7 @@ drinks give you a frost to stop at.
 | Queen's Park Swizzle | Swizzled, never shaken: the stick goes to the bottom of the crushed ice and is spun between the palms until a thick frost forms on the glass, which also keeps the mint, ice and bitters in their three bands ([Wikipedia](https://en.wikipedia.org/wiki/Queen%27s_Park_Swizzle), [PUNCH](https://punchdrink.com/recipes/queens-park-swizzle/)) |
 | Chartreuse Swizzle | Marcovaldo Dionysos, Tres Agaves, San Francisco, 2002. Churned with crushed ice until the glass frosts — "it's not a Swizzle without the ice, and that ice best be crushed" ([Imbibe](https://imbibemagazine.com/recipe/chartreuse-swizzle-recipe/)) |
 | Bermuda Rum Swizzle | Traditionally swizzled with a stick cut from an allspice tree, spun between the palms until the drink froths ([Wikipedia](https://en.wikipedia.org/wiki/Rum_swizzle), [The Bermudian](https://www.thebermudian.com/food-a-drink/recipes/traditional-bermuda-rum-swizzle/)). A shaker is a common modern substitute, but the island method is the one the drink is named for |
-| Ti' Punch | Roused with a *bois lélé*, the Martinique swizzle stick — the spur end in the glass and the handle spun between the palms ([Imbibe](https://imbibemagazine.com/introduction-ti-punch/), [Uncommon Caribbean](https://www.uncommoncaribbean.com/martinique/uncommon-buy-le-bois-lele-the-authentic-caribbean-swizzle-stick/)). Traditionally no ice at all, so there is nothing to churn and no frost to stop at — the rouse just dissolves the cane syrup |
+| Ti' Punch | Swizzled with a swizzle stick, the spur end in the glass and the handle spun between the palms ([Imbibe](https://imbibemagazine.com/introduction-ti-punch/), [Uncommon Caribbean](https://www.uncommoncaribbean.com/martinique/uncommon-buy-le-bois-lele-the-authentic-caribbean-swizzle-stick/)). Traditionally no ice at all, so there is nothing to churn and no frost to stop at — the swizzle just dissolves the cane syrup |
 
 
 ## Built, Not Stirred
