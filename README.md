@@ -205,7 +205,7 @@ are supposed to sit on top of. The placement table is in
 | 9 | Otherwise — spirit and sugar | `Stirred` |
 
 `Built, Not Stirred`, `Built, Swizzled` and `Dropped` are override-only; nothing
-infers them. A swizzle is three drinks, all named for the technique — crushed
+infers them. A swizzle is four drinks — three named for the technique, plus the Ti' Punch and its bois lélé. Crushed
 ice alone is not the test, since eight further drinks are built over it and
 stirred with a spoon.
 

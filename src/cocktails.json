@@ -104,7 +104,7 @@
     { "name": "Planter's Punch", "glass": "Highball", "serve": "over crushed ice", "ingredients": "2 oz Dark Rum, 1 oz Fresh Lime Juice, 1 oz Simple Syrup, 2 dashes Angostura, Soda Water (top)" },
     { "name": "Painkiller", "glass": "Highball or Tiki", "serve": "over crushed ice", "ingredients": "2 oz Dark Rum (Pusser's), 1 oz Orange Juice, 4 oz Pineapple Juice, 1 oz Cream of Coconut, Grated Nutmeg (garnish)" },
     { "name": "Three Dots and a Dash", "glass": "Tiki", "serve": "over crushed ice", "ingredients": "1½ oz Aged Rum, ½ oz Agricole Rum, ½ oz Falernum, ¼ oz Allspice Dram, ½ oz Fresh Lime Juice, ½ oz Honey Syrup, 1 dash Angostura" },
-    { "name": "Ti' Punch", "glass": "Rocks", "serve": "neat", "method": "Built, Stirred", "ingredients": "2 oz Rhum Agricole, ¼ oz Cane Syrup, Small Disc of Lime" },
+    { "name": "Ti' Punch", "glass": "Rocks", "serve": "neat", "method": "Built, Swizzled", "ingredients": "2 oz Rhum Agricole, ¼ oz Cane Syrup, Small Disc of Lime" },
     { "name": "Rum Old Fashioned", "glass": "Rocks", "method": "Built, Stirred", "serve": "on the rocks", "ingredients": "2 oz Aged Dark Rum, 1 sugar cube, 2 dashes Angostura Bitters, Orange peel (garnish)" },
     { "name": "Kir Royale", "glass": "Champagne Flute", "method": "Built, Not Stirred", "serve": "up", "ingredients": "½ oz Crème de Cassis, 4 oz Champagne" },
     { "name": "Mimosa", "glass": "Champagne Flute", "serve": "up", "ingredients": "3 oz Fresh Orange Juice, 3 oz Champagne" },

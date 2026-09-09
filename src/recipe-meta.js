@@ -427,7 +427,12 @@ export function buildSteps(c) {
         // The stick goes to the bottom of the crushed ice and is spun between
         // the palms, driving the ice up through the drink. Frost on the outside
         // of the glass is how you know it is done.
-        steps.push("Insert a swizzle stick to the bottom of the glass and spin it between your palms, drawing the crushed ice up through the drink, until a thick frost forms on the outside. Top with more crushed ice.");
+        // The motion is the same either way; only crushed ice gives you the
+        // frost to stop at. A Ti' Punch is roused with a bois lele over no ice
+        // at all, so there is nothing to churn and nothing to frost.
+        steps.push(crushed
+          ? "Insert a swizzle stick to the bottom of the glass and spin it between your palms, drawing the crushed ice up through the drink, until a thick frost forms on the outside. Top with more crushed ice."
+          : "Rouse with a swizzle stick — the spur end in the glass, the handle spun between your palms — just until the sugar has dissolved and the drink is combined.");
       } else if (crushed && fizzy) {
         // A Mojito is stirred, not swizzled: a slow lift from the bottom to
         // bring the mint up, gentle enough to leave the soda its bubbles.
