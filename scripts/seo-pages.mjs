@@ -166,7 +166,9 @@ ${related.map(r => `  <li><a href="/cocktails/${slugify(r.name)}/">${esc(r.name)
     recipeCategory: "Cocktail",
     recipeCuisine: "Cocktail",
     recipeYield: "1 cocktail",
-    keywords: [c.name, `${c.name} recipe`, spirit, method].join(", "),
+    // schema.org keywords is a comma-separated list, so a method whose own name
+    // contains a comma ("Built, Stirred") would split into two junk keywords.
+    keywords: [c.name, `${c.name} recipe`, spirit, method.replace(/,/g, "")].join(", "),
     recipeIngredient: [...components.map(x => x.text), ...garnishes],
     recipeInstructions: steps.map((s, i) => ({
       "@type": "HowToStep", position: i + 1, text: s,

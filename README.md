@@ -157,7 +157,9 @@ ingredients string
    │
    ├─ parseIngredients()  ──►  components [{measure, item, text, role}] + garnishes
    │                             role ∈ float | rinse | null
-   ├─ getMethod()         ──►  Shaken | Stirred | Built | Blended | Layered | (override)
+   ├─ getMethod()         ──►  Shaken | Stirred | Built, Stirred | Built, Not Stirred
+   │                            | Built, Swizzled | Rolled | Blended | Layered
+   │                            | (override)
    ├─ inBuildOrder()      ──►  components sorted liquor → citrus → syrup → juice → last
    ├─ buildSteps()        ──►  numbered instructions, using method + serve + roles
    ├─ summarize()         ──►  one-line description (meta description / lede)
@@ -194,15 +196,25 @@ are supposed to sit on top of. The placement table is in
 | 0 | The recipe carries an explicit `method` | that method |
 | 1 | Name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
 | 2 | Ingredients contain `layered` | `Layered` |
-| 3 | Glass is a tall build (`highball`, `collins`, `copper mug`, `pint`, `wine`, `sling`, `zombie`) **and** ingredients contain a mixer (`soda`, `tonic`, `ginger beer/ale`, `cola`, `tomato juice`, `clamato`, `beer`, `champagne`, `prosecco`, `lemonade`…) | `Built` |
-| 4 | Ingredients contain something that must be shaken: citrus juice, egg, cream, purée, espresso | `Shaken` |
-| 5 | Ingredients mention crushed ice, or `serve` is `over crushed ice` | `Built` |
-| 6 | Otherwise — spirit and sugar | `Stirred` |
+| 3 | Ingredients contain a tomato or Clamato base | `Rolled` |
+| 4 | **Not** a crushed-ice drink, and ingredients contain citrus **and** a sweetener — a sour base | `Shaken` |
+| 5 | **Not** a crushed-ice drink, and ingredients contain an emulsifier: egg, cream, purée, espresso | `Shaken` |
+| 6 | Glass is a tall build (`highball`, `collins`, `copper mug`, `pint`, `wine`, `sling`, `zombie`) **and** ingredients contain a mixer (`soda`, `tonic`, `ginger beer/ale`, `cola`, `beer`, `champagne`, `prosecco`, `lemonade`…) | `Built, Stirred` |
+| 7 | Ingredients contain something that must be shaken: citrus juice, egg, cream, purée, espresso | `Shaken` |
+| 8 | Ingredients mention crushed ice, or `serve` is `over crushed ice` | `Built, Stirred` |
+| 9 | Otherwise — spirit and sugar | `Stirred` |
+
+`Built, Not Stirred`, `Built, Swizzled` and `Dropped` are override-only; nothing
+infers them. A swizzle is four drinks — three named for the technique, plus the Ti' Punch, which is swizzled with a swizzle stick without saying so. Crushed
+ice alone is not the test, since eight further drinks are built over it and
+stirred with a spoon.
 
 Two details are deliberate. Rule 1 matches the *technique as written*, not the
 bare word "blend", because *Blended Scotch* and *Blended Whiskey* are spirits
-and were being sent to a blender. Rule 3 sits above rule 4 so a Mojito is built
-rather than shaken, and rule 5 sits below it so a Bramble — shaken, *then*
+and were being sent to a blender. Rules 4 and 5 sit above rule 6 so a
+Gin Fizz, a Tom Collins and a Ramos are shaken and then topped rather than
+stirred in the glass, and they exempt crushed-ice drinks so a Mojito is still
+built. Rule 8 sits below rule 7 so a Bramble — shaken, *then*
 poured over crushed ice — is still shaken.
 
 The rule of thumb is right for most of the repertoire and wrong for a knowable
@@ -229,9 +241,10 @@ The recipes that opt out, and why, are in
 
 ### Steps and serving
 
-`buildSteps` has a branch per method. `Built` is the wide one: a soda highball,
-a muddled Old Fashioned and a hot toddy are all assembled in the serving vessel
-but do not start the same way, so it reads `serve` to decide whether the glass
+`buildSteps` has a branch per method. The two builds share the wide one: a soda
+highball, a muddled Old Fashioned and a hot toddy are all assembled in the
+serving vessel but do not start the same way, so it reads `serve` to decide
+whether the glass
 is preheated (`hot`), packed with crushed ice, filled with cubes, or left alone
 (`up`, `neat`); reads the ingredients to decide whether sugar and bitters are
 muddled first; and reads a `CARBONATED` list — narrower than the build-mixer
@@ -239,9 +252,10 @@ list — to decide whether stirring costs you bubbles.
 
 Around every branch, roles place the exceptions: rinses first; toppers held back
 until after straining for drinks mixed elsewhere; floats and drizzles last. A
-layered drink with a float is a base with something set on top (a Baby Guinness
-pours its coffee liqueur and floats the cream); only a drink whose every
-component is a layer, like a B-52, is poured over the back of a spoon.
+float never decides the method — it is something set on top of a finished drink,
+and the method describes what is underneath. Only a drink whose every component
+is a layer, like a B-52, is poured over the back of a spoon, plus the Baby
+Guinness, where the float and the layer are one act.
 
 `serve` also distinguishes **up** from **neat**, which is a temperature
 distinction and not a technique one: up is chilled against ice and served off
@@ -273,8 +287,9 @@ Champagne Cocktail, Irish Coffee, Black Russian, Rusty Nail, Kir, Treacle, Ti'
 Punch, the hot drinks — which read as spirit-and-sugar and would otherwise be
 called Stirred (all but the Hot Toddy, which the shake rule sent to a shaker
 instead). Others correct a wrong shake or stir: Brandy Milk Punch and Toasted
-Almond are shaken (dairy the shake rule misses); Black Velvet, Snakebite, Baby
-Guinness and True Blood are layered.
+Almond are shaken (dairy the shake rule misses); Black Velvet, Snakebite and
+Baby Guinness are layered; the True Blood is built and not stirred, with its
+wine floated on top.
 
 Five needed techniques inference has no rule for at all, each with its own
 `buildSteps` branch:
