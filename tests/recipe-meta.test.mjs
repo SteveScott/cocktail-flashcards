@@ -1,4 +1,4 @@
-import cocktailData from "../src/cocktails.json" with { type: "json" };
+import cocktails from "../src/cocktails.json" with { type: "json" };
 import { getMethod } from "../src/recipe-meta.js";
 
 let fail = 0;
@@ -8,7 +8,7 @@ const eq = (name, got, want) => {
   else console.log(`ok   ${name}`);
 };
 
-const zombie = cocktailData.top50.find((c) => c.name === "Zombie");
+const zombie = cocktails.find((c) => c.name === "Zombie");
 eq("Zombie recipe exists", Boolean(zombie), true);
 eq("Zombie uses chimney glass", zombie?.glass, "Chimney");
 eq("Zombie keeps explicit flash-blend method", getMethod(zombie), "Flash Blend");
