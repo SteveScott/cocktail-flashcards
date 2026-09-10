@@ -84,6 +84,22 @@ misses("gin", "Virgin Mary");             // no alcohol at all
 finds("ginger", "Moscow Mule");
 misses("ginger", "Negroni");
 
+// ── the word still being typed ─────────────────────────────────────────────
+// "ru" is no ingredient, so it is read as a prefix: every rum, and every drink
+// whose name starts a word with it. The White Russian riding along on its name
+// is the price of a list that narrows as you type — and it is gone the moment
+// the word is finished. A word the vocabulary knows in full is never read this
+// way, which is the whole gin/ginger rule above.
+ok("a half-typed word keeps everything the finished one finds",
+  find("rum").every(n => find("ru").includes(n)));
+finds("ru", "Daiquiri");                  // rum, by ingredient
+finds("ru", "White Russian");             // vodka, Kahlúa and cream — by name alone
+finds("ru", "Rusty Nail");
+misses("rum", "White Russian");           // finished word, and the Russians drop out
+ok("finishing the word is narrower", find("rum").length < find("ru").length);
+ok("half-typed reaches the ingredient too",
+  find("syrup").every(n => find("syr").includes(n)));
+
 // ── searching by name ──────────────────────────────────────────────────────
 // A name is read as far as it is typed — the drink has to show up before the
 // last letter of it does.
