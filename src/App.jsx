@@ -1,4 +1,4 @@
-/* global __BUILD_TIME__ */ // injected by vite.config.js — see the build stamp in the billing diagnostics
+/* global __APP_VERSION__, __BUILD_TIME__ */ // injected by vite.config.js — the version in the footer, the build stamp in the billing diagnostics
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
@@ -22,6 +22,15 @@ import {
   presentPaywall, presentCustomerCenter, isBillingAvailable, isUserCancelled,
   PAYWALL_OUTCOME, getAdConsentState, showAdPrivacyOptions, getBillingDiagnostics,
 } from './monetization';
+
+// The app's version, from package.json by way of vite.config.js. The Play shell
+// stamps the same string into the APK as versionName, so this is the number the
+// store listing shows as well — see "Version" in the README.
+//
+// The fallback is for anything that runs the source without Vite's define pass:
+// there is no version to report there, and a hard-coded number in the footer of
+// an unbuilt tree would be a lie rather than a default.
+const VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 const { top50, master150 } = cocktailData;
 
@@ -1964,6 +1973,7 @@ export default function App() {
             ["stopped at", d.stage],
             ["purchases plugin", d.purchasesPlugin ? "in this build" : "MISSING from this build"],
             ["plugins present", d.pluginList],
+            ["version", VERSION],
             ["build", typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown"],
           ];
           return (
@@ -2180,6 +2190,15 @@ export default function App() {
           )}
         </div>
       )}
+
+      {/* Last line on the screen, and the quietest thing on it. It is here for
+          the one exchange that starts "which version are you on?" — the web and
+          the Play build show the same string, so the answer means the same
+          thing whichever one the person is holding. Selectable, because the
+          point of it is to be read back. */}
+      <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.7rem",color:C.textGhost,userSelect:"text"}}>
+        v{VERSION}
+      </div>
     </div></div>
   );
 

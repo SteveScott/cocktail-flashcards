@@ -743,6 +743,46 @@ static pages survive the catch-all — it must never gain `force = true`. The
 plugin clears `dist` itself with a retry, because on Windows Dropbox and Defender
 hold handles on fresh files; `emptyOutDir` stays `false`.
 
+### Version
+
+One string — `version` in `package.json`, currently **1.3.0** — and everything
+that shows a version reads that one field:
+
+- `vite.config.js` defines `__APP_VERSION__` from it; `src/App.jsx` prints it at
+  the foot of the menu screen and lists it in the billing diagnostics.
+- `android/app/build.gradle` parses the same field into `versionName`, which is
+  what the Play listing and Android's app info show.
+
+So a release is one edit — `npm version 1.3.1 --no-git-tag-version`, or just
+type it into `package.json` — and the web, the app and the store move together.
+Nothing else in the repo holds a version to keep in step, which is the point.
+
+**`versionCode` is the exception**, and stays a literal in
+`android/app/build.gradle`. It is not a version but Play's upload counter: it
+must increase on *every* upload, including a re-upload of an unchanged
+`versionName`, and it can never go down. Increment it by hand when you upload an
+AAB, and leave it alone otherwise — a bump that never ships just burns a number.
+The pair currently reads `versionCode 8` / `1.3.0`.
+
+What the number means depends on which build is showing it, because the Play
+shell loads the deployed site:
+
+- On the **web**, the footer is the version of the bundle in front of you.
+- In the **Play app**, the footer is the version of the *site* the shell has
+  loaded, not of the APK around it. They are the same string on the day of a
+  release, and the site runs ahead whenever a deploy lands before a store
+  upload. The APK's own `versionName` is what the store listing shows.
+
+That gap is the architecture rather than an oversight — a web deploy reaches
+every installed client at once, and only a store upload changes the shell — and
+the useful half is the one in the footer: it names the code actually running.
+
+Two things nearby are deliberately *not* this version. The build stamp beside it
+in the billing diagnostics is an ISO timestamp regenerated on every build: it
+identifies a **deploy**, where the version identifies a **release**. And the
+service worker's `cocktail-cache-v1` tracks neither — it is network-first, so
+that name only has to change if the cache format does.
+
 ## Security model
 
 - **`firestore.rules` is the boundary.** Clients ship all the monetization code

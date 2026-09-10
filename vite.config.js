@@ -9,14 +9,25 @@ import { seoPages } from './scripts/seo-pages.mjs'
 const cocktails = createRequire(import.meta.url)('./src/cocktails.json')
 const ALL = [...cocktails.top50, ...cocktails.master150]
 
+// The app's version, and there is one of it. package.json holds the string;
+// android/app/build.gradle reads the SAME field and stamps it into the APK as
+// versionName, so the number in the web footer and the number on the Play
+// listing are the same number by construction rather than by anyone
+// remembering. It is read here rather than imported into the app so the bundle
+// carries the version and not the dependency list.
+const VERSION = createRequire(import.meta.url)('./package.json').version
+
 // Stamped into the bundle so a device can say WHICH build it is running. The
 // Capacitor shell loads the deployed site and a WebView caches it, so "the fix
-// isn't working" and "the fix isn't deployed" look identical without this.
+// isn't working" and "the fix isn't deployed" look identical without this. The
+// version answers a different question — it changes when the app changes, this
+// changes on every deploy — so the diagnostics panel shows both.
 const BUILD_TIME = new Date().toISOString()
 
 // https://vite.dev/config/
 export default defineConfig({
   define: {
+    __APP_VERSION__: JSON.stringify(VERSION),
     __BUILD_TIME__: JSON.stringify(BUILD_TIME),
   },
   plugins: [
