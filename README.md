@@ -194,7 +194,7 @@ are supposed to sit on top of. The placement table is in
 | # | Rule | Result |
 |---|---|---|
 | 0 | The recipe carries an explicit `method` | that method |
-| 1 | Name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
+| 1 | `serve` is `frozen`, **or** name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
 | 2 | Ingredients contain `layered` | `Layered` |
 | 3 | Ingredients contain a tomato or Clamato base | `Rolled` |
 | 4 | **Not** a crushed-ice drink, and ingredients contain citrus **and** a sweetener — a sour base | `Shaken` |
