@@ -609,11 +609,17 @@ export function recipeLinkFor(item, links) {
 // A row carries `slug` only when `links` is passed, which is how a caller opts
 // in: the quizzes render the same rows without it, so no answer is ever a click
 // away from the question.
+//
+// `term` is what to search the book for from this row, and is the label rather
+// than the item on purpose. Stripping the trailing parenthetical is wrong for a
+// link, which must land on one recipe, but right for a search: from a Miami
+// Vice, "Piña Colada" finds the frozen half, the original and the Miami Vice
+// itself, where "Piña Colada (Frozen)" would hide the drink it is a variant of.
 export function ingredientRows(str, links) {
   return splitParts(str || "").map(text => {
     const m = text.match(MEASURE_RE);
     const item = (m ? m[2] : text).trim();
-    return { text, item, slug: recipeLinkFor(item, links) };
+    return { text, item, term: ingredientLabel(item), slug: recipeLinkFor(item, links) };
   });
 }
 

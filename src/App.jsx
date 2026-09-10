@@ -11,7 +11,7 @@ import { restoreProgress } from "./admin-restore.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
-import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows, buildRecipeLinks } from './recipe-meta';
+import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
 import AdSlot from './AdSlot.jsx';
@@ -45,9 +45,6 @@ const PRO_PRICE = "$7.99";
 // Every cocktail in the book. The free tier studies and quizzes the top 50 of
 // them; the rest is what a Pro purchase adds — see poolFor() below.
 const ALL_CARDS = [...top50, ...master150];
-// Name -> recipe-page slug, built once. Handed to ingredientRows() by the
-// surfaces that may link out; the quizzes call it without this and get none.
-const RECIPE_LINKS = buildRecipeLinks(ALL_CARDS);
 
 // The vocabulary of the corpus and the distribution the 86 It quiz samples wrong
 // answers from. Built once — the lexicon never changes at runtime. Deliberately
@@ -524,6 +521,11 @@ export default function App() {
   // preference and stays in localStorage.
   const [theme, setTheme] = useState(loadTheme);
   const [mode, setMode] = useState("menu");
+  // Set when the index is opened as a detour from a card rather than from the
+  // menu, so the trip can be undone. Study and quiz progress is ordinary
+  // component state and survives the mode switch untouched, so resuming is
+  // nothing more than putting the mode back.
+  const [returnTo, setReturnTo] = useState(null);
   const [di, setDi] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [qa, setQa] = useState([]);
@@ -1770,6 +1772,28 @@ export default function App() {
   // whichever object is on, so no screen has to know which that is.
   const C = THEMES[theme] || THEMES[DEFAULT_THEME];
 
+  // Open the index already filtered to one ingredient. `from` is the mode to
+  // come back to; passing nothing leaves any existing return alone, which is
+  // what lets you pivot from ingredient to ingredient inside the index without
+  // losing the way back to the card you started on.
+  const searchFor = (term, from) => {
+    setSearch(term);
+    if (from !== undefined) setReturnTo(from);
+    setMode("index");
+  };
+
+  // The only tappable thing on an ingredient row: the text itself stays inert,
+  // so a mis-tap while reading a card can never cost you your place. Drawn in
+  // the palette's quietest link colour, which is what it is for.
+  const findBtn = (term, from) => (
+    <button
+      onClick={()=>searchFor(term, from)}
+      title={`Find drinks with ${term}`}
+      aria-label={`Find drinks with ${term}`}
+      style={{background:"transparent",border:"none",padding:"0 0.15rem",margin:0,cursor:"pointer",color:C.textGhost,fontSize:"0.7rem",lineHeight:1,flexShrink:0}}
+    >🔍</button>
+  );
+
   const wrap = { maxWidth:480, width:"100%" };
   const page = { minHeight:"100dvh", background:C.surfacePage, backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", color:C.textStrong, display:"flex", flexDirection:"column", alignItems:"center", padding:"1.5rem 1rem" };
   // `...C.ui.btn` is where a scheme sets its own lettering — Future puts button
@@ -2203,10 +2227,10 @@ export default function App() {
         <div style={{background:C.success,height:"100%",width:`${(learned/total)*100}%`,transition:"width 0.5s"}} />
       </div>
 
-      <button onClick={()=>{setDi(0);setRevealed(false);setMode("study");}} style={{...btn(C.navStudy),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
-      <button onClick={()=>{setQuizKind("self");setMode("quizlen");}} style={{...btn(C.navQuiz),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
-      <button onClick={()=>{setQuizKind("86");setMode("quizlen");}} style={{...btn(C.navEightySix),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
-      <button onClick={()=>{setSearch("");setMode("index");}} style={{...btn(C.navIndex),width:"100%",marginBottom:"0.75rem"}}>🔍 Index — Search Cocktails</button>
+      <button onClick={()=>{setDi(0);setRevealed(false);setReturnTo(null);setMode("study");}} style={{...btn(C.navStudy),width:"100%",marginBottom:"0.75rem"}}>📚 Study Mode</button>
+      <button onClick={()=>{setQuizKind("self");setReturnTo(null);setMode("quizlen");}} style={{...btn(C.navQuiz),width:"100%",marginBottom:"0.75rem"}}>🎯 Self Quiz — Test Yourself</button>
+      <button onClick={()=>{setQuizKind("86");setReturnTo(null);setMode("quizlen");}} style={{...btn(C.navEightySix),width:"100%",marginBottom:"0.75rem"}}>🍸 86 It — Spot the Impostors</button>
+      <button onClick={()=>{setSearch("");setReturnTo(null);setMode("index");}} style={{...btn(C.navIndex),width:"100%",marginBottom:"0.75rem"}}>🔍 Index — Search Cocktails</button>
       {/* Deliberately the smallest thing in the stack, and last. Nothing here is
           somewhere you go to study — it is where you go once something has gone
           wrong — so it sits below every control that is, in a quiet face rather
@@ -2383,7 +2407,10 @@ export default function App() {
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
-          <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.textMuted,cursor:"pointer"}}>← Menu</button>
+          <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}>
+            <button onClick={()=>{setReturnTo(null);setMode("menu");}} style={{background:"transparent",border:"none",color:C.textMuted,cursor:"pointer"}}>← Menu</button>
+            {returnTo && <button onClick={()=>{setReturnTo(null);setMode(returnTo);}} style={{background:"transparent",border:"none",color:C.infoLite,cursor:"pointer",fontWeight:600}}>↩ Resume {returnTo === "quiz" ? "quiz" : "study"}</button>}
+          </div>
           <span style={{color:C.textMuted,fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{tallies.length ? ` · ${tallies.join(" · ")}` : ""}</span>
         </div>
         <input
@@ -2449,8 +2476,11 @@ export default function App() {
               </div>
               <div style={{color:C.textBody,lineHeight:1.7,fontSize:"0.85rem"}}>
                 {c.glass && <div style={{padding:"0.05rem 0",borderBottom:`1px solid ${C.borderFaint}`,color:C.textMuted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
-                {ingredientRows(c.ingredients, RECIPE_LINKS).map((g,i,a)=>(
-                  <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g.slug ? <a href={`/cocktails/${g.slug}`} style={{color:C.infoLite}}>{g.text}</a> : g.text}</div>
+                {ingredientRows(c.ingredients).map((g,i,a)=>(
+                  <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none",display:"flex",alignItems:"center",gap:"0.4rem"}}>
+                    <span style={{flex:1,minWidth:0}}>{g.text}</span>
+                    {findBtn(g.term)}
+                  </div>
                 ))}
               </div>
             </div>
@@ -2477,7 +2507,7 @@ export default function App() {
             {allMastered ? `You've learned all ${total} cocktails.` : "Add some cocktails from the Index to start studying."}
           </p>
           <div style={{display:"flex",gap:"0.75rem"}}>
-            {!allMastered && <button onClick={()=>{setSearch("");setMode("index");}} style={btn(C.navIndex,{padding:"0.75rem 1.5rem"})}>🔍 Index</button>}
+            {!allMastered && <button onClick={()=>{setSearch("");setReturnTo(null);setMode("index");}} style={btn(C.navIndex,{padding:"0.75rem 1.5rem"})}>🔍 Index</button>}
             <button onClick={()=>setMode("menu")} style={btn(C.info,{padding:"0.75rem 1.5rem"})}>Back to Menu</button>
           </div>
           {/* Nothing left to study is the one moment a bigger library is
@@ -2522,8 +2552,11 @@ export default function App() {
               ? <button onClick={()=>setRevealed(true)} style={btn(C.surfaceQuiet,{color:C.textBody,fontSize:"0.95rem"})}>Reveal Ingredients</button>
               : <div style={{color:C.textBody,lineHeight:1.85,fontSize:"0.9rem"}}>
                   {c.glass && <div style={{padding:"0.1rem 0",borderBottom:`1px solid ${C.borderFaint}`,color:C.textMuted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
-                  {ingredientRows(c.ingredients, RECIPE_LINKS).map((g,i,a)=>(
-                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g.slug ? <a href={`/cocktails/${g.slug}`} style={{color:C.infoLite}}>{g.text}</a> : g.text}</div>
+                  {ingredientRows(c.ingredients).map((g,i,a)=>(
+                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none",display:"flex",alignItems:"center",gap:"0.4rem"}}>
+                      <span style={{flex:1,minWidth:0}}>{g.text}</span>
+                      {findBtn(g.term, "study")}
+                    </div>
                   ))}
                 </div>
             }

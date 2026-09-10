@@ -148,7 +148,10 @@ The parser reads the string as the data writes it, so the conventions matter:
 - **An ingredient may name another cocktail.** A Miami Vice is `6 oz Piña
   Colada (Frozen), 6 oz Strawberry Daiquiri (Frozen)` — two drinks the book
   already teaches. Written exactly as that recipe's `name`, it resolves to a
-  link into the recipe (`buildRecipeLinks`/`recipeLinkFor`).
+  link into the recipe (`buildRecipeLinks`/`recipeLinkFor`), which is how the
+  generated pages cross-link. In the app every ingredient instead carries a
+  search glyph that opens the index filtered to it; the row's text is inert, so
+  reading a card can never navigate you off it by accident.
 - **Order is meaningful.** Ingredients are stored in build order (see below).
 
 ## The rule process: deriving facts from a recipe
