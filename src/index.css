@@ -51,21 +51,38 @@
    A woff2 is fetched only when a rule actually matches the family, which splits
    these two. Exo 2 is the body face and 71KB across both subsets, and nothing
    asks for it until someone switches to Future — so a Retro user never pays for
-   it. Orbitron is 12KB and everybody gets it, because the scheme picker letters
-   its Future button in Orbitron whichever scheme is running; that is the point
-   of the button, and it is the cheaper of the two to spend.
+   it. Oxanium's latin file is 14KB and everybody gets it, because the scheme
+   picker letters its Future button in Oxanium whichever scheme is running; that
+   is the point of the button, and it is the cheaper of the two to spend. A
+   Retro user only ever sets the word "Future" in it, so the ext file below
+   stays unfetched until they actually switch.
 
-   Orbitron ships latin only; Exo 2 carries the extended set the recipe names
-   need for the accented spirits. */
+   This was Orbitron, the widest face the app has ever set: same string, same
+   size, it runs a third wider than Oxanium, and it was hard to read at the
+   sizes an index card wants. Oxanium keeps the angular sci-fi register in 75%
+   of the width. The axis really is 200-800, not Orbitron's 400-900:
+   font-synthesis: none below means claiming a weight the file has not got
+   renders the nearest one it has, silently. */
 @font-face {
-  font-family: 'Orbitron';
+  font-family: 'Oxanium';
   font-style: normal;
-  font-weight: 400 900;
+  font-weight: 200 800;
   font-display: swap;
-  src: url('/fonts/orbitron-latin.woff2') format('woff2');
+  src: url('/fonts/oxanium-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
     U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
     U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oxanium';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/oxanium-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
 @font-face {
@@ -196,7 +213,7 @@
   --photo-opacity: 0.95;
 
   --sans: 'Exo 2', 'Segoe UI', system-ui, sans-serif;
-  --heading: 'Orbitron', 'Exo 2', ui-sans-serif, system-ui, sans-serif;
+  --heading: 'Oxanium', 'Exo 2', ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
