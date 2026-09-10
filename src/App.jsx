@@ -233,13 +233,18 @@ const THEMES = {
     surfaceCard:     "rgba(5, 9, 22, 0.66)",
     surfacePage:     "rgba(5, 9, 22, 0.34)",
 
-    // Orbitron is a much wider face than Playfair, so the title has to come down
-    // a size or it wraps on a phone; the caps and tracking on buttons are the
-    // scheme's own voice rather than decoration, and the glow is what makes a
-    // flat fill read as lit.
+    // The caps this used to set — 0.07em on the title, 0.09em on buttons — were
+    // the scheme's voice, but they were also most of why it was hard to read:
+    // tracked uppercase over a blurred photograph punishes any face. The glow
+    // and the palette carry the voice now; the lettering just has to be read.
+    //
+    // 1.8rem matches Retro, so the title is the same words at the same size in
+    // both schemes and only the face changes. It was 1.25rem to stop Orbitron
+    // wrapping on a phone; Oxanium sets that string within a pixel of Playfair
+    // at this size, so the row it shares with the save indicator still holds.
     ui: {
-      h1: { fontSize: "1.25rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" },
-      btn: { textTransform: "uppercase", letterSpacing: "0.09em", fontSize: "0.92rem" },
+      h1: { fontSize: "1.8rem", fontWeight: 700, letterSpacing: "0.01em" },
+      btn: { letterSpacing: "0.02em", fontSize: "0.92rem" },
       glow: true,
     },
   },
@@ -249,7 +254,10 @@ const THEMES = {
 // THEMES, because each button advertises the scheme it SELECTS and not the one
 // currently running: a picker that restyled itself would only ever show you the
 // answer you already have. The faces are named here too — the Future button is
-// lettered in Orbitron whichever scheme is on, which is the whole point of it.
+// lettered in Oxanium whichever scheme is on, which is the whole point of it.
+// It follows the scheme out of caps too: a button still shouting FUTURE would
+// be advertising lettering the scheme no longer uses. The tracking stays, at
+// the swatch's own 0.02em — it is a specimen, not a line of text to read.
 const THEME_SWATCH = {
   retro: {
     label: "Retro", bg: "#8f5f2a", fg: "#fdf6e8", ring: "#d6b46a",
@@ -258,8 +266,8 @@ const THEME_SWATCH = {
   },
   future: {
     label: "Future", bg: "#2f5cff", fg: "#eafcff", ring: "#22d3ee",
-    font: "'Orbitron', ui-sans-serif, system-ui, sans-serif",
-    tracking: "0.14em", transform: "uppercase", glow: "0 0 20px -4px #2f5cff",
+    font: "'Oxanium', ui-sans-serif, system-ui, sans-serif",
+    tracking: "0.02em", transform: "none", glow: "0 0 20px -4px #2f5cff",
   },
 };
 
