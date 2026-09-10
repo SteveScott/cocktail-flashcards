@@ -241,11 +241,22 @@ const SPIRITS = [
 // The drink's base category, used to group recipes and to cross-link related
 // ones. Reads the FIRST measured component first — in a well-written recipe
 // that is the base — and only falls back to scanning the whole line.
-export function baseSpirit(c) {
+export function baseSpirit(c, recipes) {
   const { components } = parseIngredients(c.ingredients);
   const lead = components[0]?.item || "";
   for (const [re, label] of SPIRITS) if (re.test(lead)) return label;
   for (const [re, label] of SPIRITS) if (re.test(c.ingredients)) return label;
+  // A drink assembled out of other drinks names no spirit of its own: a Miami
+  // Vice lists two frozen halves and nothing else, so every pattern above
+  // misses and the drink lands in "Other", away from the rums it belongs with.
+  // Read the base off a half instead — it is a recipe the book already holds.
+  // The inner call is deliberately given no list: one hop is enough to answer
+  // the question, and it cannot recurse into a cycle.
+  for (const x of components) {
+    const half = (recipes || []).find(r => norm(r.name) === norm(x.item) && r.name !== c.name);
+    const s = half && baseSpirit(half);
+    if (s && s !== "Other") return s;
+  }
   return "Other";
 }
 
@@ -314,8 +325,10 @@ export function buildSteps(c) {
   // before it is poured, so neither belongs in the shaker with everything
   // else — a Penicillin's Islay float was being shaken into the drink it is
   // supposed to sit on top of. A layered drink is the exception: there the
-  // float IS the layering, so leave it in sequence.
-  const layered = method === "Layered";
+  // float IS the layering, so leave it in sequence. Matched as a word rather
+  // than by equality so a compound method carries the rule: a Miami Vice is
+  // "Blended, Layered", and its halves are a sequence like any other layer.
+  const layered = /\bLayered\b/.test(method);
   // A layered drink with a float has a base and something set on top of it — a
   // Baby Guinness's cream. Only a drink whose every component is a layer gets
   // poured over the back of a spoon.
@@ -496,6 +509,20 @@ export function buildSteps(c) {
       steps.push(`Pour ${list} slowly over the back of a bar spoon, in the order listed.`);
       steps.push(`Take care to keep each layer distinct in ${glass}.`);
     }
+  } else if (method === "Blended, Layered") {
+    // Two finished drinks, each blended on its own and then poured one over the
+    // other. Nothing here meets in a shaker, so the ordinary layering line —
+    // over the back of a bar spoon — would be wrong: a frozen half is thick
+    // enough to sit on the one below it unaided. The halves are listed
+    // bottom-first, the order they go into the glass, the same rule every other
+    // layered drink in the book follows.
+    steps.push(`Blend each half separately — ${list} — with about a cup of crushed ice apiece, until smooth.`);
+    if (components.length) {
+      steps.push(`Pour the ${ingredientLabel(components[0].item)} into ${glass}.`);
+      for (const x of components.slice(1)) {
+        steps.push(`Pour the ${ingredientLabel(x.item)} slowly over it, so the halves stay distinct.`);
+      }
+    }
   } else {
     // Every method above is matched by name. Reaching here means a recipe
     // carries a `method` no branch handles — a typo, or a technique added to
@@ -554,6 +581,40 @@ const NOT_AN_INGREDIENT = /\bor\b|—/;
 // give itself away without the player knowing a thing about the drink.
 export function ingredientLabel(item) {
   return (item || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
+// Name -> slug for every recipe in the book. Built once by the caller and
+// handed to the lookups below, so a render does not rebuild it per card.
+export function buildRecipeLinks(recipes) {
+  return new Map((recipes || []).map(c => [norm(c.name), slugify(c.name)]));
+}
+
+// A few drinks are made out of other drinks: a Miami Vice is two blended halves
+// poured one over the other. Where an ingredient names a cocktail the book
+// already teaches, it can point at that recipe instead of sitting as dead text.
+//
+// Matched on the raw item, never ingredientLabel(), because the label strips the
+// trailing parenthetical that separates "Piña Colada (Frozen)" from the plain
+// "Piña Colada" it is a variant of. Sending the frozen half to the unfrozen
+// recipe would be a worse answer than not linking it at all.
+export function recipeLinkFor(item, links) {
+  return (links && links.get(norm(item))) || null;
+}
+
+// One display row per ingredient, for the surfaces that list a recipe out.
+// Rows come from splitParts, so a parenthetical carrying its own comma survives
+// whole — the naive split(", ") this replaces tore the Miami Vice into six
+// fragments with unbalanced brackets and cut the Mind Eraser mid-note.
+//
+// A row carries `slug` only when `links` is passed, which is how a caller opts
+// in: the quizzes render the same rows without it, so no answer is ever a click
+// away from the question.
+export function ingredientRows(str, links) {
+  return splitParts(str || "").map(text => {
+    const m = text.match(MEASURE_RE);
+    const item = (m ? m[2] : text).trim();
+    return { text, item, slug: recipeLinkFor(item, links) };
+  });
 }
 
 // The ingredient names of one recipe, cleaned and de-duplicated. Two entries

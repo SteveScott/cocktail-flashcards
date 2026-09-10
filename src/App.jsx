@@ -11,7 +11,7 @@ import { restoreProgress } from "./admin-restore.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
-import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery } from './recipe-meta';
+import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows, buildRecipeLinks } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
 import AdSlot from './AdSlot.jsx';
@@ -45,6 +45,9 @@ const PRO_PRICE = "$7.99";
 // Every cocktail in the book. The free tier studies and quizzes the top 50 of
 // them; the rest is what a Pro purchase adds — see poolFor() below.
 const ALL_CARDS = [...top50, ...master150];
+// Name -> recipe-page slug, built once. Handed to ingredientRows() by the
+// surfaces that may link out; the quizzes call it without this and get none.
+const RECIPE_LINKS = buildRecipeLinks(ALL_CARDS);
 
 // The vocabulary of the corpus and the distribution the 86 It quiz samples wrong
 // answers from. Built once — the lexicon never changes at runtime. Deliberately
@@ -2446,8 +2449,8 @@ export default function App() {
               </div>
               <div style={{color:C.textBody,lineHeight:1.7,fontSize:"0.85rem"}}>
                 {c.glass && <div style={{padding:"0.05rem 0",borderBottom:`1px solid ${C.borderFaint}`,color:C.textMuted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
-                {c.ingredients.split(", ").map((g,i,a)=>(
-                  <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g}</div>
+                {ingredientRows(c.ingredients, RECIPE_LINKS).map((g,i,a)=>(
+                  <div key={i} style={{padding:"0.05rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g.slug ? <a href={`/cocktails/${g.slug}`} style={{color:C.infoLite}}>{g.text}</a> : g.text}</div>
                 ))}
               </div>
             </div>
@@ -2519,8 +2522,8 @@ export default function App() {
               ? <button onClick={()=>setRevealed(true)} style={btn(C.surfaceQuiet,{color:C.textBody,fontSize:"0.95rem"})}>Reveal Ingredients</button>
               : <div style={{color:C.textBody,lineHeight:1.85,fontSize:"0.9rem"}}>
                   {c.glass && <div style={{padding:"0.1rem 0",borderBottom:`1px solid ${C.borderFaint}`,color:C.textMuted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
-                  {c.ingredients.split(", ").map((g,i,a)=>(
-                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g}</div>
+                  {ingredientRows(c.ingredients, RECIPE_LINKS).map((g,i,a)=>(
+                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g.slug ? <a href={`/cocktails/${g.slug}`} style={{color:C.infoLite}}>{g.text}</a> : g.text}</div>
                   ))}
                 </div>
             }
@@ -2692,8 +2695,8 @@ export default function App() {
               ? <button onClick={()=>setQr(true)} style={btn(C.surfaceQuiet,{color:C.textBody,fontSize:"0.95rem"})}>Reveal Ingredients</button>
               : <div style={{color:C.textBody,lineHeight:1.85,fontSize:"0.9rem"}}>
                   {c.glass && <div style={{padding:"0.1rem 0",borderBottom:`1px solid ${C.borderFaint}`,color:C.textMuted}}>{glassIcon(c.glass)} {c.glass} • {getMethod(c)}{c.serve ? " • " + c.serve : ""}</div>}
-                  {c.ingredients.split(", ").map((g,i,a)=>(
-                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g}</div>
+                  {ingredientRows(c.ingredients).map((g,i,a)=>(
+                    <div key={i} style={{padding:"0.1rem 0",borderBottom:i<a.length-1?`1px solid ${C.borderFaint}`:"none"}}>{g.text}</div>
                   ))}
                 </div>
             }

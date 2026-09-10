@@ -145,6 +145,10 @@ The parser reads the string as the data writes it, so the conventions matter:
 - **Parentheticals may contain commas** — `2 oz Soda Water (layered, drunk
   through a straw)` — and the splitter respects them.
 - **Unmeasured items are garnish**, unless a marker says otherwise.
+- **An ingredient may name another cocktail.** A Miami Vice is `6 oz Piña
+  Colada (Frozen), 6 oz Strawberry Daiquiri (Frozen)` — two drinks the book
+  already teaches. Written exactly as that recipe's `name`, it resolves to a
+  link into the recipe (`buildRecipeLinks`/`recipeLinkFor`).
 - **Order is meaningful.** Ingredients are stored in build order (see below).
 
 ## The rule process: deriving facts from a recipe
