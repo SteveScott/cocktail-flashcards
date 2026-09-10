@@ -142,8 +142,8 @@ The parser reads the string as the data writes it, so the conventions matter:
   liquid, no different from an ounce.
 - **Placement markers in parentheses:** `(float)`, `(drizzle)`, `(top)`,
   `(garnish)`, `(layered)`, `(shot)`, `(chaser)`, `(dropped)`, `(on the side)`.
-- **Parentheticals may contain commas** — `2 oz Aged Rum (1 oz light, 1 oz
-  dark)` — and the splitter respects them.
+- **Parentheticals may contain commas** — `2 oz Soda Water (layered, drunk
+  through a straw)` — and the splitter respects them.
 - **Unmeasured items are garnish**, unless a marker says otherwise.
 - **Order is meaningful.** Ingredients are stored in build order (see below).
 

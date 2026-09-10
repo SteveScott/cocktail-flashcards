@@ -100,9 +100,9 @@ export function getMethod(c) {
   return "Stirred";
 }
 
-// Split on commas that are NOT inside parentheses. Three recipes carry a
-// parenthetical containing its own comma ("Coffee Liqueur (Kahlúa, or Tia
-// Maria)"), and a naive split shears them in half.
+// Split on commas that are NOT inside parentheses. Two recipes carry a
+// parenthetical containing its own comma ("2 oz Soda Water (layered, drunk
+// through a straw)"), and a naive split shears them in half.
 function splitParts(str) {
   const out = [];
   let depth = 0, cur = "";

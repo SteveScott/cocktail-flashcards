@@ -23,7 +23,7 @@
     { "rank": 21, "name": "Pisco Sour", "glass": "Coupe or Rocks", "serve": "up", "ingredients": "2 oz Pisco, 1 oz Fresh Lime Juice, ¾ oz Simple Syrup, 1 Egg White, 2 dashes Angostura Bitters (garnish)" },
     { "rank": 22, "name": "Clover Club", "glass": "Coupe", "serve": "up", "ingredients": "2 oz Gin, ½ oz Fresh Lemon Juice, ½ oz Raspberry Syrup, 1 Egg White" },
     { "rank": 23, "name": "French 75", "glass": "Champagne Flute", "serve": "up", "ingredients": "1½ oz Gin, ½ oz Fresh Lemon Juice, ½ oz Simple Syrup, 3 oz Champagne" },
-    { "rank": 24, "name": "Mai Tai", "glass": "Rocks or Tiki", "serve": "over crushed ice", "ingredients": "2 oz Aged Rum (1 oz light, 1 oz dark), ¾ oz Orange Curaçao, ¾ oz Fresh Lime Juice, ½ oz Orgeat, Dark Rum float" },
+    { "rank": 24, "name": "Mai Tai", "glass": "Rocks or Tiki", "serve": "over crushed ice", "ingredients": "1 oz Dark Jamaican Rum, 1 oz Rhum Agricole, ¾ oz Orange Curaçao, ¾ oz Fresh Lime Juice, ½ oz Orgeat, Dark Rum float" },
     { "rank": 25, "name": "Gin Fizz", "glass": "Highball", "serve": "on the rocks", "ingredients": "2 oz Gin, 1 oz Fresh Lemon Juice, ¾ oz Simple Syrup, 2 oz Soda Water" },
     { "rank": 26, "name": "Pornstar Martini", "glass": "Coupe or Martini", "serve": "up", "ingredients": "1½ oz Vanilla Vodka, ½ oz Passoa, ½ oz Fresh Lime Juice, 1 oz Passion Fruit Purée, Shot of Prosecco (on the side)" },
     { "rank": 27, "name": "Gin Basil Smash", "glass": "Rocks", "serve": "on the rocks", "ingredients": "2 oz Gin, 1 oz Fresh Lemon Juice, ¾ oz Simple Syrup, 6-8 Fresh Basil Leaves (muddled)" },
