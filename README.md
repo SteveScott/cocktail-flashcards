@@ -345,7 +345,7 @@ values:
 | `mode` | Screen |
 |---|---|
 | `menu` | Stats, sign-in, mode buttons, the "Add All Cards" switch (the paywall), Pro and admin panels. |
-| `index` | Search across all 322 (accent-insensitive: "pina" finds Piña Colada), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
+| `index` | Search across all 322 by name or ingredient (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
 | `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
 | `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Self Quiz draws from the whole pool; 86 It from the drinks you've studied, topped up from the top of the pool. |
@@ -444,6 +444,47 @@ A drink can be marked tried from the card or from the index. This is a fact
 about the drinker, independent of study: it touches neither deck nor scores,
 and a drink can be tried without ever having been studied. The index filters
 are component state, not persisted — a way of looking at the list, not progress.
+
+### The index search
+
+The search box reads the query against the **ingredient vocabulary** — the
+lexicon of every ingredient name the book uses, the same one the 86 It quiz
+draws impostors from — rather than against the recipe text. That is what lets it
+tell "one ingredient of two words" from "two ingredients":
+
+| Typed | Read as | Finds |
+|---|---|---|
+| `rum, lime` / `rum lime` | rum + lime | drinks with **both** |
+| `lime juice` | one ingredient | the lime ones, not the lemon ones |
+| `juice` | no such ingredient on its own | every juice |
+| `simple syrup` | one ingredient | simple and rich simple, not honey-ginger |
+| `syrup` | no such ingredient on its own | all twelve syrups |
+| `jamaican rum` | one ingredient | the Jamaican rums, not all eighteen |
+
+Three rules produce all of it. A run of words that the vocabulary knows as one
+ingredient **stays together**; anything else is separate terms, and every term
+has to land somewhere on the card (name or ingredient), which is what makes a
+multi-ingredient query an AND. A term matches **whole words in one ingredient**,
+consecutively — the difference between lime juice and lemon juice is that only
+one recipe has those two words next to each other. And the **last word typed**
+matches as a prefix, so the list narrows keystroke by keystroke, *unless* the
+vocabulary already knows that word in full: "gin" is a finished word, so it is
+Gin, Sloe Gin and Old Tom Gin, and never Ginger Beer.
+
+Names are looser than ingredients on purpose: a name matches as far as it is
+typed, whatever the vocabulary thinks, because nobody finishes "Piña Colada"
+before expecting to see it and "cola" being an ingredient is no reason to hide
+the drink. The one thing lost against the old substring search is the fragment
+that starts mid-word — "tini" no longer finds a Martini — which is the same rule
+that stopped "gin" from returning the Virgin Mary.
+
+When a query does come apart into more than one term, the box says so
+underneath ("Drinks matching rum + lime"), because otherwise an AND that returns
+three drinks looks like a bug rather than an answer.
+
+`tests/search.test.mjs` pins all of it, including two corpus-wide properties:
+every ingredient name finds every recipe carrying it, and every drink is
+reachable from every prefix of its own name.
 
 ### The index filters
 
@@ -860,8 +901,10 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
   linted too. That noise is machine-dependent and not in git; adding `android`
   to `globalIgnores` would remove it. Judge a change by whether the `src/`
   count moves.
-- **There is no test suite.** The verification standard for a change is: the
-  build passes, derived output is diffed across all 322 recipes against the
+- **There is no UI test suite.** `npm test` covers the parts where a mistake is
+  silent and expensive — the backup/restore merge rules and the index search —
+  in plain node, no runner. Everything else is verified the same way as before:
+  the build passes, derived output is diffed across all 322 recipes against the
   previous state, and UI changes are driven in a real browser against the dev
   server (Playwright works; the dev server is on 5173).
 - **Line endings.** `.gitattributes` normalises text to LF in the repo and pins

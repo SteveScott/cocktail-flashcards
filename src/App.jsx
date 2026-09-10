@@ -11,7 +11,7 @@ import { restoreProgress } from "./admin-restore.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
-import { norm, getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
+import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
 import AdSlot from './AdSlot.jsx';
@@ -52,6 +52,12 @@ const ALL_CARDS = [...top50, ...master150];
 // not a recipe, and drawing them from 50 drinks would make the free game easier
 // rather than smaller.
 const LEXICON = buildLexicon(ALL_CARDS);
+
+// The index's search, built once over the same corpus: the ingredient
+// vocabulary a query is read against, and every recipe pre-cut into words. It
+// is the whole book for the same reason the lexicon is — the index lists every
+// recipe whatever the pool is, so its search has to reach every recipe too.
+const SEARCH_INDEX = buildSearchIndex(ALL_CARDS);
 
 const DECK_SIZE = 20;
 const MASTERY_SCORE = 6;
@@ -2333,10 +2339,16 @@ export default function App() {
   );
 
   if (mode === "index") {
-    const q = norm(search.trim());
-    // Match on both the cocktail name and its ingredient list, accent-insensitively,
-    // so "pina" finds "Piña Colada" and "rum" finds every drink containing rum.
-    const matches = q ? ALL_CARDS.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_CARDS;
+    // Names and ingredients, accent-insensitively, so "pina" finds "Piña Colada"
+    // and "rum" finds every drink containing rum. A query naming more than one
+    // thing asks for all of them: "rum, lime" is the drinks with both, and
+    // "lime juice" is one ingredient rather than two loose words, so it does not
+    // hand back the lemon ones. See searchCards in recipe-meta.js.
+    const matches = searchCards(SEARCH_INDEX, search);
+    // What the query was read as, shown only when it came apart into more than
+    // one ingredient — that is the case where the results need explaining, and
+    // echoing a single term back at someone who just typed it does not.
+    const terms = parseSearchQuery(search, SEARCH_INDEX);
     const triedSet = new Set(st.tried || []);
     // "Studied" is progress made, not deck membership — the row's own
     // "✓ In Study" button already says what is in the deck. A cocktail counts
@@ -2375,9 +2387,14 @@ export default function App() {
           autoFocus
           value={search}
           onChange={e=>setSearch(e.target.value)}
-          placeholder="Search name or ingredient…"
+          placeholder="Name or ingredients — try “rum, lime”"
           style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:`1px solid ${C.border}`,color:C.textStrong,fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
+        {terms.length > 1 && (
+          <div style={{fontSize:"0.72rem",color:C.textFaint,marginBottom:"0.6rem"}}>
+            Drinks matching {terms.map(t => t.words.join(" ")).join(" + ")}
+          </div>
+        )}
         {/* Four of these do not fit one row at this column's 480px cap, let
             alone on a 360px phone, so they are a fixed 2x2 rather than a wrap
             that would re-break as a label or font changed. Each one toggles:
