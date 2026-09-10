@@ -1783,15 +1783,26 @@ export default function App() {
   };
 
   // The only tappable thing on an ingredient row: the text itself stays inert,
-  // so a mis-tap while reading a card can never cost you your place. Drawn in
-  // the palette's quietest link colour, which is what it is for.
+  // so a mis-tap while reading a card can never cost you your place.
+  //
+  // Drawn rather than typed. An emoji would be full-colour whatever the scheme
+  // is doing and would land differently on every platform's font; this is a
+  // hairline box in the same brass the row dividers use, with an arrow leaving
+  // its corner, and it takes its colour from the active scheme like everything
+  // else. 16px is small enough to read as a mark and still a real target.
   const findBtn = (term, from) => (
     <button
+      className="ing-find"
       onClick={()=>searchFor(term, from)}
       title={`Find drinks with ${term}`}
       aria-label={`Find drinks with ${term}`}
-      style={{background:"transparent",border:"none",padding:"0 0.15rem",margin:0,cursor:"pointer",color:C.textGhost,fontSize:"0.7rem",lineHeight:1,flexShrink:0}}
-    >🔍</button>
+      style={{width:16,height:16,padding:0,margin:0,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",lineHeight:0,background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,color:C.textMuted,cursor:"pointer"}}
+    >
+      <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true" focusable="false">
+        <path d="M2.3 5.7 L5.6 2.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M3.5 2.4 H5.6 V4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   );
 
   const wrap = { maxWidth:480, width:"100%" };
