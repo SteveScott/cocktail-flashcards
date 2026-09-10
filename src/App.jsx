@@ -315,7 +315,7 @@ function poolFor(st, pro) {
 }
 
 // Fisher–Yates on a copy. Shared by both quizzes, which each need a fresh
-// random order of the whole pool rather than its first n cocktails.
+// random order rather than the pool's fixed one.
 function shuffled(list) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {
@@ -1592,7 +1592,7 @@ export default function App() {
 
   function next() { setDi(i => (i+1) % deck.length); setRevealed(false); }
   function prev() { setDi(i => (i-1+deck.length) % deck.length); setRevealed(false); }
-  // Build a fresh, fully-shuffled quiz order every time — quizzing always draws
+  // Build a fresh, fully-shuffled quiz order every time — Self Quiz always draws
   // from the whole pool in random sequence (Fisher–Yates), never the fixed pool
   // order. Shuffling before the slice is what makes a short quiz a random sample
   // of the pool rather than its first n cocktails. n = null takes everything.
@@ -1609,16 +1609,23 @@ export default function App() {
     else { setQi(i=>i+1); setQr(false); }
   }
 
-  // 86 It. Same shuffle-then-slice as startQuiz, so a short round is a random
-  // sample of the pool rather than its first n drinks, but each question also
-  // carries the options it will offer. They are generated up front, once: built
-  // during render they would redraw their impostors on every keystroke.
+  // 86 It. Unlike startQuiz it asks about what you have studied: a short round
+  // is a random sample of the drinks with any progress — a score above zero, or
+  // mastered — and only when there are fewer of those than the round is long is
+  // it topped up, from the top of the pool down. The round is shuffled once more
+  // so the top-up isn't all at the end. Each question also carries the options
+  // it will offer. They are generated up front, once: built during render they
+  // would redraw their impostors on every keystroke.
   function start86Quiz(n) {
-    // `pool` already honours master mode; eligibility drops the one drink that
-    // cannot make a question.
-    const eligible = shuffled(pool.filter(eightySixEligible));
-    const chosen = (n ? eligible.slice(0, n) : eligible)
-      .map(c => buildEightySixQuestion(c, LEXICON));
+    // `pool` already honours master mode, and is in rank order; eligibility
+    // drops the one drink that cannot make a question.
+    const eligible = pool.filter(eightySixEligible);
+    const learnedSet = new Set(st.learned || []);
+    const progressed = c => (st.scores[c.name] || 0) > 0 || learnedSet.has(c.name);
+    const studied = shuffled(eligible.filter(progressed));
+    const topUp = eligible.filter(c => !progressed(c));
+    const picked = n ? [...studied, ...topUp].slice(0, n) : eligible;
+    const chosen = shuffled(picked).map(c => buildEightySixQuestion(c, LEXICON));
     setQuizKind("86");
     setQuizLen(n ?? null);
     setQuizPool(chosen);
@@ -2563,7 +2570,7 @@ export default function App() {
           <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
           <p style={{color:C.textMuted,fontSize:"0.85rem",margin:0}}>
             {quizKind === "86"
-              ? "86 It — drawn at random from all " + total + "."
+              ? "86 It — drawn from the cocktails you've studied, topped up with the most popular."
               : "Cocktails are drawn at random from all " + total + "."}
           </p>
         </div>
