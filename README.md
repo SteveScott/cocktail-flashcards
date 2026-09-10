@@ -348,7 +348,7 @@ values:
 | `index` | Search across all 322 (accent-insensitive: "pina" finds Piña Colada), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
 | `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
-| `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Both draw a fresh shuffle of the whole pool. |
+| `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Self Quiz draws from the whole pool; 86 It from the drinks you've studied, topped up from the top of the pool. |
 | `results` | Score, missed list, fireworks at 100%. Retry repeats the same quiz and length. |
 
 ### Study
@@ -378,10 +378,20 @@ values:
 
 ### Quiz
 
-Every quiz is a fresh Fisher–Yates shuffle of the **whole pool**, not the deck,
-sliced to the chosen length — shuffle before slice is what makes a short quiz a
-random sample. Since the pool honours the entitlement, a free player is quizzed
-on the top 50 in both quizzes.
+**Self Quiz** is a fresh Fisher–Yates shuffle of the **whole pool**, not the
+deck, sliced to the chosen length — shuffle before slice is what makes a short
+quiz a random sample.
+
+**86 It** asks about what you have studied. A short round is a random sample of
+the pool's drinks with any progress — a score above zero, or in `learned`
+(`tried` doesn't count: drinking one isn't studying it). Only when there are
+fewer of those than the round is long is it topped up, in rank order from the
+top of the pool, so a player who has studied nothing gets the top 10 on every
+10-question round. The round is shuffled again so the top-up isn't all at the
+end. "All Cocktails" is still the whole pool.
+
+Since the pool honours the entitlement, a free player is quizzed on the top 50
+in both quizzes, and progress on paid drinks is ignored while the library is off.
 
 **Self Quiz** grading is self-reported and does not touch study scores. **86 It**
 grades itself: right only when every real ingredient survives and every impostor
