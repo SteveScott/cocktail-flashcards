@@ -83,6 +83,7 @@ Five ideas explain most of the design:
 | `src/platform.js` | Runtime detection of web vs Play Store shell; the `FEATURES` switches. |
 | `src/firebase.js` | Firebase init from `VITE_FIREBASE_*`; ad-whitelist helpers. |
 | `src/native-auth.js` | Google sign-in through Android's account picker for the Capacitor build. |
+| `src/launcher-icon.js` | Asks the Play shell to swap its home screen icon when the colour scheme changes. |
 | `src/ads.js`, `src/AdSlot.jsx` | Web display ads (AdSense): tag loading, "is an ad actually on screen", space reservation. |
 | `src/monetization.js` | Play build: AdMob banner, UMP consent, RevenueCat / Play Billing. |
 | `src/consent.js` | Reopening Google's GDPR message; whether GDPR applies to this visitor. |
@@ -96,7 +97,7 @@ Five ideas explain most of the design:
 | `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
 | `firestore.rules` | The access-control model. Read this before touching the `users` document. |
 | `public/` | Static assets, `manifest.json`, `pwa-sw.js`, `privacy.html`, `robots.txt`, `ads.txt`. |
-| `android/` | The Capacitor Android project. Nothing in it is served; it is the store shell. |
+| `android/` | The Capacitor Android project. Nothing in it is served; it is the store shell. The only code in it is `CocktailActivity` and `LauncherIconPlugin`. |
 | `docs/` | Deep dives on specific subsystems — listed at the end. |
 | `ignore/` | Local scratch, gitignored. Keys and artwork sources live here and never in git. |
 
@@ -580,6 +581,56 @@ token for a Firebase session with `signInWithCredential`. Downstream — auth
 state, the Firestore subscription, the whitelist check — is identical on both
 platforms. See [docs/mobile-google-signin.md](docs/mobile-google-signin.md).
 
+### The launcher icon follows the scheme
+
+On the Play build the home screen icon is drawn in the scheme the app is
+wearing: brass on walnut for Retro, cyan on near-black for Future. It is the one
+surface the scheme reaches that is visible with the app shut, and the only one
+where the choice is on display rather than in use.
+
+Android does not let an app change its icon. What it allows is several launcher
+entries carrying different icons with exactly one of them enabled, so the
+feature is spread over four files:
+
+- `scripts/icons.mjs` inks the one drawing in each scheme's palette and writes a
+  full launcher set per scheme — `ic_launcher*` for Retro, `ic_launcher_future*`
+  for Future — along with the adaptive-icon XML and the background colours.
+- `android/app/src/main/AndroidManifest.xml` declares an `<activity-alias>` per
+  scheme, all pointing at `CocktailActivity`, Retro enabled and the rest not.
+- `LauncherIconPlugin.java` flips them through `PackageManager`, enabling the new
+  entry before disabling the old one: a package with no enabled LAUNCHER
+  component is, to a launcher, an uninstalled one, and a redraw landing in that
+  window can take the icon away for good.
+- `src/launcher-icon.js` asks for the change from the theme effect in `App.jsx`.
+  It is a no-op on the web and a caught rejection on any shell predating the
+  plugin — the shell loads the *deployed* site, so this code runs inside APKs
+  that have never heard of a `LauncherIcon` plugin.
+
+Two consequences of the mechanism are worth knowing before touching it.
+
+**The activity is not called `MainActivity` any more.** That name now belongs to
+the Retro alias, and deliberately: a home screen icon records the component it
+was dragged from, and every install in the wild recorded
+`com.bpp.cocktailflashcards.MainActivity`. Had both aliases taken new names,
+every one of those icons would have gone at the next update. The activity behind
+them is `CocktailActivity`.
+
+**The swap waits for `onPause`.** Changing a component's enabled state while its
+own task is in front is the case Android handles worst. `DONT_KILL_APP` keeps
+the process alive, but the system's own bookkeeping can still drop the task from
+Recents once the component it was launched from is disabled, and this app is a
+WebView on a live site, so a restart costs the user their place. Deferring to the
+moment they leave keeps all of that out of the middle of a session — and it is
+the last moment before the launcher is on screen, which is the only place the
+icon can be seen at all.
+
+Adding a third scheme is four edits, three of them outside `src/App.jsx`: a
+palette in `scripts/icons.mjs`, an alias in the manifest, an entry in the
+`Scheme` enum in the plugin. Miss one and the scheme has either no icon to
+select or no way to select it. Everything that is *not* a launcher entry — the
+favicon, the splash screen, the icon Settings and the share sheet show, both
+store uploads — stays Retro.
+
 ## Monetization, entitlements and consent
 
 One purchase, **Cocktail Flashcards Pro** ($7.99, one-time), carrying two things:
@@ -759,11 +810,17 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 
   The static pages (`public/privacy.html`, the SEO pages in
   `scripts/seo-pages.mjs`) are Retro only, by hand: they are served without the
-  bundle and have no picker to offer.
-- **Icons.** `npm run icons` is a regeneration step, not a build step — the 35
-  files it writes are committed. Edit the geometry at the top of
+  bundle and have no picker to offer. The Play build has a third place to keep in
+  step — the launcher icon is drawn per scheme, and a new scheme needs a palette,
+  an alias and a plugin entry before anything can select it. See
+  [The launcher icon follows the scheme](#the-launcher-icon-follows-the-scheme).
+- **Icons.** `npm run icons` is a regeneration step, not a build step — the 55
+  files it writes are committed. Edit the geometry or a palette at the top of
   `scripts/icons.mjs` and re-run it; never hand-edit an output, or the browser
-  tab and the Play launcher start showing different drinks.
+  tab and the Play launcher start showing different drinks. Five of those
+  outputs are XML rather than pixels — the four adaptive-icon definitions and
+  the colours behind them — because a launcher background kept by hand is
+  exactly what goes stale when a foreground is redrawn.
 - **Screenshots.** `src/assets/screenshots/` holds eight shots of the major
   features at 1080x2400 (a 360dp viewport at 3x), named
   `<number>-<feature>-<scheme>.png` and alternating Retro and Future. They are

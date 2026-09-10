@@ -10,6 +10,7 @@ import cocktailData from './cocktails.json';
 import { restoreProgress } from "./admin-restore.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
+import { setLauncherIcon } from './launcher-icon';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
 import { norm, getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
@@ -1463,13 +1464,16 @@ export default function App() {
   function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
 
   // <html data-theme> drives index.css: the two font stacks, the page chrome and
-  // the wash over the bar photograph. The meta tag moves with it so the Android
+  // the wash over the bar photograph. The other two lines are the pieces of the
+  // scheme that live outside both stylesheets: the meta tag, so the Android
   // status bar and the browser's own chrome do not stay the other scheme's
-  // colour — the one piece of the theme that lives outside both stylesheets.
+  // colour, and the launcher icon, so neither does the home screen on the Play
+  // build (a no-op everywhere else — see src/launcher-icon.js).
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", THEMES[theme].ink);
+      ?.setAttribute("content", THEMES[theme].well);
+    setLauncherIcon(theme);
     try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
   }, [theme]);
 
