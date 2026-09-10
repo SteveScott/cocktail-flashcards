@@ -71,9 +71,51 @@ jobs:
       # NODE_VERSION in netlify.toml. Was 22, which is now in maintenance; the
       # point of naming it in all four places is that the build somebody runs
       # locally is the build that deploys.
+      #
+      # `cache: npm` is explicit because the automatic caching described above
+      # never engages here. It keys off package-lock.json, which this repo has,
+      # and it earns its place only as of this file installing dependencies at
+      # all — see the step below.
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: npm
+
+      # `npm ci` is new here. This job used to need no dependencies at all: it
+      # reached Firebase through `npx firebase-tools` and the Netlify wait
+      # through Node built-ins. The suite needs the real tree — the backup and
+      # restore tests import firebase-admin — so the install is the price of
+      # running it, and the cache above keeps it short.
+      - name: Install dependencies
+        run: npm ci
+
+      # These three are the same checks a contributor runs locally, and until
+      # now they ran nowhere else: nothing automated ever read them, so "it
+      # passed on my machine" was the whole of the evidence behind a release.
+      #
+      # They sit ahead of the rules deploy on purpose. A failure should stop the
+      # ruleset going out, and a step placed after it could only ever report on
+      # a release that had already happened.
+      #
+      # What they do NOT do is hold back the site. Netlify's git integration
+      # starts its own build from the same push and does not wait for this job —
+      # see the note at the top of this file about `stop_builds`. So a red suite
+      # stops the rules and marks the release red, while the code still reaches
+      # the CDN; undoing that is a Netlify rollback, not something this file can
+      # reach.
+      - name: Test
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      # Not redundant with Netlify's build. This one proves the build works on
+      # the pinned Node against a clean `npm ci` tree; Netlify's proves it works
+      # with Netlify's environment and secret scanning. A failure here is a code
+      # fault and a failure there is usually configuration, and being able to
+      # tell those apart is worth the extra minute.
+      - name: Build
+        run: npm run build
 
       # The key goes to a file by way of the environment, never a command line:
       # the CLI reads it from GOOGLE_APPLICATION_CREDENTIALS, and an argument is
