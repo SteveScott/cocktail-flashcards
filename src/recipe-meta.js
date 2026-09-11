@@ -80,6 +80,13 @@ export function getMethod(c) {
   const ing = c.ingredients.toLowerCase();
   const glass = (c.glass || "").toLowerCase();
 
+  // `serve` already carries this: every drink served frozen is one that came
+  // out of a blender, and the two sets are the same six drinks. Reading it here
+  // lets the recipes drop the "— blended with ice" and "(blended)" markers they
+  // were carrying only to reach this line — markers that trailed into the
+  // ingredient label ("Chocolate Syrup — blended with ice") and made the first
+  // step tell you to add ice to a blender along with more ice.
+  if (c.serve === "Frozen") return "Blended";
   if (/blend|frozen/.test(name) || /blended with|\(blended\)/.test(ing)) return "Blended";
   if (/layered/.test(ing)) return "Layered";
   if (ROLLED_BASE.test(ing)) return "Rolled";
@@ -87,7 +94,7 @@ export function getMethod(c) {
   // and a Hurricane are shaken and then poured over it. But it does exempt a
   // drink from the two sour rules below, which would otherwise send a Mojito
   // and a Caipirinha — citrus and sugar both — to a tin they never see.
-  const crushed = /crushed ice/.test(ing) || c.serve === "over crushed ice";
+  const crushed = /crushed ice/.test(ing) || c.serve === "Over Crushed Ice";
   // Before the build rule, not after it. A fizz, a collins and a Long Island
   // are all sours that happen to be finished with soda in a tall glass, and
   // testing the glass first called every one of them a build — which left a
@@ -100,9 +107,9 @@ export function getMethod(c) {
   return "Stirred";
 }
 
-// Split on commas that are NOT inside parentheses. Three recipes carry a
-// parenthetical containing its own comma ("Coffee Liqueur (Kahlúa, or Tia
-// Maria)"), and a naive split shears them in half.
+// Split on commas that are NOT inside parentheses. Two recipes carry a
+// parenthetical containing its own comma ("2 oz Soda Water (layered, drunk
+// through a straw)"), and a naive split shears them in half.
 function splitParts(str) {
   const out = [];
   let depth = 0, cur = "";
@@ -241,11 +248,22 @@ const SPIRITS = [
 // The drink's base category, used to group recipes and to cross-link related
 // ones. Reads the FIRST measured component first — in a well-written recipe
 // that is the base — and only falls back to scanning the whole line.
-export function baseSpirit(c) {
+export function baseSpirit(c, recipes) {
   const { components } = parseIngredients(c.ingredients);
   const lead = components[0]?.item || "";
   for (const [re, label] of SPIRITS) if (re.test(lead)) return label;
   for (const [re, label] of SPIRITS) if (re.test(c.ingredients)) return label;
+  // A drink assembled out of other drinks names no spirit of its own: a Miami
+  // Vice lists two frozen halves and nothing else, so every pattern above
+  // misses and the drink lands in "Other", away from the rums it belongs with.
+  // Read the base off a half instead — it is a recipe the book already holds.
+  // The inner call is deliberately given no list: one hop is enough to answer
+  // the question, and it cannot recurse into a cycle.
+  for (const x of components) {
+    const half = (recipes || []).find(r => norm(r.name) === norm(x.item) && r.name !== c.name);
+    const s = half && baseSpirit(half);
+    if (s && s !== "Other") return s;
+  }
   return "Other";
 }
 
@@ -271,9 +289,9 @@ function methodAdjective(method) {
 // it. Up is chilled and iceless; neat is iceless and never chilled at all.
 function serveTarget(c, glass) {
   switch (c.serve) {
-    case "on the rocks":     return `${glass} filled with fresh ice`;
-    case "over crushed ice": return `${glass} packed with crushed ice`;
-    case "up":               return `a chilled ${glass.replace(/^an? /, "")}`;
+    case "On the Rocks":     return `${glass} filled with fresh ice`;
+    case "Over Crushed Ice": return `${glass} packed with crushed ice`;
+    case "Up":               return `a chilled ${glass.replace(/^an? /, "")}`;
     default:                 return glass;
   }
 }
@@ -314,8 +332,10 @@ export function buildSteps(c) {
   // before it is poured, so neither belongs in the shaker with everything
   // else — a Penicillin's Islay float was being shaken into the drink it is
   // supposed to sit on top of. A layered drink is the exception: there the
-  // float IS the layering, so leave it in sequence.
-  const layered = method === "Layered";
+  // float IS the layering, so leave it in sequence. Matched as a word rather
+  // than by equality so a compound method carries the rule: a Miami Vice is
+  // "Blended, Layered", and its halves are a sequence like any other layer.
+  const layered = /\bLayered\b/.test(method);
   // A layered drink with a float has a base and something set on top of it — a
   // Baby Guinness's cream. Only a drink whose every component is a layer gets
   // poured over the back of a spoon.
@@ -329,9 +349,12 @@ export function buildSteps(c) {
   const toppers = strained ? parsed.filter(x => /^(top|splash)$/i.test(x.measure)) : [];
   const held = new Set([...floats, ...rinses, ...toppers]);
   // "Where not specified" is the whole point of the default: a recipe that
-  // states its own sequence keeps it. Berry's Zombie pours lime before
-  // falernum and the IBA's Aperol Spritz leads with the prosecco, and neither
-  // is the default order. A layered drink's sequence IS the recipe.
+  // states its own sequence keeps it. The IBA's Aperol Spritz leads with the
+  // prosecco and the Blue Blazer puts scotch and boiling water in before the
+  // sugar, and neither is the default order. A layered drink's sequence IS the
+  // recipe. Both examples are drinks that actually carry `order: "as-written"`;
+  // the Zombie used to stand here and does not, having been checked and
+  // deliberately left unpinned (docs/methods.md).
   const asWritten = layered || c.order === "as-written";
   const components = asWritten ? parsed.filter(x => !held.has(x))
                                : inBuildOrder(parsed.filter(x => !held.has(x)));
@@ -364,10 +387,10 @@ export function buildSteps(c) {
     // same way: ice is wrong for a hot drink, and the sugar has to be dealt
     // with before the ice goes in.
     const fizzy = CARBONATED.test(c.ingredients);
-    const hot = c.serve === "hot";
-    const crushed = c.serve === "over crushed ice";
-    const neat = c.serve === "neat";
-    const iced = c.serve === "on the rocks" || crushed;
+    const hot = c.serve === "Hot";
+    const crushed = c.serve === "Over Crushed Ice";
+    const neat = c.serve === "Neat";
+    const iced = c.serve === "On the Rocks" || crushed;
     const SWEETENER = /sugar|syrup|bitters|disc of lime/i;
     // Fruit that is pressed rather than poured. A Caipirinha's lime is the
     // drink, not a garnish — every other "Lime wedge" in the deck is unmeasured
@@ -496,6 +519,20 @@ export function buildSteps(c) {
       steps.push(`Pour ${list} slowly over the back of a bar spoon, in the order listed.`);
       steps.push(`Take care to keep each layer distinct in ${glass}.`);
     }
+  } else if (method === "Blended, Layered") {
+    // Two finished drinks, each blended on its own and then poured one over the
+    // other. Nothing here meets in a shaker, so the ordinary layering line —
+    // over the back of a bar spoon — would be wrong: a frozen half is thick
+    // enough to sit on the one below it unaided. The halves are listed
+    // bottom-first, the order they go into the glass, the same rule every other
+    // layered drink in the book follows.
+    steps.push(`Blend each half separately — ${list} — with about a cup of crushed ice apiece, until smooth.`);
+    if (components.length) {
+      steps.push(`Pour the ${ingredientLabel(components[0].item)} into ${glass}.`);
+      for (const x of components.slice(1)) {
+        steps.push(`Pour the ${ingredientLabel(x.item)} slowly over it, so the halves stay distinct.`);
+      }
+    }
   } else {
     // Every method above is matched by name. Reaching here means a recipe
     // carries a `method` no branch handles — a typo, or a technique added to
@@ -554,6 +591,46 @@ const NOT_AN_INGREDIENT = /\bor\b|—/;
 // give itself away without the player knowing a thing about the drink.
 export function ingredientLabel(item) {
   return (item || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
+// Name -> slug for every recipe in the book. Built once by the caller and
+// handed to the lookups below, so a render does not rebuild it per card.
+export function buildRecipeLinks(recipes) {
+  return new Map((recipes || []).map(c => [norm(c.name), slugify(c.name)]));
+}
+
+// A few drinks are made out of other drinks: a Miami Vice is two blended halves
+// poured one over the other. Where an ingredient names a cocktail the book
+// already teaches, it can point at that recipe instead of sitting as dead text.
+//
+// Matched on the raw item, never ingredientLabel(), because the label strips the
+// trailing parenthetical that separates "Piña Colada (Frozen)" from the plain
+// "Piña Colada" it is a variant of. Sending the frozen half to the unfrozen
+// recipe would be a worse answer than not linking it at all.
+export function recipeLinkFor(item, links) {
+  return (links && links.get(norm(item))) || null;
+}
+
+// One display row per ingredient, for the surfaces that list a recipe out.
+// Rows come from splitParts, so a parenthetical carrying its own comma survives
+// whole — the naive split(", ") this replaces tore the Miami Vice into six
+// fragments with unbalanced brackets and cut the Mind Eraser mid-note.
+//
+// A row carries `slug` only when `links` is passed, which is how a caller opts
+// in: the quizzes render the same rows without it, so no answer is ever a click
+// away from the question.
+//
+// `term` is what to search the book for from this row, and is the label rather
+// than the item on purpose. Stripping the trailing parenthetical is wrong for a
+// link, which must land on one recipe, but right for a search: from a Miami
+// Vice, "Piña Colada" finds the frozen half, the original and the Miami Vice
+// itself, where "Piña Colada (Frozen)" would hide the drink it is a variant of.
+export function ingredientRows(str, links) {
+  return splitParts(str || "").map(text => {
+    const m = text.match(MEASURE_RE);
+    const item = (m ? m[2] : text).trim();
+    return { text, item, term: ingredientLabel(item), slug: recipeLinkFor(item, links) };
+  });
 }
 
 // The ingredient names of one recipe, cleaned and de-duplicated. Two entries
@@ -674,4 +751,153 @@ export function buildEightySixQuestion(c, lexicon, rand = Math.random) {
     [options[i], options[j]] = [options[j], options[i]];
   }
   return { ...c, options };
+}
+
+// ── Search over names and ingredients ──────────────────────────────────────
+//
+// The index used to be one substring test against the raw ingredient line,
+// which failed in both directions at once. It was too narrow for a query
+// naming two things — "rum, lime" and "rum lime" appear verbatim in no recipe,
+// so a search anyone would call obvious returned nothing — and too loose for a
+// query naming one thing precisely: "gin" matched every Ginger Beer, and no
+// search could ask for lime juice without being handed the lemon ones too,
+// because the only tool was "does this character sequence occur".
+//
+// What the search actually needs to know is where one ingredient name ends and
+// the next begins, and the corpus already says: the lexicon (see
+// `ingredientLabels`) is the vocabulary of every ingredient the book uses. So
+// the query is read against that vocabulary rather than against the recipe
+// text. "simple" followed by "syrup" is a run the vocabulary knows as one name,
+// so it stays one term and Honey Syrup is not an answer to it. "rum" followed
+// by "lime" is not, so it is two terms, and a drink has to carry both.
+//
+// The rest follows from two rules:
+//
+//   * A term matches whole words, not fragments — "gin" is Gin, Sloe Gin and
+//     Old Tom Gin, and Ginger Beer is a different ingredient. The exception is
+//     the word still being typed (the last one in the query), which matches as
+//     a prefix so the list keeps narrowing keystroke by keystroke: "sy", "syr",
+//     "syru" all still find the syrups. A word the vocabulary knows in full is
+//     never treated as half-typed, which is what keeps "gin" off ginger.
+//   * A term matches a *contiguous* run within one ingredient. That is the
+//     whole distinction between "lime juice" and "lemon juice": both drinks
+//     contain the words lime and juice somewhere, only one contains them
+//     together. Terms are then ANDed across the recipe, which is what makes
+//     "rum, lime" a two-ingredient question.
+//
+// A bare word that is not itself a complete ingredient — "syrup", "juice",
+// "rum" — names no single thing in the lexicon, so it matches every compound
+// that contains it: all twelve syrups, all thirteen juices, all eighteen rums.
+// Say more and you get less: "Jamaican Rum" is the rums that are Jamaican.
+//
+// Cocktail names are held to neither rule as strictly: a name matches as far as
+// it is typed, whatever the vocabulary makes of the word. See `lands`.
+
+// Words, folded to lowercase ASCII, with punctuation as the separator. Both
+// sides of the search are cut the same way, so "St-Germain" and "st germain"
+// are the same query — and so a phrase can never be read across a boundary the
+// writing meant to keep apart (see searchFields below).
+//
+// The apostrophe is rubbed out rather than split on, which is what makes
+// "Pimm's" one word instead of "pimm" plus "s". Splitting on it also put the
+// bare letter "s" into the ingredient vocabulary, where — the vocabulary being
+// the list of words that count as finished — it stopped "aperol s" from ever
+// reaching Aperol Spritz.
+function searchWords(s) {
+  return norm(s).replace(/['’ʼ`]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+// Does `run` occur as consecutive words inside `field`? The last word of the
+// run matches as a prefix when `prefix` is set — the half-typed word, and only
+// ever that one, since a fragment in the middle of a phrase is a typo rather
+// than someone still typing.
+function runAt(field, run, prefix) {
+  outer:
+  for (let i = 0; i + run.length <= field.length; i++) {
+    for (let j = 0; j < run.length; j++) {
+      const word = field[i + j], term = run[j];
+      const partial = prefix && j === run.length - 1;
+      if (partial ? !word.startsWith(term) : word !== term) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+// The ingredient text of one recipe, cut into fields: one per comma-separated
+// component. Fields are what stop a phrase from being read across a boundary
+// the recipe meant to keep — "Dark Rum, Lime Juice" holds the words "rum" and
+// "lime" side by side, and it is not a drink made with rum lime.
+function searchFields(c) {
+  return splitParts(c.ingredients).map(searchWords);
+}
+
+// Built once over the whole corpus: the ingredient vocabulary the query is read
+// against, and every recipe pre-cut into words so a keystroke is a comparison of
+// word arrays rather than 322 re-parses.
+export function buildSearchIndex(recipes) {
+  const labels = new Set();
+  for (const c of recipes) for (const label of ingredientLabels(c)) labels.add(label);
+  const phrases = [...labels].map(searchWords).filter(p => p.length);
+  return {
+    phrases,
+    // Every word any ingredient name uses. Membership means "this word is
+    // finished", not "this word is an ingredient": syrup is in here from Simple
+    // Syrup, and there is no ingredient called Syrup.
+    vocabulary: new Set(phrases.flat()),
+    longest: phrases.reduce((n, p) => Math.max(n, p.length), 1),
+    cards: recipes.map(c => ({ card: c, name: searchWords(c.name), ingredients: searchFields(c) })),
+  };
+}
+
+// Cut the query into terms, longest vocabulary phrase first. Greedy is enough
+// here and a full segmentation would be false precision: ingredient names do
+// not nest, so there is no query where taking the longest run first loses a
+// shorter reading that would have matched more ("rum simple syrup" is rum plus
+// simple syrup under any reading of it).
+//
+// `tail` marks the term holding the last word of the query — the one that may
+// still be half-typed — and `prefix` says whether to read it that way against
+// an ingredient, which is only when the vocabulary does not already know that
+// word in full.
+export function parseSearchQuery(query, index) {
+  const tokens = searchWords(query);
+  const terms = [];
+  for (let i = 0; i < tokens.length;) {
+    const partial = n => i + n === tokens.length && !index.vocabulary.has(tokens[i + n - 1]);
+    let take = 1;
+    for (let n = Math.min(index.longest, tokens.length - i); n > 1; n--) {
+      const run = tokens.slice(i, i + n);
+      if (index.phrases.some(p => runAt(p, run, partial(n)))) { take = n; break; }
+    }
+    terms.push({ words: tokens.slice(i, i + take), prefix: partial(take), tail: i + take === tokens.length });
+    i += take;
+  }
+  return terms;
+}
+
+// A term lands on a card when it names one of its ingredients or part of its
+// name. The two are read by different rules on purpose. An ingredient is held
+// to the whole word, because that is the precision the search is for: "gin" is
+// not Ginger Beer and "lime juice" is not lemon. A name is read as far as it is
+// typed, because that is what a name search is — nobody finishes "Piña Colada"
+// before expecting to see it, and "cola" being an ingredient in its own right
+// is no reason to hide the drink.
+function lands(entry, term) {
+  return runAt(entry.name, term.words, term.tail) ||
+         entry.ingredients.some(f => runAt(f, term.words, term.prefix));
+}
+
+// The recipes a query names, in corpus order.
+//
+// Every term has to land, which is what makes "rum, lime" a two-ingredient
+// question rather than a string nothing contains. The one deliberate loss
+// against the old substring test is the fragment that starts mid-word: "tini"
+// no longer finds a Martini. That is the same rule that keeps "gin" off Ginger
+// Beer — and off the Virgin Mary, which the substring test served up as a gin
+// drink with no gin in it.
+export function searchCards(index, query) {
+  const terms = parseSearchQuery(query, index);
+  if (!terms.length) return index.cards.map(e => e.card);
+  return index.cards.filter(e => terms.every(t => lands(e, t))).map(e => e.card);
 }

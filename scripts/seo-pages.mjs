@@ -28,6 +28,7 @@ import { writeFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   slugify, getMethod, baseSpirit, parseIngredients, buildSteps, summarize,
+  buildRecipeLinks, recipeLinkFor,
 } from "../src/recipe-meta.js";
 
 const SITE = "https://cocktailflashcards.com";
@@ -114,9 +115,9 @@ ${body}
 `;
 }
 
-function recipePage(c, related) {
+function recipePage(c, related, links, all) {
   const method = getMethod(c);
-  const spirit = baseSpirit(c);
+  const spirit = baseSpirit(c, all);
   const { components, garnishes } = parseIngredients(c.ingredients);
   const steps = buildSteps(c);
   const slug = slugify(c.name);
@@ -138,7 +139,11 @@ function recipePage(c, related) {
 
 <h2>Ingredients</h2>
 <ul class="ing">
-${components.map(x => `  <li><span class="m">${esc(x.measure)}</span><span>${esc(x.item)}</span></li>`).join("\n")}
+${components.map(x => {
+  const to = recipeLinkFor(x.item, links);
+  const item = to ? `<a href="/cocktails/${to}">${esc(x.item)}</a>` : esc(x.item);
+  return `  <li><span class="m">${esc(x.measure)}</span><span>${item}</span></li>`;
+}).join("\n")}
 ${garnishes.map(g => `  <li><span class="m">Garnish</span><span>${esc(g)}</span></li>`).join("\n")}
 </ul>
 
@@ -281,10 +286,14 @@ export function seoPages(cocktails) {
       }
       const unique = [...bySlug.values()];
 
+      // Name -> slug once for the whole build, so an ingredient that names
+      // another drink can point at it.
+      const links = buildRecipeLinks(unique);
+
       // Group for the index page and for cross-linking.
       const groups = new Map();
       for (const c of unique) {
-        const k = baseSpirit(c);
+        const k = baseSpirit(c, unique);
         if (!groups.has(k)) groups.set(k, []);
         groups.get(k).push(c);
       }
@@ -296,7 +305,7 @@ export function seoPages(cocktails) {
 
       for (const c of unique) {
         const slug = slugify(c.name);
-        const siblings = groups.get(baseSpirit(c)).filter(x => x.name !== c.name);
+        const siblings = groups.get(baseSpirit(c, unique)).filter(x => x.name !== c.name);
         // Deterministic neighbours, not random, so the internal link graph is
         // stable across builds instead of churning every deploy.
         const start = siblings.findIndex(x => x.name.localeCompare(c.name) > 0);
@@ -309,7 +318,7 @@ export function seoPages(cocktails) {
         // creates one directory instead of 322, which builds faster and avoids
         // the Windows file-locking that mass directory creation provokes when the
         // repo sits in a synced folder.
-        await writeFile(join(out, "cocktails", `${slug}.html`), recipePage(c, related), "utf8");
+        await writeFile(join(out, "cocktails", `${slug}.html`), recipePage(c, related, links, unique), "utf8");
       }
 
       await writeFile(join(out, "cocktails", "index.html"), indexPage(sorted, unique.length), "utf8");

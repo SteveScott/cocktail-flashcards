@@ -185,6 +185,20 @@ half-and-half rather than plain milk or cream.
 
 ## Blended
 
+`serve: "Frozen"` is read as Blended before any pattern in the ingredients is.
+The two sets are the same six drinks, so the field was already carrying the
+fact — and reading it lets the recipes drop the markers they used to carry only
+to reach the rule. Five did: `— blended with 1 cup ice` on the frozen Piña
+Colada, `— blended with ice` on the Bushwacker, `(blended)` on Missionary's
+Downfall and the Frosé, and the Frozen Margarita's `1 cup Ice (blended)`, the
+only place in the book ice was ever an ingredient.
+
+They were not harmless. A trailing `— blended with ice` is not a parenthetical,
+so it stayed in the ingredient label: the Bushwacker's last ingredient read
+"Chocolate Syrup — blended with ice" on the card and in the 86 It lexicon, and
+its first step said to add it "to a blender along with about a cup of crushed
+ice" — ice twice in one sentence.
+
 | Drink | Source |
 |---|---|
 | Sgroppino | Sorbet, vodka and prosecco whisked or immersion-blended to a froth ([Saveur](https://www.saveur.com/article/Recipes/Sgroppino-Cocktail/)) |
@@ -201,6 +215,7 @@ These needed new method values, and each has its own branch in `buildSteps()`.
 | Jägerbomb | Dropped | A [bomb shot](https://en.wikipedia.org/wiki/Bomb_shot) — the shot glass is dropped into the mixer |
 | Boilermaker | Dropped | The same [bomb shot](https://en.wikipedia.org/wiki/Bomb_shot), whiskey into beer. Its ingredient string used to hedge "alongside or dropped"; the alongside form is a `Chased` drink, so the data now names one |
 | Pickleback | Chased | Nothing is mixed: the whiskey is drunk, then the brine ([Wikipedia](https://en.wikipedia.org/wiki/Pickleback)) |
+| Miami Vice | Blended, Layered | Not one drink but two, each blended on its own and poured one over the other. Both halves are recipes in their own right, so the card lists them rather than restating their ingredients |
 
 ## Checked and deliberately left alone
 
@@ -223,12 +238,12 @@ one of them has ice in it.
 
 | Value | Meaning |
 |---|---|
-| `up` | Chilled, served without ice. |
-| `neat` | No ice **and never chilled** — poured and drunk at room temperature. |
-| `on the rocks` | Over ice cubes. |
-| `over crushed ice` | Over crushed or pebble ice: juleps, swizzles, cobblers, tiki. |
-| `hot` | Served hot. Seven drinks. |
-| `frozen` | Blended to a slush. Six drinks. |
+| `Up` | Chilled, served without ice. |
+| `Neat` | No ice **and never chilled** — poured and drunk at room temperature. |
+| `On the Rocks` | Over ice cubes. |
+| `Over Crushed Ice` | Over crushed or pebble ice: juleps, swizzles, cobblers, tiki. |
+| `Hot` | Served hot. Seven drinks. |
+| `Frozen` | Blended to a slush. Six drinks. |
 
 **Up and neat are not the same thing, and the difference is temperature.** Up is
 chilled — stirred or shaken against ice and then served off it. Neat is never
@@ -239,7 +254,7 @@ chilled at all. Two drinks are neat by tradition rather than by glassware:
 | Ti' Punch | No ice in Martinique, and the rhum is better for it — traditionalists drink it above 80°F ([Imbibe](https://imbibemagazine.com/introduction-ti-punch/), [VinePair](https://vinepair.com/cocktail-college/ti-punch/)) |
 | Whisky Mac | Poured and swirled with no ice, to keep the ginger wine from thinning ([Master of Malt](https://www.masterofmalt.com/blog/post/whisky-mac-cocktail-recipe/)) |
 
-`hot` and `frozen` are additions beyond those four: an Irish Coffee and a Frozen
+`Hot` and `Frozen` are additions beyond those four: an Irish Coffee and a Frozen
 Margarita are not up, neat, on the rocks or over crushed ice, and forcing either
 into one of those would be a lie on the card.
 
@@ -254,7 +269,7 @@ Frappé reading as builds now that crushed ice is a serving style rather than an
 ingredient in their lists.
 
 Values a rule cannot reach are set by hand: the Sazerac (chilled, ice discarded,
-so `up` in a rocks glass) and the cold-but-uniced Kir, Snakebite, Boilermaker,
+so `Up` in a rocks glass) and the cold-but-uniced Kir, Snakebite, Boilermaker,
 Eggnog and Jägerbomb.
 
 ## Units written after the ingredient
@@ -316,7 +331,10 @@ the sequence is either sourced or structural and the default would break it:
 | Trinidad Sour | Angostura is the base spirit here, not a dash |
 | Blue Blazer | Scotch and boiling water go into the mug before the sugar |
 
-Layered drinks are never reordered — the sequence *is* the recipe.
+Layered drinks are never reordered — the sequence *is* the recipe. The test is
+the word, not the whole method, so a compound like the Miami Vice's
+`Blended, Layered` is covered: its two halves are listed bottom-first, the order
+they go into the glass, exactly as a B-52's three liqueurs are.
 
 Two candidates were checked and **not** pinned. Difford's orders the
 Don-the-Beachcomber tiki drinks in the default order — Three Dots and a Dash as
