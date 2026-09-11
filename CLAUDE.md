@@ -62,13 +62,28 @@ they become the odd ones out.
 
 ## Traps
 
-**Cocktail names are progress keys.** Scores, the learned list, the tried list
-and the deck are all keyed by the exact `name` string. Renaming a cocktail
-resets that card for everyone who had studied it, and leaves an orphan key in
-their account. `learned` is filtered against the pool on read, so a stale key
-cannot inflate a count — but the progress is gone. Names also feed `slugify`,
-so a rename can move a recipe URL; check that the slug is unchanged before
-deciding a rename is free.
+**Cocktail names are keys in three places.** Scores, the learned list, the tried
+list and the deck are all keyed by the exact `name` string, so renaming a
+cocktail resets that card for everyone who had studied it and leaves an orphan
+key in their account. `learned` is filtered against the pool on read, so a stale
+key cannot inflate a count — but the progress is gone. Names also feed
+`slugify`, so a rename can move a recipe URL. And a recipe may list *another
+recipe* as an ingredient — the Miami Vice is `6 oz Piña Colada (Frozen), 6 oz
+Strawberry Daiquiri (Frozen)` — which `baseSpirit` and the generated
+cross-links resolve by matching the raw item against `name`. Rename either half
+and the drink silently drops to "Other" with a dead link. Check all three before
+deciding a rename is free:
+
+```js
+const names = new Set(all.map(c => norm(c.name)));
+for (const c of all)
+  for (const x of parseIngredients(c.ingredients).components)
+    if (names.has(norm(x.item))) console.log(c.name, '->', x.item);
+```
+
+`baseSpirit(c, recipes)` needs that second argument to follow such a link. It is
+optional and degrades silently to `"Other"` when omitted, so call it the way
+`scripts/seo-pages.mjs` does — `baseSpirit(c, all)` — not bare.
 
 **`serve` is compared by value, not by pattern.** `getMethod`, `serveTarget` and
 `buildSteps` in `src/recipe-meta.js` switch on the literal string. Change a
