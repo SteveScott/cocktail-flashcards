@@ -12,7 +12,7 @@ import { getAdmin } from "./_firebaseAdmin.mjs";
 // minted for it, and those cannot be forged. Reading the list tells an attacker
 // whose account to go after, which firestore.rules already tells them — its
 // admins() carries the same addresses in plaintext.
-function adminEmails() {
+export function adminEmails() {
   return (process.env.VITE_ADMIN_EMAILS || "")
     .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 }
