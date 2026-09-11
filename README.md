@@ -125,7 +125,7 @@ keeps diffs readable. Keep it that way.
 | `name` | all | Unique. Used as the key everywhere — scores, decks, learned lists, tried marks. |
 | `glass` | all | The vessel, as a short label: `Coupe`, `Rocks`, `Highball (Collins)`, `Coupe or Nick & Nora`. |
 | `ingredients` | all | One comma-separated string. See conventions below. |
-| `serve` | all | How it reaches the drinker: `up`, `neat`, `on the rocks`, `over crushed ice`, `hot`, `frozen`. |
+| `serve` | all | How it reaches the drinker: `Up`, `Neat`, `On the Rocks`, `Over Crushed Ice`, `Hot`, `Frozen`. |
 | `rank` | top50 | Position in the DI list. |
 | `method` | 36 | Explicit preparation method, when inference would be wrong. See [overrides](#irregular-cocktails-overrides-and-exceptions). |
 | `order` | 7 | `"as-written"` — this recipe's ingredient sequence is sourced or structural and must not be reordered. |
@@ -195,14 +195,14 @@ are supposed to sit on top of. The placement table is in
 | # | Rule | Result |
 |---|---|---|
 | 0 | The recipe carries an explicit `method` | that method |
-| 1 | `serve` is `frozen`, **or** name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
+| 1 | `serve` is `Frozen`, **or** name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
 | 2 | Ingredients contain `layered` | `Layered` |
 | 3 | Ingredients contain a tomato or Clamato base | `Rolled` |
 | 4 | **Not** a crushed-ice drink, and ingredients contain citrus **and** a sweetener — a sour base | `Shaken` |
 | 5 | **Not** a crushed-ice drink, and ingredients contain an emulsifier: egg, cream, purée, espresso | `Shaken` |
 | 6 | Glass is a tall build (`highball`, `collins`, `copper mug`, `pint`, `wine`, `sling`, `zombie`) **and** ingredients contain a mixer (`soda`, `tonic`, `ginger beer/ale`, `cola`, `beer`, `champagne`, `prosecco`, `lemonade`…) | `Built, Stirred` |
 | 7 | Ingredients contain something that must be shaken: citrus juice, egg, cream, purée, espresso | `Shaken` |
-| 8 | Ingredients mention crushed ice, or `serve` is `over crushed ice` | `Built, Stirred` |
+| 8 | Ingredients mention crushed ice, or `serve` is `Over Crushed Ice` | `Built, Stirred` |
 | 9 | Otherwise — spirit and sugar | `Stirred` |
 
 `Built, Not Stirred`, `Built, Swizzled` and `Dropped` are override-only; nothing
@@ -246,8 +246,8 @@ The recipes that opt out, and why, are in
 highball, a muddled Old Fashioned and a hot toddy are all assembled in the
 serving vessel but do not start the same way, so it reads `serve` to decide
 whether the glass
-is preheated (`hot`), packed with crushed ice, filled with cubes, or left alone
-(`up`, `neat`); reads the ingredients to decide whether sugar and bitters are
+is preheated (`Hot`), packed with crushed ice, filled with cubes, or left alone
+(`Up`, `Neat`); reads the ingredients to decide whether sugar and bitters are
 muddled first; and reads a `CARBONATED` list — narrower than the build-mixer
 list — to decide whether stirring costs you bubbles.
 
@@ -260,8 +260,8 @@ Guinness, where the float and the layer are one act.
 
 `serve` also distinguishes **up** from **neat**, which is a temperature
 distinction and not a technique one: up is chilled against ice and served off
-it; neat is never chilled at all. A Sazerac is `up` in a rocks glass — chilled,
-ice discarded, nothing in the glass. `hot` and `frozen` exist because an Irish
+it; neat is never chilled at all. A Sazerac is `Up` in a rocks glass — chilled,
+ice discarded, nothing in the glass. `Hot` and `Frozen` exist because an Irish
 Coffee and a Frozen Margarita are none of the other four.
 
 Where the rules are known to still be wrong is recorded in
@@ -325,9 +325,9 @@ inconsistent data rather than preserved sourcing.
 ### `serve` — set by hand where no rule reaches
 
 `serve` was derived once from glass and method for all 321 recipes, then
-corrected by hand where the derivation cannot know: the Sazerac (`up` despite a
+corrected by hand where the derivation cannot know: the Sazerac (`Up` despite a
 rocks glass); Kir, Snakebite, Boilermaker, Eggnog and Jägerbomb (cold but never
-poured over ice); Ti' Punch and Whisky Mac (`neat` — room temperature by
+poured over ice); Ti' Punch and Whisky Mac (`Neat` — room temperature by
 tradition, and in Martinique comfortably above 80°F).
 
 ### House recipes
