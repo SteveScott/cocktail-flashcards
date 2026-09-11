@@ -185,7 +185,7 @@ half-and-half rather than plain milk or cream.
 
 ## Blended
 
-`serve: "frozen"` is read as Blended before any pattern in the ingredients is.
+`serve: "Frozen"` is read as Blended before any pattern in the ingredients is.
 The two sets are the same six drinks, so the field was already carrying the
 fact — and reading it lets the recipes drop the markers they used to carry only
 to reach the rule. Five did: `— blended with 1 cup ice` on the frozen Piña
@@ -238,12 +238,12 @@ one of them has ice in it.
 
 | Value | Meaning |
 |---|---|
-| `up` | Chilled, served without ice. |
-| `neat` | No ice **and never chilled** — poured and drunk at room temperature. |
-| `on the rocks` | Over ice cubes. |
-| `over crushed ice` | Over crushed or pebble ice: juleps, swizzles, cobblers, tiki. |
-| `hot` | Served hot. Seven drinks. |
-| `frozen` | Blended to a slush. Six drinks. |
+| `Up` | Chilled, served without ice. |
+| `Neat` | No ice **and never chilled** — poured and drunk at room temperature. |
+| `On the Rocks` | Over ice cubes. |
+| `Over Crushed Ice` | Over crushed or pebble ice: juleps, swizzles, cobblers, tiki. |
+| `Hot` | Served hot. Seven drinks. |
+| `Frozen` | Blended to a slush. Six drinks. |
 
 **Up and neat are not the same thing, and the difference is temperature.** Up is
 chilled — stirred or shaken against ice and then served off it. Neat is never
@@ -254,7 +254,7 @@ chilled at all. Two drinks are neat by tradition rather than by glassware:
 | Ti' Punch | No ice in Martinique, and the rhum is better for it — traditionalists drink it above 80°F ([Imbibe](https://imbibemagazine.com/introduction-ti-punch/), [VinePair](https://vinepair.com/cocktail-college/ti-punch/)) |
 | Whisky Mac | Poured and swirled with no ice, to keep the ginger wine from thinning ([Master of Malt](https://www.masterofmalt.com/blog/post/whisky-mac-cocktail-recipe/)) |
 
-`hot` and `frozen` are additions beyond those four: an Irish Coffee and a Frozen
+`Hot` and `Frozen` are additions beyond those four: an Irish Coffee and a Frozen
 Margarita are not up, neat, on the rocks or over crushed ice, and forcing either
 into one of those would be a lie on the card.
 
@@ -269,7 +269,7 @@ Frappé reading as builds now that crushed ice is a serving style rather than an
 ingredient in their lists.
 
 Values a rule cannot reach are set by hand: the Sazerac (chilled, ice discarded,
-so `up` in a rocks glass) and the cold-but-uniced Kir, Snakebite, Boilermaker,
+so `Up` in a rocks glass) and the cold-but-uniced Kir, Snakebite, Boilermaker,
 Eggnog and Jägerbomb.
 
 ## Units written after the ingredient

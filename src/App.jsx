@@ -554,7 +554,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   // The index's two filter dimensions. Both are index-only and deliberately not
   // persisted: a way of looking at the list, not progress worth syncing between
-  // devices. They stack — every active one has to pass — so "☐ Not tried" plus
+  // devices. They stack — every active one has to pass — so "☐ Not Tried" plus
   // "📖 Studied" asks the question neither can alone: what have I learned but
   // never actually drunk. Tried is one three-way choice rather than two toggles
   // because a drink cannot be both, so selecting both could only ever be empty.
@@ -595,7 +595,7 @@ export default function App() {
   // and so it can't be stale-true for the previous user.
   const [linkedUid, setLinkedUid] = useState(null);
   // Web only: whether GDPR applies to this visitor, per Google's TCF data. Gates
-  // the "Privacy & cookie settings" link, which is meaningless outside scope.
+  // the "Privacy & Cookie Settings" link, which is meaningless outside scope.
   const [gdprApplies, setGdprApplies] = useState(false);
   // Web only: has an ad actually rendered on this page? Starts false and flips
   // once AdSense fills a unit — see areAdsServing() in src/ads.js.
@@ -1866,7 +1866,7 @@ export default function App() {
       </p>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1.75rem"}}>
-        {[["Mastered",learned,C.success],["In deck",deck.length,C.info],["Tried",st.tried?.length||0,C.accent]].map(([l,v,c])=>(
+        {[["Mastered",learned,C.success],["In Deck",deck.length,C.info],["Tried",st.tried?.length||0,C.accent]].map(([l,v,c])=>(
           <div key={l} style={frame({borderRadius:12,padding:"0.9rem",textAlign:"center"})}>
             <div style={{fontSize:"1.75rem",fontWeight:800,color:c}}>{v}</div>
             <div style={{fontSize:"0.75rem",color:C.textMuted,marginTop:2}}>{l}</div>
@@ -2099,7 +2099,7 @@ export default function App() {
               <div style={{display:"flex",alignItems:"center",gap:"0.6rem"}}>
                 <button onClick={signOutUser} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:8,padding:"0.4rem 0.7rem",fontSize:"0.75rem",cursor:"pointer"}}>Sign out</button>
               </div>
-              {/* "Delete account" used to sit next to Sign out, one mis-tap away from
+              {/* "Delete Account" used to sit next to Sign out, one mis-tap away from
                   wiping an account. It now lives in the footer — see below. */}
             </>
           ) : (
@@ -2120,7 +2120,7 @@ export default function App() {
                 {FACEBOOK_LOGIN_ENABLED && <button onClick={signInFacebook} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#1877F2":C.surfaceDisabled,color:firebaseEnabled?"#ffffff":C.textFaint,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>Sign in with Facebook</button>}
               </div>
               {/* The password form used to sit here as "Use email instead". It now
-                  lives in the footer as "Admin login" — see below. */}
+                  lives in the footer as "Admin Login" — see below. */}
             </>
           )}
         </div>
@@ -2147,7 +2147,7 @@ export default function App() {
             <div style={{fontSize:"0.8rem",color:C.textMuted}}>
               {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : `Cocktail Flashcards Pro — all ${ALL_CARDS.length} cocktails, no ads`}
             </div>
-            <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:C.textFaint,fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore purchase</button>
+            <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:C.textFaint,fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore Purchase</button>
           </div>
           <button onClick={buyRemoveAdsNative} disabled={purchasing || awaitingIdentity} style={{background:(purchasing||awaitingIdentity)?C.surfaceDisabled:C.success,color:(purchasing||awaitingIdentity)?C.textFaint:C.well,border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:(purchasing||awaitingIdentity)?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
             {purchasing ? "Processing…" : awaitingIdentity ? "Connecting…" : "✨ Go Pro"}
@@ -2285,8 +2285,8 @@ export default function App() {
         )}
       </div>
       <div style={{marginTop:"1.5rem"}}>
-        <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.textFaint,marginBottom:"0.5rem"}}>Colour scheme</div>
-        <div role="group" aria-label="Colour scheme" style={{display:"flex",gap:"0.6rem"}}>
+        <div style={{fontSize:"0.68rem",letterSpacing:"0.16em",textTransform:"uppercase",color:C.textFaint,marginBottom:"0.5rem"}}>Colour Scheme</div>
+        <div role="group" aria-label="Colour Scheme" style={{display:"flex",gap:"0.6rem"}}>
           {["retro","future"].map(t => {
             const sw = THEME_SWATCH[t], on = theme === t;
             return (
@@ -2325,17 +2325,17 @@ export default function App() {
         <a href="/privacy" style={{color:C.textFaint}}>Privacy Policy</a>
         {FEATURES.ads && gdprApplies && (
           <button onClick={openPrivacySettings} style={{background:"transparent",border:"none",color:C.textFaint,fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
-            Privacy &amp; cookie settings
+            Privacy &amp; Cookie Settings
           </button>
         )}
         {FEATURES.nativeAds && privacyOptionsRequired && (
           <button onClick={openAdPrivacyOptions} style={{background:"transparent",border:"none",color:C.textFaint,fontSize:"0.75rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
-            Ad privacy options
+            Ad Privacy Options
           </button>
         )}
       </div>
 
-      {/* Delete account — deliberately down here rather than beside "Sign out",
+      {/* Delete Account — deliberately down here rather than beside "Sign out",
           where a mis-tap could wipe an account that cannot be recovered. Play
           still requires deletion to be reachable in-app, and the policy page
           names this location, so it stays a plain visible control: buried, not
@@ -2344,14 +2344,14 @@ export default function App() {
       {firebaseEnabled && authReady && user && (
         <div style={{textAlign:"center",marginTop:"0.5rem"}}>
           <button onClick={() => { setDeleteConfirm(v => !v); setDeleteErr(""); }} aria-expanded={deleteConfirm} style={{background:"transparent",border:"none",color:C.textGhost,fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
-            {deleteConfirm ? "Cancel" : "Delete account"}
+            {deleteConfirm ? "Cancel" : "Delete Account"}
           </button>
           {deleteConfirm && (
             <div style={{maxWidth:300,margin:"0.6rem auto 0"}}>
               <div style={{fontSize:"0.75rem",color:C.textBody,marginBottom:"0.5rem"}}>
                 Permanently delete your account and synced progress? This cannot be undone
                 {adFree ? ", and your Pro access will be removed from this account" : ""}.
-                {adFree && billingReady ? " You can get it back with Restore purchase." : ""}
+                {adFree && billingReady ? " You can get it back with Restore Purchase." : ""}
               </div>
               <div style={{display:"flex",gap:"0.4rem",alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
                 <button onClick={deleteAccount} disabled={deleteBusy} style={{background:deleteBusy?C.surfaceDisabled:C.dangerDeep,color:deleteBusy?C.textFaint:C.textOnFill,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.78rem",fontWeight:600,cursor:deleteBusy?"not-allowed":"pointer"}}>
@@ -2365,7 +2365,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Admin login — the password sign-in, moved out of the account card so
+      {/* Admin Login — the password sign-in, moved out of the account card so
           Google stays the only visible choice for ordinary users. Still the
           credentials path for Play Console's App access reviewers, whose OAuth
           sign-ins trip Google's security challenges, so the App access notes
@@ -2373,7 +2373,7 @@ export default function App() {
       {firebaseEnabled && authReady && !user && (
         <div style={{textAlign:"center",marginTop:"0.5rem"}}>
           <button onClick={() => { setShowEmailForm(v => !v); setEmailErr(""); }} aria-expanded={showEmailForm} style={{background:"transparent",border:"none",color:C.textGhost,fontSize:"0.72rem",cursor:"pointer",padding:0,textDecoration:"underline"}}>
-            {showEmailForm ? "Cancel" : "Admin login"}
+            {showEmailForm ? "Cancel" : "Admin Login"}
           </button>
           {showEmailForm && (
             <form onSubmit={signInEmail} style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxWidth:260,margin:"0.6rem auto 0"}}>
@@ -2468,7 +2468,7 @@ export default function App() {
           {[
             ["All",         !filtered,                  ()=>{setTriedFilter("all");setStudiedOnly(false);}],
             ["☑ Tried",     triedFilter==="tried",      ()=>setTriedFilter(f=>f==="tried"?"all":"tried")],
-            ["☐ Not tried", triedFilter==="untried",    ()=>setTriedFilter(f=>f==="untried"?"all":"untried")],
+            ["☐ Not Tried", triedFilter==="untried",    ()=>setTriedFilter(f=>f==="untried"?"all":"untried")],
             ["📖 Studied",  studiedOnly,                ()=>setStudiedOnly(v=>!v)],
           ].map(([label,on,onClick])=>(
             <button key={label} onClick={onClick} aria-pressed={on}
@@ -2536,7 +2536,7 @@ export default function App() {
       return (
         <div style={{...page,justifyContent:"center"}}>
           <div style={{fontSize:"3rem",marginBottom:"1rem"}}>{allMastered ? "🏆" : "🃏"}</div>
-          <h2 style={{fontWeight:800,marginBottom:"0.5rem"}}>{allMastered ? "All Mastered!" : "Your deck is empty"}</h2>
+          <h2 style={{fontWeight:800,marginBottom:"0.5rem"}}>{allMastered ? "All Mastered!" : "Your Deck Is Empty"}</h2>
           <p style={{color:C.textMuted,marginBottom:"2rem",textAlign:"center"}}>
             {allMastered ? `You've learned all ${total} cocktails.` : "Add some cocktails from the Index to start studying."}
           </p>
@@ -2697,7 +2697,7 @@ export default function App() {
         <div style={frame({borderRadius:20,padding:"1.5rem",marginBottom:"1.25rem"})}>
           <h2 style={{fontSize:"1.5rem",fontWeight:800,color:C.textStrong,margin:"0 0 0.25rem"}}>{c.name}</h2>
           <div style={{color:C.textMuted,fontSize:"0.8rem",marginBottom:"1rem"}}>
-            {qr ? (gotIt ? "✓ Correct" : "✗ Not quite") : "Uncheck anything that doesn't belong."}
+            {qr ? (gotIt ? "✓ Correct" : "✗ Not Quite") : "Uncheck anything that doesn't belong."}
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:"0.5rem"}}>
             {c.options.map((o,i)=>{
@@ -2812,7 +2812,7 @@ export default function App() {
           <button onClick={()=>startPicked(quizLen)} style={btn(quizKind === "86" ? C.danger : C.accentAlt)}>Retry Quiz</button>
           <button onClick={()=>setMode("menu")} style={btn(C.surfaceQuiet)}>Menu</button>
         </div>
-        <button onClick={()=>setMode("quizlen")} style={{width:"100%",marginTop:"0.75rem",padding:"0.6rem",borderRadius:8,background:"transparent",color:C.textMuted,fontWeight:600,fontSize:"0.85rem",border:"none",cursor:"pointer",textDecoration:"underline"}}>Change quiz length</button>
+        <button onClick={()=>setMode("quizlen")} style={{width:"100%",marginTop:"0.75rem",padding:"0.6rem",borderRadius:8,background:"transparent",color:C.textMuted,fontWeight:600,fontSize:"0.85rem",border:"none",cursor:"pointer",textDecoration:"underline"}}>Change Quiz Length</button>
       </div></div>
     );
   }

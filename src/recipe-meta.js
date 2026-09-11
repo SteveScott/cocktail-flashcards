@@ -86,7 +86,7 @@ export function getMethod(c) {
   // were carrying only to reach this line — markers that trailed into the
   // ingredient label ("Chocolate Syrup — blended with ice") and made the first
   // step tell you to add ice to a blender along with more ice.
-  if (c.serve === "frozen") return "Blended";
+  if (c.serve === "Frozen") return "Blended";
   if (/blend|frozen/.test(name) || /blended with|\(blended\)/.test(ing)) return "Blended";
   if (/layered/.test(ing)) return "Layered";
   if (ROLLED_BASE.test(ing)) return "Rolled";
@@ -94,7 +94,7 @@ export function getMethod(c) {
   // and a Hurricane are shaken and then poured over it. But it does exempt a
   // drink from the two sour rules below, which would otherwise send a Mojito
   // and a Caipirinha — citrus and sugar both — to a tin they never see.
-  const crushed = /crushed ice/.test(ing) || c.serve === "over crushed ice";
+  const crushed = /crushed ice/.test(ing) || c.serve === "Over Crushed Ice";
   // Before the build rule, not after it. A fizz, a collins and a Long Island
   // are all sours that happen to be finished with soda in a tall glass, and
   // testing the glass first called every one of them a build — which left a
@@ -289,9 +289,9 @@ function methodAdjective(method) {
 // it. Up is chilled and iceless; neat is iceless and never chilled at all.
 function serveTarget(c, glass) {
   switch (c.serve) {
-    case "on the rocks":     return `${glass} filled with fresh ice`;
-    case "over crushed ice": return `${glass} packed with crushed ice`;
-    case "up":               return `a chilled ${glass.replace(/^an? /, "")}`;
+    case "On the Rocks":     return `${glass} filled with fresh ice`;
+    case "Over Crushed Ice": return `${glass} packed with crushed ice`;
+    case "Up":               return `a chilled ${glass.replace(/^an? /, "")}`;
     default:                 return glass;
   }
 }
@@ -387,10 +387,10 @@ export function buildSteps(c) {
     // same way: ice is wrong for a hot drink, and the sugar has to be dealt
     // with before the ice goes in.
     const fizzy = CARBONATED.test(c.ingredients);
-    const hot = c.serve === "hot";
-    const crushed = c.serve === "over crushed ice";
-    const neat = c.serve === "neat";
-    const iced = c.serve === "on the rocks" || crushed;
+    const hot = c.serve === "Hot";
+    const crushed = c.serve === "Over Crushed Ice";
+    const neat = c.serve === "Neat";
+    const iced = c.serve === "On the Rocks" || crushed;
     const SWEETENER = /sugar|syrup|bitters|disc of lime/i;
     // Fruit that is pressed rather than poured. A Caipirinha's lime is the
     // drink, not a garnish — every other "Lime wedge" in the deck is unmeasured
