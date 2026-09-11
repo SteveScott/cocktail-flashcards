@@ -1,5 +1,22 @@
 // Release build configuration
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+// ONE version for the whole app, and package.json is where it lives. The web
+// footer reads the same field through vite.config.js, so the string on the Play
+// listing and the string a browser shows are the same string by construction
+// rather than by anyone remembering to change both. Bump it there; see
+// "Version" in the README.
+//
+// versionCode is NOT derived from it and is left below as a literal, because
+// the two answer to different masters: this one is for people and moves when
+// the app changes, versionCode is Play's upload counter and must increase on
+// every single upload, including a re-upload of an unchanged version.
+def appVersionName = new JsonSlurper().parse(rootProject.file('../package.json')).version
+if (!appVersionName) {
+    throw new GradleException("package.json has no version field — that is where the app version lives")
+}
 
 android {
     namespace = "com.bpp.cocktailflashcards"
@@ -8,8 +25,8 @@ android {
         applicationId "com.bpp.cocktailflashcards"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 7
-        versionName "1.2.0"
+        versionCode 8
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
