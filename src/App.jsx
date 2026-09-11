@@ -1,4 +1,4 @@
-/* global __BUILD_TIME__ */ // injected by vite.config.js — see the build stamp in the billing diagnostics
+/* global __APP_VERSION__, __BUILD_TIME__ */ // injected by vite.config.js — the version in the footer, the build stamp in the billing diagnostics
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
@@ -10,6 +10,7 @@ import cocktailData from './cocktails.json';
 import { restoreProgress } from "./admin-restore.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
+import { setLauncherIcon } from './launcher-icon';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
 import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
@@ -21,6 +22,15 @@ import {
   presentPaywall, presentCustomerCenter, isBillingAvailable, isUserCancelled,
   PAYWALL_OUTCOME, getAdConsentState, showAdPrivacyOptions, getBillingDiagnostics,
 } from './monetization';
+
+// The app's version, from package.json by way of vite.config.js. The Play shell
+// stamps the same string into the APK as versionName, so this is the number the
+// store listing shows as well — see "Version" in the README.
+//
+// The fallback is for anything that runs the source without Vite's define pass:
+// there is no version to report there, and a hard-coded number in the footer of
+// an unbuilt tree would be a lie rather than a default.
+const VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 const { top50, master150 } = cocktailData;
 
@@ -1539,13 +1549,16 @@ export default function App() {
   function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
 
   // <html data-theme> drives index.css: the two font stacks, the page chrome and
-  // the wash over the bar photograph. The meta tag moves with it so the Android
+  // the wash over the bar photograph. The other two lines are the pieces of the
+  // scheme that live outside both stylesheets: the meta tag, so the Android
   // status bar and the browser's own chrome do not stay the other scheme's
-  // colour — the one piece of the theme that lives outside both stylesheets.
+  // colour, and the launcher icon, so neither does the home screen on the Play
+  // build (a no-op everywhere else — see src/launcher-icon.js).
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", THEMES[theme].ink);
+      ?.setAttribute("content", THEMES[theme].well);
+    setLauncherIcon(theme);
     try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
   }, [theme]);
 
@@ -2157,6 +2170,7 @@ export default function App() {
             ["stopped at", d.stage],
             ["purchases plugin", d.purchasesPlugin ? "in this build" : "MISSING from this build"],
             ["plugins present", d.pluginList],
+            ["version", VERSION],
             ["build", typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown"],
           ];
           return (
@@ -2373,6 +2387,15 @@ export default function App() {
           )}
         </div>
       )}
+
+      {/* Last line on the screen, and the quietest thing on it. It is here for
+          the one exchange that starts "which version are you on?" — the web and
+          the Play build show the same string, so the answer means the same
+          thing whichever one the person is holding. Selectable, because the
+          point of it is to be read back. */}
+      <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.7rem",color:C.textGhost,userSelect:"text"}}>
+        v{VERSION}
+      </div>
     </div></div>
   );
 

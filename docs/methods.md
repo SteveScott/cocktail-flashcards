@@ -185,6 +185,20 @@ half-and-half rather than plain milk or cream.
 
 ## Blended
 
+`serve: "frozen"` is read as Blended before any pattern in the ingredients is.
+The two sets are the same six drinks, so the field was already carrying the
+fact — and reading it lets the recipes drop the markers they used to carry only
+to reach the rule. Five did: `— blended with 1 cup ice` on the frozen Piña
+Colada, `— blended with ice` on the Bushwacker, `(blended)` on Missionary's
+Downfall and the Frosé, and the Frozen Margarita's `1 cup Ice (blended)`, the
+only place in the book ice was ever an ingredient.
+
+They were not harmless. A trailing `— blended with ice` is not a parenthetical,
+so it stayed in the ingredient label: the Bushwacker's last ingredient read
+"Chocolate Syrup — blended with ice" on the card and in the 86 It lexicon, and
+its first step said to add it "to a blender along with about a cup of crushed
+ice" — ice twice in one sentence.
+
 | Drink | Source |
 |---|---|
 | Sgroppino | Sorbet, vodka and prosecco whisked or immersion-blended to a froth ([Saveur](https://www.saveur.com/article/Recipes/Sgroppino-Cocktail/)) |

@@ -80,6 +80,13 @@ export function getMethod(c) {
   const ing = c.ingredients.toLowerCase();
   const glass = (c.glass || "").toLowerCase();
 
+  // `serve` already carries this: every drink served frozen is one that came
+  // out of a blender, and the two sets are the same six drinks. Reading it here
+  // lets the recipes drop the "— blended with ice" and "(blended)" markers they
+  // were carrying only to reach this line — markers that trailed into the
+  // ingredient label ("Chocolate Syrup — blended with ice") and made the first
+  // step tell you to add ice to a blender along with more ice.
+  if (c.serve === "frozen") return "Blended";
   if (/blend|frozen/.test(name) || /blended with|\(blended\)/.test(ing)) return "Blended";
   if (/layered/.test(ing)) return "Layered";
   if (ROLLED_BASE.test(ing)) return "Rolled";
@@ -342,9 +349,12 @@ export function buildSteps(c) {
   const toppers = strained ? parsed.filter(x => /^(top|splash)$/i.test(x.measure)) : [];
   const held = new Set([...floats, ...rinses, ...toppers]);
   // "Where not specified" is the whole point of the default: a recipe that
-  // states its own sequence keeps it. Berry's Zombie pours lime before
-  // falernum and the IBA's Aperol Spritz leads with the prosecco, and neither
-  // is the default order. A layered drink's sequence IS the recipe.
+  // states its own sequence keeps it. The IBA's Aperol Spritz leads with the
+  // prosecco and the Blue Blazer puts scotch and boiling water in before the
+  // sugar, and neither is the default order. A layered drink's sequence IS the
+  // recipe. Both examples are drinks that actually carry `order: "as-written"`;
+  // the Zombie used to stand here and does not, having been checked and
+  // deliberately left unpinned (docs/methods.md).
   const asWritten = layered || c.order === "as-written";
   const components = asWritten ? parsed.filter(x => !held.has(x))
                                : inBuildOrder(parsed.filter(x => !held.has(x)));
