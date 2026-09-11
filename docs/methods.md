@@ -215,6 +215,7 @@ These needed new method values, and each has its own branch in `buildSteps()`.
 | Jägerbomb | Dropped | A [bomb shot](https://en.wikipedia.org/wiki/Bomb_shot) — the shot glass is dropped into the mixer |
 | Boilermaker | Dropped | The same [bomb shot](https://en.wikipedia.org/wiki/Bomb_shot), whiskey into beer. Its ingredient string used to hedge "alongside or dropped"; the alongside form is a `Chased` drink, so the data now names one |
 | Pickleback | Chased | Nothing is mixed: the whiskey is drunk, then the brine ([Wikipedia](https://en.wikipedia.org/wiki/Pickleback)) |
+| Miami Vice | Blended, Layered | Not one drink but two, each blended on its own and poured one over the other. Both halves are recipes in their own right, so the card lists them rather than restating their ingredients |
 
 ## Checked and deliberately left alone
 
@@ -330,7 +331,10 @@ the sequence is either sourced or structural and the default would break it:
 | Trinidad Sour | Angostura is the base spirit here, not a dash |
 | Blue Blazer | Scotch and boiling water go into the mug before the sugar |
 
-Layered drinks are never reordered — the sequence *is* the recipe.
+Layered drinks are never reordered — the sequence *is* the recipe. The test is
+the word, not the whole method, so a compound like the Miami Vice's
+`Blended, Layered` is covered: its two halves are listed bottom-first, the order
+they go into the glass, exactly as a B-52's three liqueurs are.
 
 Two candidates were checked and **not** pinned. Difford's orders the
 Don-the-Beachcomber tiki drinks in the default order — Three Dots and a Dash as

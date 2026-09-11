@@ -380,3 +380,21 @@ code {
     display: none;
   }
 }
+
+/* The one tappable thing on an ingredient row. It sits at 0.6 so it reads as a
+   hairline mark rather than a control competing with the ingredient beside it,
+   and comes up to full only when it is actually being aimed at. Colours are set
+   inline from the active scheme, so this rule never names one. */
+.ing-find {
+  opacity: 0.6;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+.ing-find:hover,
+.ing-find:focus-visible {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ing-find {
+    transition: none;
+  }
+}
