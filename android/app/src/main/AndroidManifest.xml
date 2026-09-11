@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- android:icon here is the app's icon everywhere that is NOT the launcher
+         — Settings, the share sheet, notifications — and it stays Retro. Those
+         surfaces are the system describing the app rather than the app dressing
+         itself, and none of them is read while the app is closed, which is the
+         whole case for the launcher swap. -->
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -9,20 +14,69 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- The activity carries no launcher entry of its own. The two aliases
+             below are the launcher entries, one per colour scheme, and exactly
+             one of them is ever enabled: LauncherIconPlugin flips them when the
+             scheme changes, which is the only way Android lets an app change
+             its icon. An alias can only point at an enabled activity, so this
+             one is never flipped — it stays enabled and unlisted, and the app
+             keeps a single activity and a single task.
+
+             Still exported, as it was when it carried the LAUNCHER filter
+             itself: an alias is reached through the target, so this is the
+             surface the app has always had rather than any new one.
+
+             The target activity must be declared before the aliases. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
-            android:name=".MainActivity"
+            android:name=".CocktailActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTop"
-            android:exported="true">
+            android:exported="true" />
+
+        <!-- Retro, the default, and still called MainActivity on purpose. A home
+             screen icon records the component it was dragged from, and every
+             install in the wild recorded com.bpp.cocktailflashcards.MainActivity
+             back when that was the activity. Rename this and those icons go
+             away on update — the launcher reads the component as gone. So the
+             name stays with the entry the user sees and the activity behind it
+             took a new one. -->
+        <activity-alias
+            android:name=".MainActivity"
+            android:targetActivity=".CocktailActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/title_activity_main">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-        </activity>
+        </activity-alias>
+
+        <!-- Future. Disabled in the manifest, which makes Retro what a fresh
+             install wears; the app asks for the saved scheme on the first render
+             after that (src/launcher-icon.js), so a reinstall corrects itself
+             the first time the user leaves the app. -->
+        <activity-alias
+            android:name=".FutureLauncher"
+            android:targetActivity=".CocktailActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_future"
+            android:roundIcon="@mipmap/ic_launcher_future_round"
+            android:label="@string/title_activity_main">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity-alias>
 
         <provider
             android:name="androidx.core.content.FileProvider"

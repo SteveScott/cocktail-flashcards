@@ -1,4 +1,4 @@
-/* global __BUILD_TIME__ */ // injected by vite.config.js — see the build stamp in the billing diagnostics
+/* global __APP_VERSION__, __BUILD_TIME__ */ // injected by vite.config.js — the version in the footer, the build stamp in the billing diagnostics
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
@@ -10,8 +10,9 @@ import cocktailData from './cocktails.json';
 import { restoreProgress } from "./admin-restore.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
+import { setLauncherIcon } from './launcher-icon';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
-import { norm, getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible } from './recipe-meta';
+import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
 import AdSlot from './AdSlot.jsx';
@@ -21,6 +22,15 @@ import {
   presentPaywall, presentCustomerCenter, isBillingAvailable, isUserCancelled,
   PAYWALL_OUTCOME, getAdConsentState, showAdPrivacyOptions, getBillingDiagnostics,
 } from './monetization';
+
+// The app's version, from package.json by way of vite.config.js. The Play shell
+// stamps the same string into the APK as versionName, so this is the number the
+// store listing shows as well — see "Version" in the README.
+//
+// The fallback is for anything that runs the source without Vite's define pass:
+// there is no version to report there, and a hard-coded number in the footer of
+// an unbuilt tree would be a lie rather than a default.
+const VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 const { top50, master150 } = cocktailData;
 
@@ -52,6 +62,12 @@ const ALL_CARDS = [...top50, ...master150];
 // not a recipe, and drawing them from 50 drinks would make the free game easier
 // rather than smaller.
 const LEXICON = buildLexicon(ALL_CARDS);
+
+// The index's search, built once over the same corpus: the ingredient
+// vocabulary a query is read against, and every recipe pre-cut into words. It
+// is the whole book for the same reason the lexicon is — the index lists every
+// recipe whatever the pool is, so its search has to reach every recipe too.
+const SEARCH_INDEX = buildSearchIndex(ALL_CARDS);
 
 const DECK_SIZE = 20;
 const MASTERY_SCORE = 6;
@@ -233,13 +249,18 @@ const THEMES = {
     surfaceCard:     "rgba(5, 9, 22, 0.66)",
     surfacePage:     "rgba(5, 9, 22, 0.34)",
 
-    // Orbitron is a much wider face than Playfair, so the title has to come down
-    // a size or it wraps on a phone; the caps and tracking on buttons are the
-    // scheme's own voice rather than decoration, and the glow is what makes a
-    // flat fill read as lit.
+    // The caps this used to set — 0.07em on the title, 0.09em on buttons — were
+    // the scheme's voice, but they were also most of why it was hard to read:
+    // tracked uppercase over a blurred photograph punishes any face. The glow
+    // and the palette carry the voice now; the lettering just has to be read.
+    //
+    // 1.8rem matches Retro, so the title is the same words at the same size in
+    // both schemes and only the face changes. It was 1.25rem to stop Orbitron
+    // wrapping on a phone; Oxanium sets that string within a pixel of Playfair
+    // at this size, so the row it shares with the save indicator still holds.
     ui: {
-      h1: { fontSize: "1.25rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" },
-      btn: { textTransform: "uppercase", letterSpacing: "0.09em", fontSize: "0.92rem" },
+      h1: { fontSize: "1.8rem", fontWeight: 700, letterSpacing: "0.01em" },
+      btn: { letterSpacing: "0.02em", fontSize: "0.92rem" },
       glow: true,
     },
   },
@@ -249,7 +270,10 @@ const THEMES = {
 // THEMES, because each button advertises the scheme it SELECTS and not the one
 // currently running: a picker that restyled itself would only ever show you the
 // answer you already have. The faces are named here too — the Future button is
-// lettered in Orbitron whichever scheme is on, which is the whole point of it.
+// lettered in Oxanium whichever scheme is on, which is the whole point of it.
+// It follows the scheme out of caps too: a button still shouting FUTURE would
+// be advertising lettering the scheme no longer uses. The tracking stays, at
+// the swatch's own 0.02em — it is a specimen, not a line of text to read.
 const THEME_SWATCH = {
   retro: {
     label: "Retro", bg: "#8f5f2a", fg: "#fdf6e8", ring: "#d6b46a",
@@ -258,8 +282,8 @@ const THEME_SWATCH = {
   },
   future: {
     label: "Future", bg: "#2f5cff", fg: "#eafcff", ring: "#22d3ee",
-    font: "'Orbitron', ui-sans-serif, system-ui, sans-serif",
-    tracking: "0.14em", transform: "uppercase", glow: "0 0 20px -4px #2f5cff",
+    font: "'Oxanium', ui-sans-serif, system-ui, sans-serif",
+    tracking: "0.02em", transform: "none", glow: "0 0 20px -4px #2f5cff",
   },
 };
 
@@ -307,7 +331,7 @@ function poolFor(st, pro) {
 }
 
 // Fisher–Yates on a copy. Shared by both quizzes, which each need a fresh
-// random order of the whole pool rather than its first n cocktails.
+// random order rather than the pool's fixed one.
 function shuffled(list) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {
@@ -523,9 +547,14 @@ export default function App() {
   const [kept, setKept] = useState([]);
   const [saved, setSaved] = useState("");
   const [search, setSearch] = useState("");
-  // "all" | "tried" | "untried" — index-only, deliberately not persisted: it is a
-  // way of looking at the list, not progress worth syncing between devices.
-  const [triedFilter, setTriedFilter] = useState("all");
+  // The index's two filter dimensions. Both are index-only and deliberately not
+  // persisted: a way of looking at the list, not progress worth syncing between
+  // devices. They stack — every active one has to pass — so "☐ Not Tried" plus
+  // "📖 Studied" asks the question neither can alone: what have I learned but
+  // never actually drunk. Tried is one three-way choice rather than two toggles
+  // because a drink cannot be both, so selecting both could only ever be empty.
+  const [triedFilter, setTriedFilter] = useState("all"); // "all" | "tried" | "untried"
+  const [studiedOnly, setStudiedOnly] = useState(false);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(!firebaseEnabled);
   // The whitelist answer, stamped with the address it was an answer ABOUT.
@@ -600,7 +629,16 @@ export default function App() {
   // The Progress screen's own busy flag and result line, for the restore a user
   // runs on their own account. Separate from the admin panel's `backupBusy`:
   // both live on this screen now, and one running must not grey out the other.
-  const [selfBusy, setSelfBusy] = useState(false);
+  // "" | "progress" | "tried" — which restore is in flight, so the two buttons
+  // can show their own spinner instead of both greying out together.
+  const [selfBusy, setSelfBusy] = useState("");
+  // Which Backup & Reset accordion is open, and which destructive action is
+  // waiting on its in-app confirm ("" | "progress" | "tried"). Both start
+  // collapsed: the two restores are separate actions on separate presses, so
+  // opening neither by default puts them on an equal footing and keeps a
+  // destructive button off the screen until it is asked for.
+  const [openSection, setOpenSection] = useState("");
+  const [confirming, setConfirming] = useState("");
   const [selfMsg, setSelfMsg] = useState("");
   const [selfErr, setSelfErr] = useState("");
 
@@ -1225,8 +1263,11 @@ export default function App() {
   // ever ADDS. A score already higher here stays, a cocktail learned since the
   // mark was last raised is kept, and pressing it twice does nothing the second
   // time. The autosave effect writes the result up as it would any other change.
-  async function restoreOwnProgress() {
-    setSelfErr(""); setSelfMsg(""); setSelfBusy(true);
+  // Study progress and tried marks restore separately, but they read the same
+  // mark and fail the same three ways, so the fetch and the diagnosis live here
+  // once and each caller only says what to do with the peak it gets.
+  async function withPeak(kind, apply) {
+    setSelfErr(""); setSelfMsg(""); setSelfBusy(kind);
     try {
       const snap = await getDoc(doc(db, "highWater", user.uid));
       // Unioned with the mark already in memory rather than taken raw: this
@@ -1239,22 +1280,7 @@ export default function App() {
       }
       highWaterRef.current = peak;
       setHwPeak(peakCounts(peak));
-
-      // Counted against this render's state, for the message only; the write
-      // below re-merges from `prev` so nothing that lands in between is lost.
-      const merged = mergeStates(st, peak, proRef.current);
-      const learnedBack = (merged.learned?.length || 0) - (st.learned?.length || 0);
-      const triedBack = (merged.tried?.length || 0) - (st.tried?.length || 0);
-      const scoresBack = Object.keys(merged.scores || {})
-        .filter((n) => (Number(merged.scores[n]) || 0) > (Number(st.scores?.[n]) || 0)).length;
-
-      setSt(prev => ({ ...mergeStates(prev, peak, proRef.current), uid: user.uid }));
-      setDi(0); setRevealed(false);
-
-      const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-      setSelfMsg(learnedBack || triedBack || scoresBack
-        ? `Restored to your maximum progress \u2014 ${plural(learnedBack, "cocktail")} mastered, ${plural(triedBack, "tried mark")} and ${plural(scoresBack, "score")} brought back.`
-        : "Your progress is already at its maximum — there was nothing to bring back.");
+      apply(peak);
     } catch (e) {
       console.error("Restore failed", e);
       // Name the fault instead of guessing at it. This read fails three ways
@@ -1262,8 +1288,9 @@ export default function App() {
       // `unauthenticated` is a session whose token expired underneath a UI that
       // still looks signed in, and `permission-denied` means the rules the
       // project is running do not grant an owner `get` on highWater/{uid} —
-      // firestore.rules is deployed by hand (see its header), so it can lag the
-      // code that depends on it. Only the first is helped by checking your
+      // firestore.rules deploys from CI now, but a push that fails at the rules
+      // step still leaves the project running the previous ruleset, so it can
+      // lag the code that depends on it. Only the first is helped by checking your
       // signal, and sending the other two there points at the one part that is
       // working. Same reasoning as startCheckout() below: surface the specific
       // reason so the failure is diagnosable rather than always showing one
@@ -1274,7 +1301,61 @@ export default function App() {
       setSelfErr(denied
         ? `Your account wasn't allowed to read its saved progress (${e.code}). Try signing out and back in — if that doesn't help it's a problem on our end, not yours, and nothing you have done here has lost anything.`
         : `Could not reach your saved progress${e?.code ? ` (${e.code})` : ""}. Check your connection and try again.`);
-    } finally { setSelfBusy(false); }
+    } finally { setSelfBusy(""); }
+  }
+
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+  // Study progress only. mergeStates() unions `tried` along with everything else
+  // — it has to, because the sign-in handshake uses it to reconcile two devices
+  // and neither may un-know a drink the other has had. Here that union is the one
+  // thing we do not want, so `tried` is put back from `prev` afterwards rather
+  // than by giving mergeStates a flag its other two callers would have to care
+  // about. Without this the Tried accordion could never report anything to bring
+  // back, because this button would already have brought it.
+  async function restoreOwnProgress() {
+    return withPeak("progress", (peak) => {
+      // Counted against this render's state, for the message only; the write
+      // below re-merges from `prev` so nothing that lands in between is lost.
+      const merged = mergeStates(st, peak, proRef.current);
+      const learnedBack = (merged.learned?.length || 0) - (st.learned?.length || 0);
+      const scoresBack = Object.keys(merged.scores || {})
+        .filter((n) => (Number(merged.scores[n]) || 0) > (Number(st.scores?.[n]) || 0)).length;
+
+      setSt(prev => ({ ...mergeStates(prev, peak, proRef.current), tried: prev.tried || [], uid: user.uid }));
+      setDi(0); setRevealed(false);
+
+      // Splitting the restore in two means this button can succeed and still
+      // leave the account's tried marks sitting in the mark, unmentioned. Say so
+      // here, or "Restored to your maximum study progress" reads as if the whole
+      // job is done and the second accordion is never found.
+      const have = new Set(st.tried || []);
+      const triedWaiting = (peak.tried || []).filter(n => !have.has(n)).length;
+      const alsoTried = triedWaiting
+        ? ` Your account also has ${plural(triedWaiting, "tried mark")} saved — Restore Tried Marks brings those back.`
+        : "";
+      setSelfMsg((learnedBack || scoresBack
+        ? `Restored to your maximum study progress \u2014 ${plural(learnedBack, "cocktail")} mastered and ${plural(scoresBack, "score")} brought back.`
+        : "Your study progress is already at its maximum — there was nothing to bring back.") + alsoTried);
+    });
+  }
+
+  // Tried marks only: a union, never a replacement, so a drink marked on this
+  // device since the mark was last raised survives a restore that does not yet
+  // know about it.
+  async function restoreOwnTried() {
+    return withPeak("tried", (peak) => {
+      const have = new Set(st.tried || []);
+      const back = (peak.tried || []).filter(n => !have.has(n)).length;
+      setSt(prev => ({
+        ...prev,
+        tried: Array.from(new Set([...(prev.tried || []), ...(peak.tried || [])])),
+        uid: user.uid,
+      }));
+      setSelfMsg(back
+        ? `Restored ${plural(back, "tried mark")}.`
+        : "Your tried marks are already at their maximum — there was nothing to bring back.");
+    });
   }
 
   // Deletes the cloud account and its data, then clears this device. The server
@@ -1463,13 +1544,16 @@ export default function App() {
   function upd(fn) { setSt(p => typeof fn === "function" ? fn(p) : fn); }
 
   // <html data-theme> drives index.css: the two font stacks, the page chrome and
-  // the wash over the bar photograph. The meta tag moves with it so the Android
+  // the wash over the bar photograph. The other two lines are the pieces of the
+  // scheme that live outside both stylesheets: the meta tag, so the Android
   // status bar and the browser's own chrome do not stay the other scheme's
-  // colour — the one piece of the theme that lives outside both stylesheets.
+  // colour, and the launcher icon, so neither does the home screen on the Play
+  // build (a no-op everywhere else — see src/launcher-icon.js).
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", THEMES[theme].ink);
+      ?.setAttribute("content", THEMES[theme].well);
+    setLauncherIcon(theme);
     try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
   }, [theme]);
 
@@ -1527,7 +1611,7 @@ export default function App() {
 
   function next() { setDi(i => (i+1) % deck.length); setRevealed(false); }
   function prev() { setDi(i => (i-1+deck.length) % deck.length); setRevealed(false); }
-  // Build a fresh, fully-shuffled quiz order every time — quizzing always draws
+  // Build a fresh, fully-shuffled quiz order every time — Self Quiz always draws
   // from the whole pool in random sequence (Fisher–Yates), never the fixed pool
   // order. Shuffling before the slice is what makes a short quiz a random sample
   // of the pool rather than its first n cocktails. n = null takes everything.
@@ -1544,16 +1628,23 @@ export default function App() {
     else { setQi(i=>i+1); setQr(false); }
   }
 
-  // 86 It. Same shuffle-then-slice as startQuiz, so a short round is a random
-  // sample of the pool rather than its first n drinks, but each question also
-  // carries the options it will offer. They are generated up front, once: built
-  // during render they would redraw their impostors on every keystroke.
+  // 86 It. Unlike startQuiz it asks about what you have studied: a short round
+  // is a random sample of the drinks with any progress — a score above zero, or
+  // mastered — and only when there are fewer of those than the round is long is
+  // it topped up, from the top of the pool down. The round is shuffled once more
+  // so the top-up isn't all at the end. Each question also carries the options
+  // it will offer. They are generated up front, once: built during render they
+  // would redraw their impostors on every keystroke.
   function start86Quiz(n) {
-    // `pool` already honours master mode; eligibility drops the one drink that
-    // cannot make a question.
-    const eligible = shuffled(pool.filter(eightySixEligible));
-    const chosen = (n ? eligible.slice(0, n) : eligible)
-      .map(c => buildEightySixQuestion(c, LEXICON));
+    // `pool` already honours master mode, and is in rank order; eligibility
+    // drops the one drink that cannot make a question.
+    const eligible = pool.filter(eightySixEligible);
+    const learnedSet = new Set(st.learned || []);
+    const progressed = c => (st.scores[c.name] || 0) > 0 || learnedSet.has(c.name);
+    const studied = shuffled(eligible.filter(progressed));
+    const topUp = eligible.filter(c => !progressed(c));
+    const picked = n ? [...studied, ...topUp].slice(0, n) : eligible;
+    const chosen = shuffled(picked).map(c => buildEightySixQuestion(c, LEXICON));
     setQuizKind("86");
     setQuizLen(n ?? null);
     setQuizPool(chosen);
@@ -1600,46 +1691,38 @@ export default function App() {
       return refillDeck({...p, scores, masterMode:m}, np);
     });
   }
-  // Clearing drops every score, every mastered cocktail and every tried mark,
-  // and the autosave effect then writes that emptied state over the copy held
-  // under the account. "Reset all progress?" was far too easy to wave through,
-  // so the confirm names each thing that goes and counts it.
+  // Clearing and restoring are split in two, because study progress and tried
+  // marks are two different facts. Marking a drink tried says something about the
+  // drinker, not about study — toggleTried touches neither deck nor scores — so
+  // wiping what you have learned has no business un-drinking anything. Clear
+  // Study Progress therefore carries `tried` across untouched, and tried marks
+  // get their own button.
   //
-  // What it no longer claims is that the loss is permanent. For a signed-in
-  // account it is not: highWater/{uid} keeps the maximum progress ever reached
-  // and only ever grows, so clearing cannot lower it and Restore Progress puts
-  // it straight back. Signed out there is no such copy, and the warning says so
-  // — the same button really is irreversible in that case, and a confirm that
-  // overstated the risk for one user would understate it for the other.
-  function reset() {
-    const mastered = st.learned?.length || 0;
-    const triedCount = st.tried?.length || 0;
-    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-    const recoverable = Boolean(firebaseEnabled && user);
-    const warning = [
-      recoverable
-        ? "\u26a0\ufe0f  CLEAR ALL PROGRESS  \u26a0\ufe0f"
-        : "\u26a0\ufe0f  WARNING \u2014 THIS CANNOT BE UNDONE  \u26a0\ufe0f",
-      "",
-      "This erases ALL of your progress: on this device, and the copy saved to your account.",
-      "",
-      `  \u2022 ${plural(mastered, "cocktail")} mastered`,
-      `  \u2022 ${plural(triedCount, "drink")} marked as tried`,
-      "  \u2022 every quiz score you have earned",
-      "  \u2022 your current study deck",
-      "",
-      recoverable
-        ? "Your account keeps your maximum progress \u2014 the best you have ever reached. Restore Progress will bring it back."
-        : "You are not signed in, so there is no saved copy to restore from. None of it can be recovered.",
-      "",
-      "Clear your progress now?",
-    ].join("\n");
-    if (!confirm(warning)) return;
-    setSt(initState(masterOn)); setDi(0); setRevealed(false);
-    setSelfErr(""); setSelfMsg(recoverable
-      ? "Progress cleared. Restore Progress will bring back your maximum progress."
-      : "Progress cleared.");
+  // Neither confirm claims the loss is permanent when it is not. For a signed-in
+  // account highWater/{uid} keeps the maximum ever reached and only ever grows,
+  // so clearing cannot lower it and the matching Restore puts it straight back.
+  // Signed out there is no such copy — the same button really is irreversible
+  // then, and a warning that overstated the risk for one user would understate
+  // it for the other. That is why these are in-app panels rather than confirm():
+  // the copy changes with the situation, and a real Cancel sits beside it.
+  const recoverable = Boolean(firebaseEnabled && user);
+
+  function clearProgress() {
+    setSt(p => ({ ...initState(masterOn), tried: p.tried || [] }));
+    setDi(0); setRevealed(false); setConfirming(""); setSelfErr("");
+    setSelfMsg(recoverable
+      ? "Study progress cleared. Restore Study Progress will bring back your maximum."
+      : "Study progress cleared.");
   }
+
+  function clearTried() {
+    setSt(p => ({ ...p, tried: [] }));
+    setConfirming(""); setSelfErr("");
+    setSelfMsg(recoverable
+      ? "Tried marks cleared. Restore Tried Marks will bring them back."
+      : "Tried marks cleared.");
+  }
+
   // Add or remove a cocktail from the study deck (st.active) by name. Adding a
   // cocktail also gives it a starting score and pulls it out of `learned` so it
   // reappears in study. The deck keeps its chosen size either way: an added card
@@ -1778,26 +1861,115 @@ export default function App() {
             </div>
       )}
 
-      <button
-        onClick={restoreOwnProgress}
-        disabled={!firebaseEnabled || !user || selfBusy}
-        style={{...btn(C.successDeep),width:"100%",marginBottom:"0.5rem",opacity:(!firebaseEnabled||!user||selfBusy)?0.5:1,cursor:(!firebaseEnabled||!user||selfBusy)?"not-allowed":"pointer"}}>
-        {selfBusy ? "Restoring…" : "♻️ Restore Progress"}
-      </button>
-      <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.75rem"}}>
-        {firebaseEnabled && user
-          ? "Brings back your maximum progress. Nothing you have now is removed or lowered — anything already ahead of the saved copy is kept, so this is safe to press at any time."
-          : "Sign in to restore. Your maximum progress is kept with your account, so there is nothing saved to restore from while you are signed out."}
-      </div>
+      {/* Two accordions, one per kind of progress. They are the same shape on
+          purpose: a restore that only ever adds, then a clear guarded by an
+          in-app confirm. Only one opens at a time — the panels are tall, and a
+          destructive button scrolled half off the screen is how the wrong one
+          gets pressed. */}
+      {[
+        {
+          key: "study",
+          title: "📚 Study Progress",
+          sub: `${learned} mastered · ${deck.length} in deck`,
+          restoreLabel: "♻️ Restore Study Progress",
+          restoreNote: firebaseEnabled && user
+            ? "Brings back your maximum scores and mastered cocktails. Nothing you have now is removed or lowered — anything already ahead of the saved copy is kept, so this is safe to press at any time."
+            : "Sign in to restore. Your maximum progress is kept with your account, so there is nothing saved to restore from while you are signed out.",
+          clearLabel: "⚠️ Clear Study Progress",
+          clearNote: <>Erases every score, every cocktail you have mastered and your
+            current study deck — on this device and in your account. Your tried
+            marks are kept.{" "}
+            {recoverable
+              ? "Your maximum is kept, so Restore Study Progress can bring this back."
+              : "You are signed out, so there is no saved copy and this cannot be undone."}</>,
+          confirmTitle: recoverable ? "Clear all study progress?" : "⚠️ This cannot be undone",
+          confirmLines: [
+            `${plural(learned, "cocktail")} mastered`,
+            "every quiz score you have earned",
+            "your current study deck",
+          ],
+          confirmTail: recoverable
+            ? "Your account keeps your maximum progress — the best you have ever reached. Restore Study Progress will bring it back."
+            : "You are not signed in, so there is no saved copy to restore from. None of it can be recovered.",
+        },
+        {
+          key: "tried",
+          title: "🥃 Tried Marks",
+          sub: plural(st.tried?.length || 0, "drink"),
+          restoreLabel: "♻️ Restore Tried Marks",
+          restoreNote: firebaseEnabled && user
+            ? "Brings back every drink your account has ever had marked as tried. Marks are added, never removed — anything you have marked since is kept."
+            : "Sign in to restore. Your tried marks are kept with your account, so there is nothing saved to restore from while you are signed out.",
+          clearLabel: "⚠️ Clear Tried Marks",
+          clearNote: <>Unmarks every drink you have marked as tried. Scores, mastered
+            cocktails and your study deck are all kept.{" "}
+            {recoverable
+              ? "Your maximum is kept, so Restore Tried Marks can bring these back."
+              : "You are signed out, so there is no saved copy and this cannot be undone."}</>,
+          confirmTitle: recoverable ? "Clear all tried marks?" : "⚠️ This cannot be undone",
+          confirmLines: [`${plural(st.tried?.length || 0, "drink")} marked as tried`],
+          confirmTail: recoverable
+            ? "Your account keeps every tried mark you have ever had. Restore Tried Marks will bring them back."
+            : "You are not signed in, so there is no saved copy to restore from. None of it can be recovered.",
+        },
+      ].map(sec => {
+        const open = openSection === sec.key;
+        const busy = selfBusy === sec.key;
+        const restoreOff = !firebaseEnabled || !user || Boolean(selfBusy);
+        return (
+        <div key={sec.key} style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"0.75rem"})}>
+          <button
+            onClick={()=>{setOpenSection(open ? "" : sec.key); setConfirming("");}}
+            aria-expanded={open}
+            style={{display:"flex",width:"100%",justifyContent:"space-between",alignItems:"center",gap:"0.5rem",background:"transparent",border:"none",padding:0,cursor:"pointer",textAlign:"left"}}>
+            <span style={{color:C.textStrong,fontWeight:800,fontSize:"0.95rem"}}>{sec.title}</span>
+            <span style={{color:C.textFaint,fontSize:"0.75rem",whiteSpace:"nowrap"}}>{sec.sub} {open ? "▲" : "▼"}</span>
+          </button>
 
-      <button onClick={reset} style={{...btn(C.danger),width:"100%",marginBottom:"0.5rem"}}>⚠️ Clear Progress</button>
-      <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.25rem"}}>
-        Erases every score, every cocktail you have mastered and every drink you
-        have marked as tried — on this device and in your account.{" "}
-        {firebaseEnabled && user
-          ? "Your maximum progress is kept, so Restore Progress can bring this back."
-          : "You are signed out, so there is no saved copy and this cannot be undone."}
-      </div>
+          {open && (
+            <div style={{marginTop:"0.9rem"}}>
+              <button
+                onClick={sec.key === "study" ? restoreOwnProgress : restoreOwnTried}
+                disabled={restoreOff}
+                style={{...btn(C.successDeep),width:"100%",marginBottom:"0.5rem",opacity:restoreOff?0.5:1,cursor:restoreOff?"not-allowed":"pointer"}}>
+                {busy ? "Restoring…" : sec.restoreLabel}
+              </button>
+              <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55,marginBottom:"1.25rem"}}>
+                {sec.restoreNote}
+              </div>
+
+              {confirming === sec.key ? (
+                <div role="alertdialog" aria-label={sec.confirmTitle} style={{borderRadius:12,padding:"0.9rem 1rem",border:`1px solid ${C.dangerTextEdge}`,background:C.well}}>
+                  <div style={{color:C.error,fontWeight:800,fontSize:"0.85rem",marginBottom:"0.5rem"}}>{sec.confirmTitle}</div>
+                  <div style={{fontSize:"0.75rem",color:C.textBody,lineHeight:1.6,marginBottom:"0.5rem"}}>
+                    This erases, on this device and in your account:
+                    <div style={{margin:"0.4rem 0"}}>
+                      {sec.confirmLines.map(l => <div key={l}>• {l}</div>)}
+                    </div>
+                    {sec.confirmTail}
+                  </div>
+                  <div style={{display:"flex",gap:"0.5rem",marginTop:"0.75rem"}}>
+                    <button onClick={()=>setConfirming("")} style={{flex:1,padding:"0.6rem",borderRadius:8,background:"transparent",color:C.textMuted,fontWeight:700,fontSize:"0.8rem",border:`1px solid ${C.borderStrong}`,cursor:"pointer"}}>
+                      Cancel
+                    </button>
+                    <button onClick={sec.key === "study" ? clearProgress : clearTried} style={{flex:1,padding:"0.6rem",borderRadius:8,background:C.danger,color:C.textOnFill,fontWeight:700,fontSize:"0.8rem",border:"none",cursor:"pointer"}}>
+                      Yes, clear
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button onClick={()=>{setSelfMsg("");setSelfErr("");setConfirming(sec.key);}} style={{...btn(C.danger),width:"100%",marginBottom:"0.5rem"}}>{sec.clearLabel}</button>
+                  <div style={{fontSize:"0.75rem",color:C.textFaint,lineHeight:1.55}}>{sec.clearNote}</div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        );
+      })}
+
+      <div style={{height:"1rem"}} />
 
       {selfMsg && <div role="status" style={frame({borderRadius:12,padding:"0.75rem 1rem",border:`1px solid ${C.successEdge}`,fontSize:"0.78rem",color:C.textBody,lineHeight:1.55,marginBottom:"1.25rem"})}>{selfMsg}</div>}
       {selfErr && <div role="alert" style={frame({borderRadius:12,padding:"0.75rem 1rem",border:`1px solid ${C.dangerTextEdge}`,fontSize:"0.78rem",color:C.error,lineHeight:1.55,marginBottom:"1.25rem"})}>{selfErr}</div>}
@@ -1960,6 +2132,7 @@ export default function App() {
             ["stopped at", d.stage],
             ["purchases plugin", d.purchasesPlugin ? "in this build" : "MISSING from this build"],
             ["plugins present", d.pluginList],
+            ["version", VERSION],
             ["build", typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown"],
           ];
           return (
@@ -2176,38 +2349,92 @@ export default function App() {
           )}
         </div>
       )}
+
+      {/* Last line on the screen, and the quietest thing on it. It is here for
+          the one exchange that starts "which version are you on?" — the web and
+          the Play build show the same string, so the answer means the same
+          thing whichever one the person is holding. Selectable, because the
+          point of it is to be read back. */}
+      <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.7rem",color:C.textGhost,userSelect:"text"}}>
+        v{VERSION}
+      </div>
     </div></div>
   );
 
   if (mode === "index") {
-    const q = norm(search.trim());
-    // Match on both the cocktail name and its ingredient list, accent-insensitively,
-    // so "pina" finds "Piña Colada" and "rum" finds every drink containing rum.
-    const matches = q ? ALL_CARDS.filter(c => norm(c.name).includes(q) || norm(c.ingredients).includes(q)) : ALL_CARDS;
+    // Names and ingredients, accent-insensitively, so "pina" finds "Piña Colada"
+    // and "rum" finds every drink containing rum. A query naming more than one
+    // thing asks for all of them: "rum, lime" is the drinks with both, and
+    // "lime juice" is one ingredient rather than two loose words, so it does not
+    // hand back the lemon ones. See searchCards in recipe-meta.js.
+    const matches = searchCards(SEARCH_INDEX, search);
+    // What the query was read as, shown only when it came apart into more than
+    // one ingredient — that is the case where the results need explaining, and
+    // echoing a single term back at someone who just typed it does not.
+    const terms = parseSearchQuery(search, SEARCH_INDEX);
     const triedSet = new Set(st.tried || []);
-    const results = triedFilter === "all"
-      ? matches
-      : matches.filter(c => triedSet.has(c.name) === (triedFilter === "tried"));
+    // "Studied" is progress made, not deck membership — the row's own
+    // "✓ In Study" button already says what is in the deck. A cocktail counts
+    // once its score has actually gone up: still sitting at 0 is not studied.
+    // Deliberately not scoped to the pool. A cocktail mastered with the library
+    // on stays studied after it is switched back off, which is the same call
+    // `learned` itself makes (see toggleMaster) — switching the library off is a
+    // change of scope, not a reset, and here there is no lock on the row to
+    // explain a disappearance. `learned` is unioned in as cheap insurance: a
+    // mastered score is >= MASTERY_SCORE so it is normally redundant, but
+    // mergeProgress unions `learned` and maxes `scores` separately, so a copy
+    // arriving with one and not the other still reads as studied.
+    const learnedSet = new Set(st.learned || []);
+    const studied = c => (st.scores?.[c.name] || 0) > 0 || learnedSet.has(c.name);
+    // Every active dimension has to pass. Written as guards rather than one
+    // boolean so a third dimension is a line, not a rewrite.
+    const filtered = triedFilter !== "all" || studiedOnly;
+    const results = matches.filter(c => {
+      if (triedFilter === "tried" && !triedSet.has(c.name)) return false;
+      if (triedFilter === "untried" && triedSet.has(c.name)) return false;
+      if (studiedOnly && !studied(c)) return false;
+      return true;
+    });
+    // One tally per active dimension, so a stacked filter explains both numbers.
+    const tallies = [
+      ...(triedFilter !== "all" ? [`${triedSet.size} tried`] : []),
+      ...(studiedOnly ? [`${ALL_CARDS.filter(studied).length} studied`] : []),
+    ];
     return (
       <div style={page}><div style={wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
           <button onClick={()=>setMode("menu")} style={{background:"transparent",border:"none",color:C.textMuted,cursor:"pointer"}}>← Menu</button>
-          <span style={{color:C.textMuted,fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{triedFilter !== "all" ? ` · ${triedSet.size} tried` : ""}</span>
+          <span style={{color:C.textMuted,fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{tallies.length ? ` · ${tallies.join(" · ")}` : ""}</span>
         </div>
         <input
           autoFocus
           value={search}
           onChange={e=>setSearch(e.target.value)}
-          placeholder="Search name or ingredient…"
+          placeholder="Name or ingredients — try “rum, lime”"
           style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:`1px solid ${C.border}`,color:C.textStrong,fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
-        <div style={{display:"flex",gap:"0.5rem",marginBottom:isPro?"1.25rem":"0.6rem"}}>
-          {[["all","All"],["tried","☑ Tried"],["untried","☐ Not Tried"]].map(([k,label])=>(
-            <button key={k} onClick={()=>setTriedFilter(k)} aria-pressed={triedFilter===k}
-              style={{flex:1,borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
-                border: triedFilter===k ? "none" : `1px solid ${C.borderStrong}`,
-                background: triedFilter===k ? C.accentAlt : "transparent",
-                color: triedFilter===k ? C.textOnFill : C.textMuted}}>{label}</button>
+        {terms.length > 1 && (
+          <div style={{fontSize:"0.72rem",color:C.textFaint,marginBottom:"0.6rem"}}>
+            Drinks matching {terms.map(t => t.words.join(" ")).join(" + ")}
+          </div>
+        )}
+        {/* Four of these do not fit one row at this column's 480px cap, let
+            alone on a 360px phone, so they are a fixed 2x2 rather than a wrap
+            that would re-break as a label or font changed. Each one toggles:
+            tapping the lit chip clears it, and "All" clears every dimension at
+            once, which is the only way back from a stack in one tap. */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:"0.5rem",marginBottom:isPro?"1.25rem":"0.6rem"}}>
+          {[
+            ["All",         !filtered,                  ()=>{setTriedFilter("all");setStudiedOnly(false);}],
+            ["☑ Tried",     triedFilter==="tried",      ()=>setTriedFilter(f=>f==="tried"?"all":"tried")],
+            ["☐ Not Tried", triedFilter==="untried",    ()=>setTriedFilter(f=>f==="untried"?"all":"untried")],
+            ["📖 Studied",  studiedOnly,                ()=>setStudiedOnly(v=>!v)],
+          ].map(([label,on,onClick])=>(
+            <button key={label} onClick={onClick} aria-pressed={on}
+              style={{borderRadius:10,padding:"0.5rem",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
+                border: on ? "none" : `1px solid ${C.borderStrong}`,
+                background: on ? C.accentAlt : "transparent",
+                color: on ? C.textOnFill : C.textMuted}}>{label}</button>
           ))}
         </div>
         {/* The Index is the whole book either way — the lock says which of these
@@ -2220,7 +2447,7 @@ export default function App() {
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
           {results.length === 0 && (
-            <div style={{color:C.textFaint,textAlign:"center",padding:"2rem 0"}}>{triedFilter === "tried" ? "No tried cocktails match." : triedFilter === "untried" ? "Nothing left untried here." : "No cocktails found."}</div>
+            <div style={{color:C.textFaint,textAlign:"center",padding:"2rem 0"}}>{!filtered ? "No cocktails found." : studiedOnly && triedFilter === "all" ? "Nothing studied here yet." : !studiedOnly && triedFilter === "tried" ? "No tried cocktails match." : !studiedOnly && triedFilter === "untried" ? "Nothing left untried here." : "Nothing matches both filters."}</div>
           )}
           {results.map(c=>{
             // Outside the pool the cocktail is readable but not studiable: Pro
@@ -2383,7 +2610,7 @@ export default function App() {
           <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
           <p style={{color:C.textMuted,fontSize:"0.85rem",margin:0}}>
             {quizKind === "86"
-              ? "86 It — drawn at random from all " + total + "."
+              ? "86 It — drawn from the cocktails you've studied, topped up with the most popular."
               : "Cocktails are drawn at random from all " + total + "."}
           </p>
         </div>

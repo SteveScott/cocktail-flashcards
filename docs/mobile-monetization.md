@@ -92,7 +92,8 @@ calling them.
 `capacitor.config.json` uses `com.bpp.cocktailflashcards` — matching the existing
 Play Console listing. (It was originally `com.cocktailflashcards.app`; the rename
 touched `capacitor.config.json`, `android/app/build.gradle`, `strings.xml`, and
-the `MainActivity.java` package directory.)
+the activity's package directory — `CocktailActivity.java` now, then
+`MainActivity.java`.)
 
 **If a Play Console listing already exists under a different package name,
 reconcile that now** — Play treats a different package as an entirely different

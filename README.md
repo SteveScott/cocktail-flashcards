@@ -83,6 +83,7 @@ Five ideas explain most of the design:
 | `src/platform.js` | Runtime detection of web vs Play Store shell; the `FEATURES` switches. |
 | `src/firebase.js` | Firebase init from `VITE_FIREBASE_*`; ad-whitelist helpers. |
 | `src/native-auth.js` | Google sign-in through Android's account picker for the Capacitor build. |
+| `src/launcher-icon.js` | Asks the Play shell to swap its home screen icon when the colour scheme changes. |
 | `src/ads.js`, `src/AdSlot.jsx` | Web display ads (AdSense): tag loading, "is an ad actually on screen", space reservation. |
 | `src/monetization.js` | Play build: AdMob banner, UMP consent, RevenueCat / Play Billing. |
 | `src/consent.js` | Reopening Google's GDPR message; whether GDPR applies to this visitor. |
@@ -96,7 +97,7 @@ Five ideas explain most of the design:
 | `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
 | `firestore.rules` | The access-control model. Read this before touching the `users` document. |
 | `public/` | Static assets, `manifest.json`, `pwa-sw.js`, `privacy.html`, `robots.txt`, `ads.txt`. |
-| `android/` | The Capacitor Android project. Nothing in it is served; it is the store shell. |
+| `android/` | The Capacitor Android project. Nothing in it is served; it is the store shell. The only code in it is `CocktailActivity` and `LauncherIconPlugin`. |
 | `docs/` | Deep dives on specific subsystems — listed at the end. |
 | `ignore/` | Local scratch, gitignored. Keys and artwork sources live here and never in git. |
 
@@ -194,7 +195,7 @@ are supposed to sit on top of. The placement table is in
 | # | Rule | Result |
 |---|---|---|
 | 0 | The recipe carries an explicit `method` | that method |
-| 1 | Name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
+| 1 | `serve` is `frozen`, **or** name contains *blend* or *frozen*, **or** ingredients say `blended with` / `(blended)` | `Blended` |
 | 2 | Ingredients contain `layered` | `Layered` |
 | 3 | Ingredients contain a tomato or Clamato base | `Rolled` |
 | 4 | **Not** a crushed-ice drink, and ingredients contain citrus **and** a sweetener — a sour base | `Shaken` |
@@ -345,10 +346,10 @@ values:
 | `mode` | Screen |
 |---|---|
 | `menu` | Stats, sign-in, mode buttons, the "Add All Cards" switch (the paywall), Pro and admin panels. |
-| `index` | Search across all 322 (accent-insensitive: "pina" finds Piña Colada), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
+| `index` | Search across all 322 by name or ingredient (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
 | `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
-| `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Both draw a fresh shuffle of the whole pool. |
+| `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Self Quiz draws from the whole pool; 86 It from the drinks you've studied, topped up from the top of the pool. |
 | `results` | Score, missed list, fireworks at 100%. Retry repeats the same quiz and length. |
 
 ### Study
@@ -378,10 +379,20 @@ values:
 
 ### Quiz
 
-Every quiz is a fresh Fisher–Yates shuffle of the **whole pool**, not the deck,
-sliced to the chosen length — shuffle before slice is what makes a short quiz a
-random sample. Since the pool honours the entitlement, a free player is quizzed
-on the top 50 in both quizzes.
+**Self Quiz** is a fresh Fisher–Yates shuffle of the **whole pool**, not the
+deck, sliced to the chosen length — shuffle before slice is what makes a short
+quiz a random sample.
+
+**86 It** asks about what you have studied. A short round is a random sample of
+the pool's drinks with any progress — a score above zero, or in `learned`
+(`tried` doesn't count: drinking one isn't studying it). Only when there are
+fewer of those than the round is long is it topped up, in rank order from the
+top of the pool, so a player who has studied nothing gets the top 10 on every
+10-question round. The round is shuffled again so the top-up isn't all at the
+end. "All Cocktails" is still the whole pool.
+
+Since the pool honours the entitlement, a free player is quizzed on the top 50
+in both quizzes, and progress on paid drinks is ignored while the library is off.
 
 **Self Quiz** grading is self-reported and does not touch study scores. **86 It**
 grades itself: right only when every real ingredient survives and every impostor
@@ -432,9 +443,108 @@ one grid point the grid cannot split.
 
 A drink can be marked tried from the card or from the index. This is a fact
 about the drinker, independent of study: it touches neither deck nor scores,
-and a drink can be tried without ever having been studied. The index filter
-(All / Tried / Not tried) is component state, not persisted — a way of looking
-at the list, not progress.
+and a drink can be tried without ever having been studied. The index filters
+are component state, not persisted — a way of looking at the list, not progress.
+
+### The index search
+
+The search box reads the query against the **ingredient vocabulary** — the
+lexicon of every ingredient name the book uses, the same one the 86 It quiz
+draws impostors from — rather than against the recipe text. That is what lets it
+tell "one ingredient of two words" from "two ingredients":
+
+| Typed | Read as | Finds |
+|---|---|---|
+| `rum, lime` / `rum lime` | rum + lime | drinks with **both** |
+| `lime juice` | one ingredient | the lime ones, not the lemon ones |
+| `juice` | no such ingredient on its own | every juice |
+| `simple syrup` | one ingredient | simple and rich simple, not honey-ginger |
+| `syrup` | no such ingredient on its own | all twelve syrups |
+| `jamaican rum` | one ingredient | the Jamaican rums, not all eighteen |
+
+Three rules produce all of it. A run of words that the vocabulary knows as one
+ingredient **stays together**; anything else is separate terms, and every term
+has to land somewhere on the card (name or ingredient), which is what makes a
+multi-ingredient query an AND. A term matches **whole words in one ingredient**,
+consecutively — the difference between lime juice and lemon juice is that only
+one recipe has those two words next to each other. And the **last word typed**
+matches as a prefix, so the list narrows keystroke by keystroke, *unless* the
+vocabulary already knows that word in full: "gin" is a finished word, so it is
+Gin, Sloe Gin and Old Tom Gin, and never Ginger Beer.
+
+Names are looser than ingredients on purpose: a name matches as far as it is
+typed, whatever the vocabulary thinks, because nobody finishes "Piña Colada"
+before expecting to see it and "cola" being an ingredient is no reason to hide
+the drink. The one thing lost against the old substring search is the fragment
+that starts mid-word — "tini" no longer finds a Martini — which is the same rule
+that stopped "gin" from returning the Virgin Mary.
+
+When a query does come apart into more than one term, the box says so
+underneath ("Drinks matching rum + lime"), because otherwise an AND that returns
+three drinks looks like a bug rather than an answer.
+
+`tests/search.test.mjs` pins all of it, including two corpus-wide properties:
+every ingredient name finds every recipe carrying it, and every drink is
+reachable from every prefix of its own name.
+
+### The index filters
+
+Two independent dimensions that **stack**: every active one has to pass.
+
+- **Tried** — a three-way choice: All / ☑ Tried / ☐ Not tried. One choice rather
+  than two toggles because a drink cannot be both, so selecting both could only
+  ever be empty.
+- **📖 Studied** — an independent toggle, AND-ed on top of whatever Tried is set
+  to.
+
+Stacking is the point: ☐ Not tried + 📖 Studied asks what neither can alone —
+what have I learned but never actually drunk. Every chip toggles off when tapped
+lit, and **All** clears both dimensions in one tap.
+
+**Studied** is the one filter reading progress rather than the tried marks: a
+cocktail counts once its score has actually gone up, or it is in `learned`. A
+score that has never left 0 is not studied — that is the intended reading, not a
+gap. This is progress *made*, not deck membership; the row's own "✓ In Study"
+button already says what is in the deck.
+
+It is deliberately **not** scoped to the study pool. A cocktail mastered with the
+full library on stays studied after the library is switched back off — the same
+call `learned` itself makes in `toggleMaster`, where switching the library off is
+a change of scope rather than a reset. (Pro is a lifetime purchase, so there is
+no path back to the free tier that could strand out-of-pool progress behind a 🔒
+row.) `learned` is unioned in as cheap insurance: a mastered score is already
+`>= MASTERY_SCORE`, so it is normally redundant, but `mergeProgress` unions
+`learned` and maxes `scores` as separate steps, so a copy arriving with one and
+not the other still reads correctly.
+
+### Backup & Reset: two kinds of progress, two of everything
+
+Because being tried is a fact about the drinker rather than about study, the
+Backup & Reset screen keeps the two apart. It is two accordions of the same
+shape — **📚 Study Progress** and **🥃 Tried Marks** — each with its own restore
+and its own clear. Only one opens at a time: the panels are tall, and a
+destructive button scrolled half off the screen is how the wrong one gets
+pressed.
+
+- **Clear Study Progress** drops every score, every mastered cocktail and the
+  deck, and carries `tried` across untouched.
+- **Clear Tried Marks** unmarks every drink and leaves scores, mastery and the
+  deck alone.
+
+Both clears confirm in-app rather than through `confirm()`, with a real Cancel
+beside the destructive button. The copy changes with the situation: for a
+signed-in account `highWater/{uid}` only ever grows, so a clear cannot lower it
+and the matching restore puts it straight back; signed out there is no such copy
+and the panel says so. A warning that overstated the risk for one user would
+understate it for the other.
+
+The restore split has one non-obvious consequence. `mergeStates()` unions
+`tried` along with everything else — it must, because the sign-in handshake uses
+it to reconcile two devices and neither may un-know a drink the other has had.
+Restore Study Progress therefore puts `tried` back from `prev` after the merge,
+rather than giving `mergeStates()` a flag its other callers would have to care
+about. Without that, Restore Tried Marks could never report anything to bring
+back, because the study restore would already have brought it.
 
 ## Storage and sync
 
@@ -538,7 +648,7 @@ Each of these fails silently, and none shows up in a build or a lint:
   client SDK refuses to delete a session more than a few minutes old. Firestore
   documents are deleted *before* the auth user, so a failure cannot orphan data
   under a uid that can never sign in again. Local progress is cleared too.
-- **Not stored anywhere:** the index's tried filter, quiz state, the current
+- **Not stored anywhere:** the index's filter chips, quiz state, the current
   screen, the card index. All of it is component state.
 
 ## Platforms: web, PWA, Play Store
@@ -579,6 +689,56 @@ so the plugin picks the account and nothing else), then exchanges the Google ID
 token for a Firebase session with `signInWithCredential`. Downstream — auth
 state, the Firestore subscription, the whitelist check — is identical on both
 platforms. See [docs/mobile-google-signin.md](docs/mobile-google-signin.md).
+
+### The launcher icon follows the scheme
+
+On the Play build the home screen icon is drawn in the scheme the app is
+wearing: brass on walnut for Retro, cyan on near-black for Future. It is the one
+surface the scheme reaches that is visible with the app shut, and the only one
+where the choice is on display rather than in use.
+
+Android does not let an app change its icon. What it allows is several launcher
+entries carrying different icons with exactly one of them enabled, so the
+feature is spread over four files:
+
+- `scripts/icons.mjs` inks the one drawing in each scheme's palette and writes a
+  full launcher set per scheme — `ic_launcher*` for Retro, `ic_launcher_future*`
+  for Future — along with the adaptive-icon XML and the background colours.
+- `android/app/src/main/AndroidManifest.xml` declares an `<activity-alias>` per
+  scheme, all pointing at `CocktailActivity`, Retro enabled and the rest not.
+- `LauncherIconPlugin.java` flips them through `PackageManager`, enabling the new
+  entry before disabling the old one: a package with no enabled LAUNCHER
+  component is, to a launcher, an uninstalled one, and a redraw landing in that
+  window can take the icon away for good.
+- `src/launcher-icon.js` asks for the change from the theme effect in `App.jsx`.
+  It is a no-op on the web and a caught rejection on any shell predating the
+  plugin — the shell loads the *deployed* site, so this code runs inside APKs
+  that have never heard of a `LauncherIcon` plugin.
+
+Two consequences of the mechanism are worth knowing before touching it.
+
+**The activity is not called `MainActivity` any more.** That name now belongs to
+the Retro alias, and deliberately: a home screen icon records the component it
+was dragged from, and every install in the wild recorded
+`com.bpp.cocktailflashcards.MainActivity`. Had both aliases taken new names,
+every one of those icons would have gone at the next update. The activity behind
+them is `CocktailActivity`.
+
+**The swap waits for `onPause`.** Changing a component's enabled state while its
+own task is in front is the case Android handles worst. `DONT_KILL_APP` keeps
+the process alive, but the system's own bookkeeping can still drop the task from
+Recents once the component it was launched from is disabled, and this app is a
+WebView on a live site, so a restart costs the user their place. Deferring to the
+moment they leave keeps all of that out of the middle of a session — and it is
+the last moment before the launcher is on screen, which is the only place the
+icon can be seen at all.
+
+Adding a third scheme is four edits, three of them outside `src/App.jsx`: a
+palette in `scripts/icons.mjs`, an alias in the manifest, an entry in the
+`Scheme` enum in the plugin. Miss one and the scheme has either no icon to
+select or no way to select it. Everything that is *not* a launcher entry — the
+favicon, the splash screen, the icon Settings and the share sheet show, both
+store uploads — stays Retro.
 
 ## Monetization, entitlements and consent
 
@@ -692,6 +852,46 @@ static pages survive the catch-all — it must never gain `force = true`. The
 plugin clears `dist` itself with a retry, because on Windows Dropbox and Defender
 hold handles on fresh files; `emptyOutDir` stays `false`.
 
+### Version
+
+One string — `version` in `package.json`, currently **1.3.0** — and everything
+that shows a version reads that one field:
+
+- `vite.config.js` defines `__APP_VERSION__` from it; `src/App.jsx` prints it at
+  the foot of the menu screen and lists it in the billing diagnostics.
+- `android/app/build.gradle` parses the same field into `versionName`, which is
+  what the Play listing and Android's app info show.
+
+So a release is one edit — `npm version 1.3.1 --no-git-tag-version`, or just
+type it into `package.json` — and the web, the app and the store move together.
+Nothing else in the repo holds a version to keep in step, which is the point.
+
+**`versionCode` is the exception**, and stays a literal in
+`android/app/build.gradle`. It is not a version but Play's upload counter: it
+must increase on *every* upload, including a re-upload of an unchanged
+`versionName`, and it can never go down. Increment it by hand when you upload an
+AAB, and leave it alone otherwise — a bump that never ships just burns a number.
+The pair currently reads `versionCode 8` / `1.3.0`.
+
+What the number means depends on which build is showing it, because the Play
+shell loads the deployed site:
+
+- On the **web**, the footer is the version of the bundle in front of you.
+- In the **Play app**, the footer is the version of the *site* the shell has
+  loaded, not of the APK around it. They are the same string on the day of a
+  release, and the site runs ahead whenever a deploy lands before a store
+  upload. The APK's own `versionName` is what the store listing shows.
+
+That gap is the architecture rather than an oversight — a web deploy reaches
+every installed client at once, and only a store upload changes the shell — and
+the useful half is the one in the footer: it names the code actually running.
+
+Two things nearby are deliberately *not* this version. The build stamp beside it
+in the billing diagnostics is an ISO timestamp regenerated on every build: it
+identifies a **deploy**, where the version identifies a **release**. And the
+service worker's `cocktail-cache-v1` tracks neither — it is network-first, so
+that name only has to change if the cache format does.
+
 ## Security model
 
 - **`firestore.rules` is the boundary.** Clients ship all the monetization code
@@ -759,11 +959,17 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 
   The static pages (`public/privacy.html`, the SEO pages in
   `scripts/seo-pages.mjs`) are Retro only, by hand: they are served without the
-  bundle and have no picker to offer.
-- **Icons.** `npm run icons` is a regeneration step, not a build step — the 35
-  files it writes are committed. Edit the geometry at the top of
+  bundle and have no picker to offer. The Play build has a third place to keep in
+  step — the launcher icon is drawn per scheme, and a new scheme needs a palette,
+  an alias and a plugin entry before anything can select it. See
+  [The launcher icon follows the scheme](#the-launcher-icon-follows-the-scheme).
+- **Icons.** `npm run icons` is a regeneration step, not a build step — the 55
+  files it writes are committed. Edit the geometry or a palette at the top of
   `scripts/icons.mjs` and re-run it; never hand-edit an output, or the browser
-  tab and the Play launcher start showing different drinks.
+  tab and the Play launcher start showing different drinks. Five of those
+  outputs are XML rather than pixels — the four adaptive-icon definitions and
+  the colours behind them — because a launcher background kept by hand is
+  exactly what goes stale when a foreground is redrawn.
 - **Screenshots.** `src/assets/screenshots/` holds eight shots of the major
   features at 1080x2400 (a 360dp viewport at 3x), named
   `<number>-<feature>-<scheme>.png` and alternating Retro and Future. They are
@@ -792,8 +998,10 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
   linted too. That noise is machine-dependent and not in git; adding `android`
   to `globalIgnores` would remove it. Judge a change by whether the `src/`
   count moves.
-- **There is no test suite.** The verification standard for a change is: the
-  build passes, derived output is diffed across all 322 recipes against the
+- **There is no UI test suite.** `npm test` covers the parts where a mistake is
+  silent and expensive — the backup/restore merge rules and the index search —
+  in plain node, no runner. Everything else is verified the same way as before:
+  the build passes, derived output is diffed across all 322 recipes against the
   previous state, and UI changes are driven in a real browser against the dev
   server (Playwright works; the dev server is on 5173).
 - **Line endings.** `.gitattributes` normalises text to LF in the repo and pins
