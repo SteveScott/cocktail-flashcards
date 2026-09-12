@@ -114,6 +114,7 @@
     { "name": "Ranch Water", "glass": "Highball", "serve": "On the Rocks", "ingredients": "2 oz Tequila Blanco, ½ oz Fresh Lime Juice, Topo Chico Sparkling Water (top)" },
     { "name": "Tequila Old Fashioned", "glass": "Rocks", "method": "Built, Stirred", "serve": "On the Rocks", "ingredients": "2 oz Reposado Tequila, ½ tsp Agave Nectar, 2 dashes Angostura Bitters, Orange peel" },
     { "name": "Spicy Margarita", "glass": "Rocks", "serve": "On the Rocks", "ingredients": "2 oz Tequila Blanco, ¾ oz Cointreau, ¾ oz Fresh Lime Juice, 2-3 Jalapeño Slices, Salt rim" },
+    { "name": "Cadillac Margarita", "glass": "Rocks", "serve": "On the Rocks", "ingredients": "2 oz Reposado Tequila, 1 oz Grand Marnier, ¾ oz Fresh Lime Juice, Salt rim" },
     { "name": "El Diablo", "glass": "Highball", "serve": "On the Rocks", "ingredients": "1½ oz Tequila Blanco, ½ oz Crème de Cassis, ½ oz Fresh Lime Juice, Ginger Beer (top)" },
     { "name": "Mezcal Sour", "glass": "Rocks or Coupe", "serve": "On the Rocks", "ingredients": "2 oz Mezcal, ¾ oz Fresh Lemon Juice, ¾ oz Agave Nectar, 1 Egg White" },
     { "name": "Lemon Drop Martini", "glass": "Martini", "serve": "Up", "ingredients": "2 oz Citrus Vodka, ¾ oz Cointreau, ¾ oz Fresh Lemon Juice, ½ oz Simple Syrup, Sugared rim" },
