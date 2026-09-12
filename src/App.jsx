@@ -64,9 +64,10 @@ const ALL_CARDS = [...top50, ...master150];
 const LEXICON = buildLexicon(ALL_CARDS);
 
 // The index's search, built once over the same corpus: the ingredient
-// vocabulary a query is read against, and every recipe pre-cut into words. It
-// is the whole book for the same reason the lexicon is — the index lists every
-// recipe whatever the pool is, so its search has to reach every recipe too.
+// vocabulary a query is read against, and every recipe pre-cut into words —
+// its name, its ingredients, and how it is made. It is the whole book for the
+// same reason the lexicon is — the index lists every recipe whatever the pool
+// is, so its search has to reach every recipe too.
 const SEARCH_INDEX = buildSearchIndex(ALL_CARDS);
 
 const DECK_SIZE = 20;
@@ -2400,11 +2401,13 @@ export default function App() {
   );
 
   if (mode === "index") {
-    // Names and ingredients, accent-insensitively, so "pina" finds "Piña Colada"
-    // and "rum" finds every drink containing rum. A query naming more than one
-    // thing asks for all of them: "rum, lime" is the drinks with both, and
-    // "lime juice" is one ingredient rather than two loose words, so it does not
-    // hand back the lemon ones. See searchCards in recipe-meta.js.
+    // Names, ingredients and method, accent-insensitively, so "pina" finds
+    // "Piña Colada" and "rum" finds every drink containing rum. A query naming
+    // more than one thing asks for all of them: "rum, lime" is the drinks with
+    // both, and "lime juice" is one ingredient rather than two loose words, so
+    // it does not hand back the lemon ones. How a drink is made is searchable
+    // the same way — "swizzled" is the swizzles, "crushed" the drinks served
+    // over crushed ice. See searchCards in recipe-meta.js.
     const matches = searchCards(SEARCH_INDEX, search);
     // What the query was read as, shown only when it came apart into more than
     // one ingredient — that is the case where the results need explaining, and
@@ -2451,7 +2454,7 @@ export default function App() {
           autoFocus
           value={search}
           onChange={e=>setSearch(e.target.value)}
-          placeholder="Name or ingredients — try “rum, lime”"
+          placeholder="Name, ingredient or method — try “rum, lime”"
           style={frame({width:"100%",boxSizing:"border-box",padding:"0.85rem 1rem",borderRadius:12,border:`1px solid ${C.border}`,color:C.textStrong,fontSize:"1rem",marginBottom:"0.6rem",outline:"none"})}
         />
         {terms.length > 1 && (
