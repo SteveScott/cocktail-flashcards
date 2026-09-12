@@ -790,6 +790,12 @@ export function buildEightySixQuestion(c, lexicon, rand = Math.random) {
 // that contains it: all twelve syrups, all thirteen juices, all eighteen rums.
 // Say more and you get less: "Jamaican Rum" is the rums that are Jamaican.
 //
+// A query can also name the technique instead of anything in the glass.
+// "Swizzled" is the four swizzles, "crushed" the drinks packed with crushed
+// ice, "shaken" everything that sees a tin. The method and the serve style are
+// indexed as fields of their own and ANDed with the rest like any other term,
+// so "swizzled rum" is the swizzles made with rum. See `searchTechnique`.
+//
 // Cocktail names are held to neither rule as strictly: a name matches as far as
 // it is typed, whatever the vocabulary makes of the word. See `lands`.
 
@@ -832,6 +838,40 @@ function searchFields(c) {
   return splitParts(c.ingredients).map(searchWords);
 }
 
+// Words that are grammar rather than technique. "On the Rocks" is worth
+// searching for as "rocks"; nobody means anything by "on" or "the", and
+// leaving them in would make two stop words a match against 124 drinks.
+const SERVE_GRAMMAR = /^(on|the|over)$/;
+
+// How a drink is made, cut into fields the same way its ingredients are: the
+// method, the adjective prose uses for it, and the serve style. A method is
+// read as a list because it is written as one — a Bermuda Rum Swizzle is
+// "Built, Swizzled" and answers to both halves.
+//
+// Two exclusions. A segment carrying "not" is dropped whole, or a Champagne
+// Cocktail — "Built, Not Stirred" — would come back as a stirred drink, which
+// is the one thing its method exists to deny. And the adjective is indexed
+// alongside the method rather than instead of it, because METHOD_ADJECTIVE is
+// written for prose, where one word has to carry the whole drink: it answers
+// "Built, Swizzled" with "swizzled" alone, and a swizzle is also built.
+//
+// The serve style is indexed because it holds the method's last fact. Crushed
+// ice is the technique of a Mint Julep and a Queen's Park Swizzle in a way no
+// ingredient line records — getMethod reads it and then spends it, calling
+// both drinks "Built, Stirred" — so without this, "crushed" found the single
+// recipe that writes crushed ice into its ingredients rather than the 32
+// drinks served over it.
+function searchTechnique(c) {
+  const method = getMethod(c);
+  const fields = splitParts(method)
+    .filter(part => !/\bnot\b/i.test(part))
+    .concat(splitParts(methodAdjective(method)))
+    .map(searchWords);
+  const serve = searchWords(c.serve).filter(w => !SERVE_GRAMMAR.test(w));
+  if (serve.length) fields.push(serve);
+  return fields.filter(f => f.length);
+}
+
 // Built once over the whole corpus: the ingredient vocabulary the query is read
 // against, and every recipe pre-cut into words so a keystroke is a comparison of
 // word arrays rather than 322 re-parses.
@@ -846,7 +886,7 @@ export function buildSearchIndex(recipes) {
     // Syrup, and there is no ingredient called Syrup.
     vocabulary: new Set(phrases.flat()),
     longest: phrases.reduce((n, p) => Math.max(n, p.length), 1),
-    cards: recipes.map(c => ({ card: c, name: searchWords(c.name), ingredients: searchFields(c) })),
+    cards: recipes.map(c => ({ card: c, name: searchWords(c.name), ingredients: searchFields(c), technique: searchTechnique(c) })),
   };
 }
 
@@ -885,7 +925,8 @@ export function parseSearchQuery(query, index) {
 // is no reason to hide the drink.
 function lands(entry, term) {
   return runAt(entry.name, term.words, term.tail) ||
-         entry.ingredients.some(f => runAt(f, term.words, term.prefix));
+         entry.ingredients.some(f => runAt(f, term.words, term.prefix)) ||
+         entry.technique.some(f => runAt(f, term.words, term.prefix));
 }
 
 // The recipes a query names, in corpus order.

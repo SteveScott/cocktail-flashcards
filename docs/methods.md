@@ -22,6 +22,15 @@ now named for the step that actually differs:
 | `Rolled` | between two tins | poured back and forth |
 | `Layered` | the serving vessel | kept apart on purpose |
 
+**These strings are searchable, so they are UI text as well as data.** The
+index's search indexes each card's method and serve style alongside its
+ingredients: "swizzled" returns the four swizzles, "crushed" the 32 drinks
+served over crushed ice. A method is read as the list it is written as, so a
+`Built, Swizzled` drink answers to both words — and a segment carrying "not" is
+dropped, or `Built, Not Stirred` would answer to "stirred", which is the one
+thing it exists to deny. Rename a method and the old word stops finding
+anything. See *The index search* in the README.
+
 Two notes on the edges of that table.
 
 **A float is not a layer.** A drink is `Layered` only when components that make
