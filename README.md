@@ -353,7 +353,7 @@ values:
 | `mode` | Screen |
 |---|---|
 | `menu` | Stats, sign-in, mode buttons, the "Add All Cards" switch (the paywall), Pro and admin panels. |
-| `index` | Search across all 322 by name or ingredient (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
+| `index` | Search across all 322 by name, ingredient or method (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both; "swizzled" finds the swizzles), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
 | `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
 | `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Self Quiz draws from the whole pool; 86 It from the drinks you've studied, topped up from the top of the pool. |
@@ -468,10 +468,12 @@ tell "one ingredient of two words" from "two ingredients":
 | `simple syrup` | one ingredient | simple and rich simple, not honey-ginger |
 | `syrup` | no such ingredient on its own | all twelve syrups |
 | `jamaican rum` | one ingredient | the Jamaican rums, not all eighteen |
+| `swizzled` | a method | the four swizzles |
+| `crushed` | a serve style | the 32 drinks packed with crushed ice |
 
 Three rules produce all of it. A run of words that the vocabulary knows as one
 ingredient **stays together**; anything else is separate terms, and every term
-has to land somewhere on the card (name or ingredient), which is what makes a
+has to land somewhere on the card (name, ingredient or method), which is what makes a
 multi-ingredient query an AND. A term matches **whole words in one ingredient**,
 consecutively — the difference between lime juice and lemon juice is that only
 one recipe has those two words next to each other. And the **last word typed**
@@ -486,13 +488,29 @@ the drink. The one thing lost against the old substring search is the fragment
 that starts mid-word — "tini" no longer finds a Martini — which is the same rule
 that stopped "gin" from returning the Virgin Mary.
 
+**How a drink is made is searchable too**, because it is a fact about the drink
+that its ingredient line does not carry. Each card indexes its method, the
+adjective the prose uses for it, and its serve style, as fields alongside the
+ingredients — so "swizzled" is the four swizzles, "rolled" the Bloody Marys,
+"frozen" what came out of a blender, and "crushed" the drinks packed with
+crushed ice rather than the single recipe that writes crushed ice into its
+ingredients. Method terms AND with the rest like any other: "swizzled rum" is
+the swizzles made with rum.
+
+Two details keep that honest. A method is read as the list it is written as, so
+a Bermuda Rum Swizzle ("Built, Swizzled") answers to both `built` and
+`swizzled` — `METHOD_ADJECTIVE` picks one word for prose, and the search keeps
+both. And a segment carrying "not" is dropped whole, or a Champagne Cocktail
+("Built, Not Stirred") would come back as a stirred drink, which is the one
+thing its method exists to deny.
+
 When a query does come apart into more than one term, the box says so
 underneath ("Drinks matching rum + lime"), because otherwise an AND that returns
 three drinks looks like a bug rather than an answer.
 
-`tests/search.test.mjs` pins all of it, including two corpus-wide properties:
-every ingredient name finds every recipe carrying it, and every drink is
-reachable from every prefix of its own name.
+`tests/search.test.mjs` pins all of it, including three corpus-wide properties:
+every ingredient name finds every recipe carrying it, every drink is reachable
+from every prefix of its own name, and every drink answers to its own method.
 
 ### The index filters
 

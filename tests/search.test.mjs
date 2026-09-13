@@ -7,7 +7,7 @@
 // Beer. None of that is visible from the code being green, so it is pinned
 // here, against the real corpus. Plain node, no runner, no dependency.
 import { readFileSync } from "node:fs";
-import { buildSearchIndex, searchCards, parseSearchQuery, ingredientLabels, norm } from "../src/recipe-meta.js";
+import { buildSearchIndex, searchCards, parseSearchQuery, ingredientLabels, getMethod, norm } from "../src/recipe-meta.js";
 
 const { top50, master150 } = JSON.parse(readFileSync(new URL("../src/cocktails.json", import.meta.url), "utf8"));
 const ALL = [...top50, ...master150];
@@ -115,6 +115,54 @@ eq("an empty search is the whole book", find("").length, ALL.length);
 eq("so is one with no words in it", find("?!").length, ALL.length);
 eq("a search for nothing that exists", find("xyzzy"), []);
 
+// ── how the drink is made ──────────────────────────────────────────────────
+// The method and the serve style are searchable too: what someone wants when
+// they type "swizzled" is the swizzles, and no ingredient line says so.
+const swizzles = ALL.filter(c => /Swizzled/.test(getMethod(c))).map(c => c.name);
+eq("swizzled is every swizzle", find("swizzled"), swizzles);
+ok("half-typed still gets there", swizzles.every(n => find("swizz").includes(n)));
+finds("swizzled", "Queen's Park Swizzle");
+finds("swizzled", "Ti' Punch");           // a swizzle that does not say so in its name
+
+// A swizzle is built in the glass, so it answers to both halves of "Built,
+// Swizzled" — the prose adjective picks one word, the search keeps both.
+finds("built", "Bermuda Rum Swizzle");
+finds("built", "Old Fashioned");
+
+// "Built, Not Stirred" is the method that exists to say a drink is NOT stirred.
+misses("stirred", "Champagne Cocktail");
+misses("stirred", "Kir Royale");
+finds("built", "Champagne Cocktail");
+misses("shaken", "Negroni");              // stirred, and no tin comes near it
+
+// Crushed ice is a technique the ingredient line does not record — getMethod
+// reads `serve` and then calls the drink Built, Stirred like any other.
+const crushed = ALL.filter(c => c.serve === "Over Crushed Ice").map(c => c.name);
+eq("crushed is every drink served on it", find("crushed"), crushed);
+finds("crushed", "Mint Julep");
+finds("crushed", "Mojito");
+ok("more than the one recipe that writes it into its ingredients", find("crushed").length > 1);
+
+// Frozen is a serve style AND a method: every frozen drink came out of a
+// blender, which is what getMethod already makes of it.
+finds("frozen", "Frozen Margarita");
+finds("frozen", "Miami Vice");
+ok("and every frozen drink is a blended one", find("frozen").every(n => find("blended").includes(n)));
+
+// The techniques inference cannot see, carried by an explicit method.
+finds("rolled", "Bloody Mary");           // tomato juice, neither shaken nor stirred
+finds("flash blend", "Zombie");
+finds("thrown", "Blue Blazer");
+finds("layered", "B-52");
+
+// A method term is ANDed with the rest like any other, so it narrows.
+ok("a method plus an ingredient is narrower than the method",
+  find("swizzled rum").length < find("swizzled").length);
+ok("and every answer is still a swizzle",
+  find("swizzled rum").every(n => find("swizzled").includes(n)));
+finds("swizzled rum", "Bermuda Rum Swizzle");
+misses("swizzled rum", "Chartreuse Swizzle");
+
 // ── corpus-wide properties ─────────────────────────────────────────────────
 // Two guards that hold for all 322 recipes, so a rule change cannot quietly
 // lose a drink: every ingredient name finds every recipe carrying it, and every
@@ -136,6 +184,15 @@ for (const c of ALL) {
   }
 }
 eq("every drink is findable from every prefix of its name", unfindableByName, []);
+
+const unfindableByMethod = [];
+for (const c of ALL) {
+  // The first segment of the method, which is the word someone would type:
+  // "Built, Swizzled" is looked up as "built", "Flash Blend" as itself.
+  const word = getMethod(c).split(",")[0].trim().toLowerCase();
+  if (!find(word).includes(c.name)) unfindableByMethod.push(`${c.name} :: ${word}`);
+}
+eq("every drink answers to its own method", unfindableByMethod, []);
 
 console.log(fail ? `\n${fail} FAILED` : "\nall passed");
 process.exit(fail ? 1 : 0);
