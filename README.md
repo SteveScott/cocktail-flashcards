@@ -146,6 +146,13 @@ The parser reads the string as the data writes it, so the conventions matter:
 - **Parentheticals may contain commas** — `2 oz Soda Water (layered, drunk
   through a straw)` — and the splitter respects them.
 - **Unmeasured items are garnish**, unless a marker says otherwise.
+- **Every recipe carries a garnish**, and a drink served without one says so:
+  the literal `No garnish`, last in the string. It is a value, not a gap — an
+  empty garnish used to be indistinguishable from a recipe nobody had finished
+  researching. It reads as *"Serve without garnish."* in the steps and is kept
+  out of the page's `recipeIngredient`, which is a shopping list. Twenty-one
+  drinks take it: the shots and layered shooters, the beer-and-a-shot builds,
+  and a few austere classics — a Ramos Gin Fizz, a Kir, a Black Russian.
 - **An ingredient may name another cocktail.** A Miami Vice is `6 oz Piña
   Colada (Frozen), 6 oz Strawberry Daiquiri (Frozen)` — two drinks the book
   already teaches. Written exactly as that recipe's `name`, it resolves to a
