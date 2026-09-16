@@ -457,8 +457,15 @@ export function buildSteps(c) {
           : "Insert a swizzle stick into the glass and spin it between your palms to swizzle the drink, just until the sugar has dissolved and everything is combined.");
       } else if (crushed && fizzy) {
         // A Mojito is stirred, not swizzled: a slow lift from the bottom to
-        // bring the mint up, gentle enough to leave the soda its bubbles.
-        steps.push("Stir gently from the bottom up to lift the mint, without knocking out the carbonation. Top with more crushed ice.");
+        // bring the mint up, gentle enough to leave the soda its bubbles. The
+        // lift is only worth naming where there are leaves in the glass to
+        // lift — a Planter's Punch is the same crushed ice and soda with its
+        // mint on top as a garnish, and was being told to raise mint it does
+        // not contain.
+        const inGlass = components.some(x => HERBS.test(x.item));
+        steps.push(inGlass
+          ? "Stir gently from the bottom up to lift the mint, without knocking out the carbonation. Top with more crushed ice."
+          : "Stir gently, without knocking out the carbonation. Top with more crushed ice.");
       } else if (crushed) {
         // A julep is stirred hard rather than swizzled, but wants the same
         // tell: keep going until the outside of the cup frosts over.
