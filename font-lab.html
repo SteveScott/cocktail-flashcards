@@ -497,7 +497,13 @@ header p { color: var(--text-m); font-size: 0.85rem; margin: 0 0 0.85rem; max-wi
     '16': () => document.getElementById('t-size').click(),
     relaxed: () => document.getElementById('t-caps').click(),
   };
-  for (const k of location.hash.replace(/^#/, '').split('+')) preset[k]?.();
+  // Own properties only. `k` comes from the URL, and a bare preset[k] reaches
+  // through the prototype chain — #constructor or #toString dispatches to
+  // Object's and not to a toggle. Nothing here takes an argument, so the worst
+  // case was a stray call rather than a hole, but it is the shape of a real one
+  // and CodeQL fails the release PR on it.
+  for (const k of location.hash.replace(/^#/, '').split('+'))
+    if (Object.hasOwn(preset, k)) preset[k]();
 </script>
 </body>
 </html>
