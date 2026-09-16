@@ -80,15 +80,16 @@ the same place. `npm test` holds it to that.
 
 `VITE_ADMIN_EMAILS`, set in the Netlify site's environment. One list, read in
 two places: the client, to decide whether to draw the admin panel, and
-`_adminAuth.mjs`, to decide who may actually call the restore endpoint. Netlify
-hands every site variable to a function whatever its name — the `VITE_` prefix
-only governs what Vite inlines into the browser bundle.
+`_adminAuth.mjs`, to decide who may actually call the admin endpoints — the
+restore, and the erase below it. Netlify hands every site variable to a function
+whatever its name — the `VITE_` prefix only governs what Vite inlines into the
+browser bundle.
 
 A caller must present a valid Firebase ID token, for an account with a
 **verified** email, on that list. The same three conditions `firestore.rules`
 applies in `isAdmin()`, mirrored on purpose: the Admin SDK does not run the
-rules, so this check is the only one there is. If the variable is empty the
-restore endpoint refuses to run — a deploy that forgets it fails closed.
+rules, so this check is the only one there is. If the variable is empty both
+endpoints refuse to run — a deploy that forgets it fails closed.
 
 **The list being in the client bundle costs nothing.** It is not a credential
 and never was doing the work: an address only matters to someone already
@@ -100,7 +101,7 @@ does not give them is any way to be that person.
 
 The one thing to watch is the reverse: this variable and the `admins()` list in
 `firestore.rules` are separate and must be kept in step by hand. This one gates
-the restore endpoint; that one gates ad-whitelist writes.
+the admin endpoints; that one gates ad-whitelist writes.
 
 ## How a restore merges
 
@@ -178,12 +179,67 @@ a purchase that landed mid-restore.
 Restored documents carry `restoredAt`, `restoredBy` and `restoredFrom` as an
 audit trail. They are server-owned; no client can write or clear them.
 
-## Account deletion
+## Account deletion — the one thing that takes data away
 
-`delete-account.mjs` removes `highWater/{uid}` and `purchaseLedger/{uid}`
-alongside `users/{uid}`. It has to: both are second copies of data this
-endpoint exists to erase, and leaving either behind would let a later restore
-bring it straight back.
+Erasure is the exception to everything above, and the only operation in this
+system that is not additive. The invariant is unchanged — a *restore* still only
+ever adds — but it is worth being exact about the boundary: the durability this
+document describes is what makes deletion hard, not something deletion is
+exempt from. Anything a restore can bring back is something an erasure has to
+reach.
+
+So both endpoints delete `highWater/{uid}` and `purchaseLedger/{uid}` alongside
+`users/{uid}`, plus `adWhitelist/{email}` under every address the account is
+known by. Leaving any of them behind would not be a slow leak; it would be an
+erasure that the next restore reverses.
+
+Two doors, one implementation — `netlify/functions/_eraseUser.mjs`:
+
+| | Who | Reached by |
+|---|---|---|
+| `delete-account` | the person themselves | Delete Account, at the foot of the app |
+| `admin-erase-user` | an administrator, on request | 🧨 Erase a User, under the admin restore panel |
+
+The second exists because the privacy policy offers deletion by email to anyone
+who would rather not sign in **or no longer can** — and somebody who has lost
+the address they signed up with cannot press the first button. It resolves the
+target and reports what it found *before* it acts (a Look Up step, gated so that
+Erase stays disabled until the look-up matches what is currently typed), refuses
+a blank target outright, and refuses to erase an address on `VITE_ADMIN_EMAILS`.
+
+**An erased account is not resurrected by a restore.** With nothing left in any
+of the three collections, `mergeProgress` returns `null`, `describeChange`
+reports no change, and `admin-restore.mjs` returns before it writes. That is a
+property of those two functions and invisible from the endpoint, so
+`tests/erase.test.mjs` pins it.
+
+**What an erasure does not reach**, named in the endpoint's own response so that
+the answer given to whoever asked matches what the code does: Stripe's customer
+and payment records, RevenueCat's record of a Play purchase, Netlify's function
+logs, and the progress in the browser on the person's own device. The first two
+have their own retention basis and their own consequences — cancelling them is a
+deliberate decision, not a side effect of clearing a flag in Firestore. The last
+one matters more than it looks: local progress survives, and if that person
+later creates a new account, the sign-in handshake will merge it into the new
+one. That is correct behaviour for the device's owner, and worth saying out loud
+so it is not discovered as a surprise.
+
+**And one gap that puts data back rather than leaving it behind.** Nothing signs
+the target out — an admin erasure has no client on the other end, where
+`delete-account` calls `signOut` itself. A device still sitting on the study
+screen autosaves 800 ms after any change, with `merge: true`, and a merge-write
+to a deleted document *recreates* it; `firestore.rules` checks
+`request.auth.uid` and does not check revocation, so the window lasts as long as
+that device's existing ID token does. Look the account up again after erasing —
+if `users` or `highWater` is back, erase again. Closing it properly means a
+rules-side check against a denylist, which is a new collection, a
+`firestore.rules` change, and the two-merge dance that goes with one; it is not
+in this feature, and the endpoint says so in `NOT_REACHED` rather than leaving
+whoever answers the request to find out.
+
+There is no tombstone. A record of who asked to be forgotten, kept in a
+collection built to hold it indefinitely, is the thing they asked not to exist;
+who erased whom and when goes to the function log, which expires on its own.
 
 ## Tests
 
@@ -203,6 +259,12 @@ what was already there; a `users/{uid}` document is deleted outright and its
 purchase comes back from the ledger alone; a purchase made after the last
 restore survives running it again; one account is restored by the email
 address it wrote in from; an unknown email is rejected.
+
+`tests/erase.test.mjs` covers the three things about a wipe that no endpoint
+shows: which collections it reaches (driven off `UID_COLLECTIONS`, so one added
+later is covered without an endpoint being edited), that the auth user goes last
+and a failed batch leaves everything in place, and that a restore run against an
+erased account writes nothing.
 
 ## What this is not
 
