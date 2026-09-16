@@ -7,9 +7,9 @@
 
     <!-- ── SEO ──────────────────────────────────────────────────────────────
          These live in the STATIC index.html on purpose. The app is a
-         client-rendered SPA, so a crawler's first fetch sees an empty
-         <div id="root"> and nothing else — anything set from React would only
-         be seen on a second, render-queued pass, if at all. Keeping title,
+         client-rendered SPA, so a crawler's first fetch sees a <div id="root">
+         holding nothing but the loading screen — anything set from React would
+         only be seen on a second, render-queued pass, if at all. Keeping title,
          description and canonical here means they're in the very first byte
          stream Google reads.
 
@@ -84,7 +84,8 @@
          before React exists.
 
          The key and the two names are duplicated from src/App.jsx (THEME_KEY,
-         THEMES) and have to stay in step with it. -->
+         THEMES) and have to stay in step with it, as are the two background
+         colours in the <style> below. -->
     <script>
       (function () {
         var t = "retro";
@@ -97,6 +98,56 @@
         if (meta) meta.setAttribute("content", t === "future" ? "#05070f" : "#17100a");
       })();
     </script>
+    <!-- Everything the first paint needs, before the hashed stylesheet exists.
+         All of it is styled from /assets/index-<hash>.css, so without this the
+         page is white until that arrives — and with no signal that lasts for
+         the whole of the service worker's navigation timeout plus the bundle
+         fetch.
+
+         The three backgrounds are the three --bg in src/index.css: Retro light,
+         Retro dark, Future. index.css owns them; this is a copy and has to move
+         when it does.
+
+         The mark is /favicon.svg, the same file the tab icon uses — NOT a copy
+         of its geometry, which scripts/icons.mjs exists to prevent, and not the
+         bar photograph, which is 212 KB behind a build hash this file cannot
+         name. It is in the service worker's precache list, so with no signal
+         it is a cache hit rather than the fetch this whole change removes. It
+         stays Retro-inked in both schemes, per the rule in scripts/icons.mjs
+         that the favicons and splashes do not follow the picker.
+
+         The quarter-second delay is the point of the animation, not the fade:
+         a cached load mounts React well inside it and shows nothing at all, so
+         this never flashes up on the launches that were already fast. It is a
+         CSS animation and not a timer because the main thread is busy parsing
+         the bundle at exactly the moment a timer would need to fire. -->
+    <style>
+      html { background: #fdf8ef; }
+      html[data-theme="future"] { background: #05070f; }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="future"]) { background: #1b1209; }
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        animation: boot-in 0.4s ease-out 0.25s both;
+      }
+      #boot img {
+        width: 88px;
+        height: 88px;
+        animation: boot-breathe 1.8s ease-in-out 0.25s infinite;
+      }
+      @keyframes boot-in { to { opacity: 1; } }
+      @keyframes boot-breathe { 50% { opacity: 0.55; } }
+      @media (prefers-reduced-motion: reduce) {
+        #boot { animation: boot-in 0.01s linear 0.25s both; }
+        #boot img { animation: none; }
+      }
+    </style>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Cocktails" />
     <!-- AdSense (adsbygoogle.js) is injected dynamically from src/App.jsx so that
@@ -145,7 +196,16 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- The loading screen, and it is INSIDE #root deliberately: createRoot
+           empties its container on the first commit — `root.textContent = ""`,
+           react-dom's branch for a container that is a plain element — so React
+           mounting is what removes this, with nothing to remember to tear down.
+           Move it outside #root and it stays on screen over the app forever. -->
+      <div id="boot" role="status" aria-label="Loading Cocktail Flashcards">
+        <img src="/favicon.svg" width="88" height="88" alt="" />
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

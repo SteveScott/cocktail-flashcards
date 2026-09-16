@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { createRequire } from 'node:module'
 import { seoPages } from './scripts/seo-pages.mjs'
+import { pwaServiceWorker } from './scripts/pwa-sw.mjs'
 
 // The recipe data is read here (not imported as JSON, which would need an
 // assert clause in this context) and handed to the generator, so the static
@@ -36,6 +37,11 @@ export default defineConfig({
     // at /cocktails/<slug>), the browse-all index, and a sitemap covering them.
     // See scripts/seo-pages.mjs and docs/seo.md for why this exists.
     seoPages(ALL),
+    // Stamps dist/pwa-sw.js with a hash of this build and the list of files it
+    // should precache, so that a deploy reinstalls the worker and refreshes the
+    // offline shell. Runs in closeBundle like seoPages, i.e. after public/ has
+    // been copied into dist, because the file it rewrites is that copy.
+    pwaServiceWorker(),
   ],
   build: {
     // The seo-recipe-pages plugin clears outDir itself, in buildStart, with a
