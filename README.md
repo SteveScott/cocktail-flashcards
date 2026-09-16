@@ -1,6 +1,6 @@
 # Cocktail Flashcards
 
-Spaced-repetition flashcards and quizzes for 322 classic cocktail recipes, built
+Spaced-repetition flashcards and quizzes for 334 classic cocktail recipes, built
 for bartenders. It runs as a website, as an installable PWA, and as the Android
 app on Google Play — which loads the same live site inside a Capacitor shell.
 Progress syncs across devices through a Google account; ads can be removed by a
@@ -35,7 +35,7 @@ and how the app copes with the cocktails that refuse to follow the rules.
                         │                              │
                         ▼                              ▼
               src/recipe-meta.js  ◄──────────  scripts/seo-pages.mjs
-              (method, order, steps)            (322 static HTML pages,
+              (method, order, steps)            (334 static HTML pages,
                         │                        JSON-LD, sitemap — at build)
                         ▼
                   src/App.jsx  ─── one component, one `mode` state machine
@@ -77,7 +77,7 @@ Five ideas explain most of the design:
 
 | Path | What it is |
 |---|---|
-| `src/cocktails.json` | The recipe database. Two lists, 322 recipes, one per line. |
+| `src/cocktails.json` | The recipe database. Two lists, 334 recipes, one per line. |
 | `src/recipe-meta.js` | Derivations over the recipes: parsing, method inference, build order, step generation. Shared with the build. |
 | `src/App.jsx` | The entire UI: menu, study, quiz, index, sign-in, admin panel, purchase flows. One component. |
 | `src/platform.js` | Runtime detection of web vs Play Store shell; the `FEATURES` switches. |
@@ -94,7 +94,7 @@ Five ideas explain most of the design:
 | `src/assets/screenshots/` | Eight feature screenshots at 1080x2400, four per colour scheme. |
 | `scripts/seo-pages.mjs` | Vite plugin that emits a static HTML page per recipe, an index, and a sitemap. |
 | `scripts/create-pro-product.mjs` | One-time Stripe product/price setup. |
-| `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
+| `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion and admin erasure, the admin restore, shared entitlement logic. |
 | `firestore.rules` | The access-control model. Read this before touching the `users` document. |
 | `public/` | Static assets, `manifest.json`, `pwa-sw.js`, `privacy.html`, `robots.txt`, `ads.txt`. |
 | `android/` | The Capacitor Android project. Nothing in it is served; it is the store shell. The only code in it is `CocktailActivity` and `LauncherIconPlugin`. |
@@ -107,10 +107,10 @@ Five ideas explain most of the design:
 
 - **`top50`** — the 50 ranked drinks (`rank` 1–50, Drinks International 2026).
   This is the free study pool, and the default one.
-- **`master150`** — the rest. The name is historical; it holds 272 recipes. This
+- **`master150`** — the rest. The name is historical; it holds 284 recipes. This
   is what a Pro purchase adds to study and quizzes.
 
-Together they are 322 recipes, combined in `App.jsx` as `ALL_CARDS`. The two
+Together they are 334 recipes, combined in `App.jsx` as `ALL_CARDS`. The two
 array names are historical and neither number in them is true any more, but they
 are the Firestore-adjacent shape of the data and not worth a migration; the
 combined list was renamed when the split stopped being cosmetic and became the
@@ -146,6 +146,13 @@ The parser reads the string as the data writes it, so the conventions matter:
 - **Parentheticals may contain commas** — `2 oz Soda Water (layered, drunk
   through a straw)` — and the splitter respects them.
 - **Unmeasured items are garnish**, unless a marker says otherwise.
+- **Every recipe carries a garnish**, and a drink served without one says so:
+  the literal `No garnish`, last in the string. It is a value, not a gap — an
+  empty garnish used to be indistinguishable from a recipe nobody had finished
+  researching. It reads as *"Serve without garnish."* in the steps and is kept
+  out of the page's `recipeIngredient`, which is a shopping list. Twenty-one
+  drinks take it: the shots and layered shooters, the beer-and-a-shot builds,
+  and a few austere classics — a Ramos Gin Fizz, a Kir, a Black Russian.
 - **An ingredient may name another cocktail.** A Miami Vice is `6 oz Piña
   Colada (Frozen), 6 oz Strawberry Daiquiri (Frozen)` — two drinks the book
   already teaches. Written exactly as that recipe's `name`, it resolves to a
@@ -353,7 +360,7 @@ values:
 | `mode` | Screen |
 |---|---|
 | `menu` | Stats, sign-in, mode buttons, the "Add All Cards" switch (the paywall), Pro and admin panels. |
-| `index` | Search across all 322 by name, ingredient or method (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both; "swizzled" finds the swizzles), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
+| `index` | Search across all 334 by name, ingredient or method (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both; "swizzled" finds the swizzles), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
 | `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
 | `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Self Quiz draws from the whole pool; 86 It from the drinks you've studied, topped up from the top of the pool. |
@@ -361,7 +368,7 @@ values:
 
 ### Study
 
-- The **pool** is `top50`, or all 322 in *master mode* (`masterMode`) — but only
+- The **pool** is `top50`, or all 334 in *master mode* (`masterMode`) — but only
   for a Pro user. `poolFor(st, pro)` is the one place that decides, and it
   ignores `masterMode` without the entitlement, so a lapsed purchase or an
   entitlement that has not loaded yet falls back to the free 50 rather than
@@ -583,7 +590,7 @@ Everything that is *progress* lives in one object, `st`:
   active:     [name],               // the study deck, in order
   learned:    [name],               // mastered
   tried:      [name],               // marked tried
-  masterMode: boolean,              // wants all 322 — honoured only with Pro
+  masterMode: boolean,              // wants all 334 — honoured only with Pro
   deckSize:   number,               // default 20
   uid?:       string                // stamped when it belongs to an account
 }
@@ -673,6 +680,23 @@ Each of these fails silently, and none shows up in a build or a lint:
   client SDK refuses to delete a session more than a few minutes old. Firestore
   documents are deleted *before* the auth user, so a failure cannot orphan data
   under a uid that can never sign in again. Local progress is cleared too.
+
+  There are **two doors to the same wipe** and one implementation of it,
+  `netlify/functions/_eraseUser.mjs`: `delete-account` for someone deleting
+  their own account from the app, and `admin-erase-user` for an administrator
+  doing it on request. The privacy policy offers deletion by email for anyone
+  who would rather not sign in *or no longer can*, and that promise needs a door
+  that does not require the person to still hold the account.
+
+  A wipe that reached only `users/{uid}` would not be a wipe. `highWater/{uid}`
+  and `purchaseLedger/{uid}` exist precisely so progress and purchases survive
+  damage to it, so a restore would put everything straight back — all four
+  collections go, plus `adWhitelist/{email}` under **every** address the account
+  is known by, the provider's as well as the primary. Erasing an account with
+  nothing left anywhere is a no-op for a restore rather than a resurrection,
+  because `mergeProgress` returns `null` and `describeChange` reports no change;
+  `tests/erase.test.mjs` holds that shut, since neither is visible from
+  `admin-restore.mjs`.
 - **Not stored anywhere:** the index's filter chips, quiz state, the current
   screen, the card index. All of it is component state.
 
@@ -770,7 +794,7 @@ store uploads — stays Retro.
 One purchase, **Cocktail Flashcards Pro** ($7.99, one-time), carrying two things:
 
 - **The library.** Study and both quizzes cover the top 50 for free; the "Add All
-  Cards" switch on the menu adds the other 272 to both, and that switch is the
+  Cards" switch on the menu adds the other 284 to both, and that switch is the
   paywall. The index still lists every recipe to read either way — a locked one
   simply cannot enter a deck. Marking a drink **tried** is never gated: it is a
   fact about the drinker, not study content.
@@ -847,6 +871,8 @@ See `netlify/functions/_entitlements.mjs`.
 | `stripe-webhook` | Stripe | Verifies the signature; on `checkout.session.completed` grants the Stripe flag. |
 | `revenuecat-webhook` | RevenueCat | Checks the shared secret (constant-time); grants on purchase events, revokes on `EXPIRATION` / `REFUND`; ignores anonymous ids. |
 | `delete-account` | App, `POST` with a Firebase ID token | Deletes the user's Firestore documents, then the auth user. Token checked with `checkRevoked`. |
+| `admin-erase-user` | Admin panel, `POST` `{uid\|email, dryRun}` | The same wipe, run on request for somebody else. `requireAdmin`; resolves the target and reports it before acting; refuses a blank target and refuses an administrator. |
+| `_eraseUser` | shared | What an erasure deletes and in what order — one implementation, both doors. |
 | `_entitlements` | shared | The per-source flag logic above. |
 | `_firebaseAdmin` | shared | Admin SDK from server-only env (`FIREBASE_*`, never `VITE_`). |
 
@@ -872,7 +898,7 @@ of thin, inconsistent generated content that gets a site rejected. See
 [docs/seo.md](docs/seo.md).
 
 `netlify.toml` serves `/privacy` and then a SPA catch-all. Netlify serves an
-existing file in preference to a rewrite, which is the only reason the 322
+existing file in preference to a rewrite, which is the only reason the 334
 static pages survive the catch-all — it must never gain `force = true`. The
 plugin clears `dist` itself with a retry, because on Windows Dropbox and Defender
 hold handles on fresh files; `emptyOutDir` stays `false`.
@@ -927,11 +953,18 @@ that name only has to change if the cache format does.
   forbid from shrinking. Entitlement flags, and the whole `purchaseLedger`
   collection, are written only by server functions using the Admin SDK.
 - `VITE_ADMIN_EMAILS` names the administrators. It hides the admin UI, and
-  `netlify/functions/_adminAuth.mjs` checks the same list before the restore
-  endpoint will do anything. Being in the bundle costs nothing — an address
-  there only matters to someone already holding a verified Firebase ID token
-  minted for it. Ad-whitelist writes are gated separately by the `admins()`
-  list in `firestore.rules`, which must be kept in step with it by hand.
+  `netlify/functions/_adminAuth.mjs` checks the same list before either admin
+  endpoint — `admin-restore` or `admin-erase-user` — will do anything. Being in
+  the bundle costs nothing — an address there only matters to someone already
+  holding a verified Firebase ID token minted for it. Ad-whitelist writes are
+  gated separately by the `admins()` list in `firestore.rules`, which must be
+  kept in step with it by hand.
+
+  The list is also the one thing `admin-erase-user` **will not erase**. An
+  address on it belongs to somebody who can call the endpoint, and on a
+  one-administrator deployment erasing it would take away the access needed to
+  undo the mistake. Removing an administrator is an edit to the env var first,
+  and only then an erasure — not one typed address away.
 - Server secrets (`STRIPE_*`, `REVENUECAT_WEBHOOK_SECRET`, `FIREBASE_*` service
   account) live in Netlify's environment and are never prefixed `VITE_`.
 - Webhooks verify their caller: Stripe by signature, RevenueCat by a
@@ -952,7 +985,7 @@ wrong:
 
 ```
 npm run dev       # Vite dev server on http://localhost:5173
-npm run build     # bundle + 322 static recipe pages + sitemap into dist/
+npm run build     # bundle + 334 static recipe pages + sitemap into dist/
 npm run preview   # serve dist/
 npm run lint      # eslint
 npm run icons     # redraw every icon and splash from scripts/icons.mjs
@@ -1026,7 +1059,7 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 - **There is no UI test suite.** `npm test` covers the parts where a mistake is
   silent and expensive — the backup/restore merge rules and the index search —
   in plain node, no runner. Everything else is verified the same way as before:
-  the build passes, derived output is diffed across all 322 recipes against the
+  the build passes, derived output is diffed across all 334 recipes against the
   previous state, and UI changes are driven in a real browser against the dev
   server (Playwright works; the dev server is on 5173).
 - **Line endings.** `.gitattributes` normalises text to LF in the repo and pins

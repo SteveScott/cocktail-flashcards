@@ -104,12 +104,15 @@ is assembled — and stirred — in the glass it is served in.
 | Shirley Temple | Poured over ice and stirred. Its lime and grenadine trip the sour rule, but half an ounce of each under four ounces of ginger ale is not a sour ([Difford's](https://www.diffordsguide.com/cocktails/recipe/1546/shirley-temple)) |
 
 A build's last step reads the narrower `CARBONATED` list to decide whether
-stirring costs you bubbles. `stout` was added to it for Nico's Bloody Mary: a
-stout is carbonated, and the head is the point of pouring one over a tomato
-base, but the list only named `beer` — which "Guinness Stout" does not contain —
-so the drink was being told to stir briefly rather than gently. It changes the
-generated steps of no other recipe; every other stout in the deck (Black Velvet,
-Snakebite, Baby Guinness) is `Layered` and never reaches that branch.
+stirring costs you bubbles. `stout` was added to it for Nico's Bloody Mary, back
+when the drink wrote "Guinness Stout" and the list named only `beer`.
+
+That entry is now unexercised, and worth knowing about before it is trusted.
+Nico's says "2 oz Guinness" — a brand, matching neither `beer` nor `stout` — and
+is `Rolled`, which never reaches the branch anyway. The only other stout in the
+deck is the Black Velvet, and it is `Layered`. So no recipe currently tests this
+word, and a beer named by brand rather than by style will slip past the whole
+list. Left in place for the next carbonated build rather than removed.
 
 ## Built, Swizzled
 
@@ -146,6 +149,7 @@ the one thing that would ruin the drink.
 | Sombrero | Coffee liqueur poured over ice, cream floated on top — the cream sitting on the liqueur "like a hat" is the whole drink, and stirring it destroys it |
 | True Blood | Built over ice and not stirred, with the red wine floated on top. The float is a float, not a layer: the method describes the vodka, raspberry liqueur and cranberry underneath it |
 | Prairie Fire | Built in the shot glass; the hot sauce disperses on its own |
+| Tequila Sunrise | Built over ice, grenadine added last and left to settle. Inference called it `Shaken` — orange juice and grenadine trip the sour rule — which put the grenadine in the tin and destroyed the gradient the drink is named for |
 
 **The True Blood is a house cocktail from QXT's, and has no external source.**
 Searching for it turns up an unrelated drink of the same name — vodka, rum,
@@ -172,12 +176,33 @@ Poured over the back of a spoon so the layers hold.
 | Black Velvet | Champagne first, stout floated over a spoon to keep the bands distinct ([Wikipedia](https://en.wikipedia.org/wiki/Black_velvet_(cocktail))) |
 | Snakebite | Cider first, lager poured over the back of a spoon ([Craft Beering](https://www.craftbeering.com/snakebite-drink-beer-cider/)) |
 | Baby Guinness | Irish cream floated over coffee liqueur to make the miniature pint's head ([Wikipedia](https://en.wikipedia.org/wiki/Baby_Guinness)) |
+| B-52 | Kahlúa, then Baileys, then Grand Marnier, each poured over a spoon to stand as its own band ([Wikipedia](https://en.wikipedia.org/wiki/B-52_(cocktail))) |
+| Buttery Nipple | Butterscotch schnapps with Irish cream layered over it |
+| Slippery Nipple | Sambuca with Irish cream layered over it, and a drop of grenadine through the middle |
+| Carajillo | Licor 43 with espresso poured over the back of a spoon to sit on top ([Wikipedia](https://en.wikipedia.org/wiki/Carajillo)) |
+| Mind Eraser | Vodka, coffee liqueur and soda in bands, drunk bottom-up through a straw — the layers are the drink |
+
+**A layered drink states its method and says nothing in the ingredient line.**
+This is the one notation, and it is what the Baby Guinness and the Miami Vice
+were already doing. The other five reached `Layered` by inference instead, off
+markers written into the ingredient text — `— layered`, `(layered)`, `(layered
+on top)`, `(layered, drunk through a straw)`, four spellings of one idea — and
+because `buildSteps` prints the ingredient list verbatim, each marker read back
+out inside the step it had triggered: *"Pour ⅓ oz Coffee Liqueur, ⅓ oz Irish
+Cream, ⅓ oz Grand Marnier — layered slowly over the back of a bar spoon"*. The
+same cleanup `(blended)` got when `getMethod` learned to read `serve`. The Mind
+Eraser keeps `(drunk through a straw)`, which is a fact about the drink rather
+than a hook for the parser.
+
+`getMethod` still infers `Layered` from the word appearing in an ingredient
+string. Nothing in the data reaches that line any more; it is left as a
+backstop, not as a second way of writing this down.
 
 The Baby Guinness is the one place the float rule bends, and deliberately. Its
 cream is written as a float and behaves as one, but it also stays put as its own
 unmixed band, and that band is the entire drink — the head on the miniature
-pint. Compare the Buttery Nipple and Slippery Nipple, identical in shape and
-already `Layered`. A float that is the point of the drink is a layer.
+pint. Compare the Buttery Nipple and Slippery Nipple, identical in shape. A
+float that is the point of the drink is a layer.
 
 ## Shaken
 
@@ -305,10 +330,14 @@ dark rum floated on. Only a drink whose every component is a layer, like a B-52
 or a Black Velvet, is poured over the back of a spoon — and the Baby Guinness,
 where the float and the layer are the same act.
 
-This matters more than the garnish line suggests: nine of the eleven floats in
-the deck already carried a leading measure, so they parsed as ordinary
-ingredients and were being shaken or stirred into the drink they are supposed
-to sit on top of.
+This matters more than the garnish line suggests: thirteen of the fifteen floats
+in the deck carry a leading measure, so they parsed as ordinary ingredients and
+were being shaken or stirred into the drink they are supposed to sit on top of.
+The two that do not — an Irish Coffee's whipped cream and a True Blood's red
+wine — are poured to taste, and `TRAILING_MEASURE_RE` is what keeps them out of
+the garnish bucket. Write the unit as `(float)` after a stated measure; the Mai
+Tai's bare "Dark Rum float" parsed correctly but was the one float in the book
+that named no quantity, and it now reads `½ oz Dark Rum (float)`.
 
 ## Ingredient order
 
@@ -397,8 +426,13 @@ and then muddled the cane syrup by itself, which is not a thing you can do.
   Iced Teas need overrides their Long Island sibling does not.
 - Other unmeasured parts still land in the garnish bucket where they are really
   ingredients or instructions: a Whiskey Sour's bare "Angostura Bitters", a Mint
-  Julep's "Crushed Ice", a Carajillo's "layer espresso on top", a Ti' Punch's
-  "Small Disc of Lime" — which is squeezed into the drink, not hung on the rim.
-  Each needs a decision about what the data should say, not a parser rule.
+  Julep's "Crushed Ice", a Ti' Punch's "Small Disc of Lime" — which is squeezed
+  into the drink, not hung on the rim. Each needs a decision about what the data
+  should say, not a parser rule. (The Carajillo's "layer espresso on top" was
+  one of these, and is now an explicit `Layered` with a measured espresso.)
+- The garnish line lower-cases what it is given, so a brand in the garnish
+  bucket loses its capitals: Nico's Bloody Mary reads "garnish with old bay
+  rim", and a New York Sour with "angostura bitters". Harmless in the other
+  fifty-odd garnishes, which are all common nouns.
 - "Julep Tin or Rocks" and "Punch Cup or Rocks" read as "a julep tin or rocks",
   because the vessel-noun suppression fires on the first alternative.

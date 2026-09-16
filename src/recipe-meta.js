@@ -131,6 +131,20 @@ function splitParts(str) {
 const MEASURE_RE = /^((?:[\d½¼¾⅓⅔⅛⅜⅝⅞]+(?:[-–][\d½¼¾⅓⅔⅛⅜⅝⅞]+)?\s*(?:oz|dash(?:es)?|drops?|tsp|tbsp|cups?|scoops?|shots?|barspoons?|barspoon)?|(?:pinch|splash|dash|shot|handful)(?: of)?)\s*)\s*(.*)$/i;
 const GARNISH_RE = /garnish|peel|twist|sprig|wedge|wheel|slice|cherry|olive|rinse|zest|rim|dusting|grated|flamed|expressed|skewer|umbrella|nutmeg$/i;
 
+// Two unmeasured things land in the garnish bucket without being garnishes.
+// "no alcohol" is the marker baseSpirit reads off the raw string to place the
+// mocktails, and a Sherry Cobbler's "Crushed ice" is what `serve` already
+// says. Neither has anywhere else to go, and both were coming out as prose: a
+// Shirley Temple read "Garnish with no alcohol, maraschino cherry."
+const NOT_A_GARNISH = /^(?:no alcohol|crushed ice)$/i;
+
+// "No garnish" is the opposite case — a real garnish value, recording that the
+// drink is served without one, so that an empty garnish cannot be read as an
+// unresearched recipe. It stays in the bucket and the surfaces render it, but
+// never as an instruction to garnish with it.
+const NO_GARNISH_RE = /^no garnish$/i;
+export function isNoGarnish(g) { return NO_GARNISH_RE.test((g || "").trim()); }
+
 // A trailing "(top)" marks a modifier poured over the finished drink — the soda
 // in a Mojito, the Champagne in a Champagne Cocktail. It carries no measure, so
 // it used to fall through to the garnish bucket and drop out of the build
@@ -219,7 +233,8 @@ export function parseIngredients(str) {
       const unit = t[2][0].toUpperCase() + t[2].slice(1).toLowerCase();
       components.push({ measure: unit, item: t[1].trim(), text: part });
     } else if (GARNISH_RE.test(part) || !m) {
-      garnishes.push(part.replace(/\s*\(garnish\)\s*/i, "").trim());
+      const g = part.replace(/\s*\(garnish\)\s*/i, "").trim();
+      if (!NOT_A_GARNISH.test(g)) garnishes.push(g);
     } else {
       components.push({ measure: m[1].trim(), item: m[2].trim(), text: part });
     }
@@ -457,8 +472,15 @@ export function buildSteps(c) {
           : "Insert a swizzle stick into the glass and spin it between your palms to swizzle the drink, just until the sugar has dissolved and everything is combined.");
       } else if (crushed && fizzy) {
         // A Mojito is stirred, not swizzled: a slow lift from the bottom to
-        // bring the mint up, gentle enough to leave the soda its bubbles.
-        steps.push("Stir gently from the bottom up to lift the mint, without knocking out the carbonation. Top with more crushed ice.");
+        // bring the mint up, gentle enough to leave the soda its bubbles. The
+        // lift is only worth naming where there are leaves in the glass to
+        // lift — a Planter's Punch is the same crushed ice and soda with its
+        // mint on top as a garnish, and was being told to raise mint it does
+        // not contain.
+        const inGlass = components.some(x => HERBS.test(x.item));
+        steps.push(inGlass
+          ? "Stir gently from the bottom up to lift the mint, without knocking out the carbonation. Top with more crushed ice."
+          : "Stir gently, without knocking out the carbonation. Top with more crushed ice.");
       } else if (crushed) {
         // A julep is stirred hard rather than swizzled, but wants the same
         // tell: keep going until the outside of the cup frosts over.
@@ -552,7 +574,9 @@ export function buildSteps(c) {
     steps.push(`${verb} ${stripTrailingUnit(f.text)} over the top.`);
   }
 
-  if (garnishes.length) {
+  if (garnishes.some(isNoGarnish)) {
+    steps.push("Serve without garnish.");
+  } else if (garnishes.length) {
     steps.push(`Garnish with ${garnishes.join(", ").toLowerCase()}.`);
   }
   return steps;
