@@ -1,6 +1,6 @@
 # Cocktail Flashcards
 
-Spaced-repetition flashcards and quizzes for 322 classic cocktail recipes, built
+Spaced-repetition flashcards and quizzes for 334 classic cocktail recipes, built
 for bartenders. It runs as a website, as an installable PWA, and as the Android
 app on Google Play — which loads the same live site inside a Capacitor shell.
 Progress syncs across devices through a Google account; ads can be removed by a
@@ -35,7 +35,7 @@ and how the app copes with the cocktails that refuse to follow the rules.
                         │                              │
                         ▼                              ▼
               src/recipe-meta.js  ◄──────────  scripts/seo-pages.mjs
-              (method, order, steps)            (322 static HTML pages,
+              (method, order, steps)            (334 static HTML pages,
                         │                        JSON-LD, sitemap — at build)
                         ▼
                   src/App.jsx  ─── one component, one `mode` state machine
@@ -77,7 +77,7 @@ Five ideas explain most of the design:
 
 | Path | What it is |
 |---|---|
-| `src/cocktails.json` | The recipe database. Two lists, 322 recipes, one per line. |
+| `src/cocktails.json` | The recipe database. Two lists, 334 recipes, one per line. |
 | `src/recipe-meta.js` | Derivations over the recipes: parsing, method inference, build order, step generation. Shared with the build. |
 | `src/App.jsx` | The entire UI: menu, study, quiz, index, sign-in, admin panel, purchase flows. One component. |
 | `src/platform.js` | Runtime detection of web vs Play Store shell; the `FEATURES` switches. |
@@ -107,10 +107,10 @@ Five ideas explain most of the design:
 
 - **`top50`** — the 50 ranked drinks (`rank` 1–50, Drinks International 2026).
   This is the free study pool, and the default one.
-- **`master150`** — the rest. The name is historical; it holds 272 recipes. This
+- **`master150`** — the rest. The name is historical; it holds 284 recipes. This
   is what a Pro purchase adds to study and quizzes.
 
-Together they are 322 recipes, combined in `App.jsx` as `ALL_CARDS`. The two
+Together they are 334 recipes, combined in `App.jsx` as `ALL_CARDS`. The two
 array names are historical and neither number in them is true any more, but they
 are the Firestore-adjacent shape of the data and not worth a migration; the
 combined list was renamed when the split stopped being cosmetic and became the
@@ -146,6 +146,13 @@ The parser reads the string as the data writes it, so the conventions matter:
 - **Parentheticals may contain commas** — `2 oz Soda Water (layered, drunk
   through a straw)` — and the splitter respects them.
 - **Unmeasured items are garnish**, unless a marker says otherwise.
+- **Every recipe carries a garnish**, and a drink served without one says so:
+  the literal `No garnish`, last in the string. It is a value, not a gap — an
+  empty garnish used to be indistinguishable from a recipe nobody had finished
+  researching. It reads as *"Serve without garnish."* in the steps and is kept
+  out of the page's `recipeIngredient`, which is a shopping list. Twenty-one
+  drinks take it: the shots and layered shooters, the beer-and-a-shot builds,
+  and a few austere classics — a Ramos Gin Fizz, a Kir, a Black Russian.
 - **An ingredient may name another cocktail.** A Miami Vice is `6 oz Piña
   Colada (Frozen), 6 oz Strawberry Daiquiri (Frozen)` — two drinks the book
   already teaches. Written exactly as that recipe's `name`, it resolves to a
@@ -353,7 +360,7 @@ values:
 | `mode` | Screen |
 |---|---|
 | `menu` | Stats, sign-in, mode buttons, the "Add All Cards" switch (the paywall), Pro and admin panels. |
-| `index` | Search across all 322 by name, ingredient or method (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both; "swizzled" finds the swizzles), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
+| `index` | Search across all 334 by name, ingredient or method (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both; "swizzled" finds the swizzles), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
 | `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
 | `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Self Quiz draws from the whole pool; 86 It from the drinks you've studied, topped up from the top of the pool. |
@@ -361,7 +368,7 @@ values:
 
 ### Study
 
-- The **pool** is `top50`, or all 322 in *master mode* (`masterMode`) — but only
+- The **pool** is `top50`, or all 334 in *master mode* (`masterMode`) — but only
   for a Pro user. `poolFor(st, pro)` is the one place that decides, and it
   ignores `masterMode` without the entitlement, so a lapsed purchase or an
   entitlement that has not loaded yet falls back to the free 50 rather than
@@ -583,7 +590,7 @@ Everything that is *progress* lives in one object, `st`:
   active:     [name],               // the study deck, in order
   learned:    [name],               // mastered
   tried:      [name],               // marked tried
-  masterMode: boolean,              // wants all 322 — honoured only with Pro
+  masterMode: boolean,              // wants all 334 — honoured only with Pro
   deckSize:   number,               // default 20
   uid?:       string                // stamped when it belongs to an account
 }
@@ -787,7 +794,7 @@ store uploads — stays Retro.
 One purchase, **Cocktail Flashcards Pro** ($7.99, one-time), carrying two things:
 
 - **The library.** Study and both quizzes cover the top 50 for free; the "Add All
-  Cards" switch on the menu adds the other 272 to both, and that switch is the
+  Cards" switch on the menu adds the other 284 to both, and that switch is the
   paywall. The index still lists every recipe to read either way — a locked one
   simply cannot enter a deck. Marking a drink **tried** is never gated: it is a
   fact about the drinker, not study content.
@@ -891,7 +898,7 @@ of thin, inconsistent generated content that gets a site rejected. See
 [docs/seo.md](docs/seo.md).
 
 `netlify.toml` serves `/privacy` and then a SPA catch-all. Netlify serves an
-existing file in preference to a rewrite, which is the only reason the 322
+existing file in preference to a rewrite, which is the only reason the 334
 static pages survive the catch-all — it must never gain `force = true`. The
 plugin clears `dist` itself with a retry, because on Windows Dropbox and Defender
 hold handles on fresh files; `emptyOutDir` stays `false`.
@@ -978,7 +985,7 @@ wrong:
 
 ```
 npm run dev       # Vite dev server on http://localhost:5173
-npm run build     # bundle + 322 static recipe pages + sitemap into dist/
+npm run build     # bundle + 334 static recipe pages + sitemap into dist/
 npm run preview   # serve dist/
 npm run lint      # eslint
 npm run icons     # redraw every icon and splash from scripts/icons.mjs
@@ -1052,7 +1059,7 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 - **There is no UI test suite.** `npm test` covers the parts where a mistake is
   silent and expensive — the backup/restore merge rules and the index search —
   in plain node, no runner. Everything else is verified the same way as before:
-  the build passes, derived output is diffed across all 322 recipes against the
+  the build passes, derived output is diffed across all 334 recipes against the
   previous state, and UI changes are driven in a real browser against the dev
   server (Playwright works; the dev server is on 5173).
 - **Line endings.** `.gitattributes` normalises text to LF in the repo and pins
