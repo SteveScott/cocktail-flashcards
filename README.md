@@ -94,7 +94,7 @@ Five ideas explain most of the design:
 | `src/assets/screenshots/` | Eight feature screenshots at 1080x2400, four per colour scheme. |
 | `scripts/seo-pages.mjs` | Vite plugin that emits a static HTML page per recipe, an index, and a sitemap. |
 | `scripts/create-pro-product.mjs` | One-time Stripe product/price setup. |
-| `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion, shared entitlement logic. |
+| `netlify/functions/` | Server side: Stripe checkout + webhook, RevenueCat webhook, account deletion and admin erasure, the admin restore, shared entitlement logic. |
 | `firestore.rules` | The access-control model. Read this before touching the `users` document. |
 | `public/` | Static assets, `manifest.json`, `pwa-sw.js`, `privacy.html`, `robots.txt`, `ads.txt`. |
 | `android/` | The Capacitor Android project. Nothing in it is served; it is the store shell. The only code in it is `CocktailActivity` and `LauncherIconPlugin`. |
@@ -680,6 +680,23 @@ Each of these fails silently, and none shows up in a build or a lint:
   client SDK refuses to delete a session more than a few minutes old. Firestore
   documents are deleted *before* the auth user, so a failure cannot orphan data
   under a uid that can never sign in again. Local progress is cleared too.
+
+  There are **two doors to the same wipe** and one implementation of it,
+  `netlify/functions/_eraseUser.mjs`: `delete-account` for someone deleting
+  their own account from the app, and `admin-erase-user` for an administrator
+  doing it on request. The privacy policy offers deletion by email for anyone
+  who would rather not sign in *or no longer can*, and that promise needs a door
+  that does not require the person to still hold the account.
+
+  A wipe that reached only `users/{uid}` would not be a wipe. `highWater/{uid}`
+  and `purchaseLedger/{uid}` exist precisely so progress and purchases survive
+  damage to it, so a restore would put everything straight back — all four
+  collections go, plus `adWhitelist/{email}` under **every** address the account
+  is known by, the provider's as well as the primary. Erasing an account with
+  nothing left anywhere is a no-op for a restore rather than a resurrection,
+  because `mergeProgress` returns `null` and `describeChange` reports no change;
+  `tests/erase.test.mjs` holds that shut, since neither is visible from
+  `admin-restore.mjs`.
 - **Not stored anywhere:** the index's filter chips, quiz state, the current
   screen, the card index. All of it is component state.
 
@@ -854,6 +871,8 @@ See `netlify/functions/_entitlements.mjs`.
 | `stripe-webhook` | Stripe | Verifies the signature; on `checkout.session.completed` grants the Stripe flag. |
 | `revenuecat-webhook` | RevenueCat | Checks the shared secret (constant-time); grants on purchase events, revokes on `EXPIRATION` / `REFUND`; ignores anonymous ids. |
 | `delete-account` | App, `POST` with a Firebase ID token | Deletes the user's Firestore documents, then the auth user. Token checked with `checkRevoked`. |
+| `admin-erase-user` | Admin panel, `POST` `{uid\|email, dryRun}` | The same wipe, run on request for somebody else. `requireAdmin`; resolves the target and reports it before acting; refuses a blank target and refuses an administrator. |
+| `_eraseUser` | shared | What an erasure deletes and in what order — one implementation, both doors. |
 | `_entitlements` | shared | The per-source flag logic above. |
 | `_firebaseAdmin` | shared | Admin SDK from server-only env (`FIREBASE_*`, never `VITE_`). |
 
@@ -934,11 +953,18 @@ that name only has to change if the cache format does.
   forbid from shrinking. Entitlement flags, and the whole `purchaseLedger`
   collection, are written only by server functions using the Admin SDK.
 - `VITE_ADMIN_EMAILS` names the administrators. It hides the admin UI, and
-  `netlify/functions/_adminAuth.mjs` checks the same list before the restore
-  endpoint will do anything. Being in the bundle costs nothing — an address
-  there only matters to someone already holding a verified Firebase ID token
-  minted for it. Ad-whitelist writes are gated separately by the `admins()`
-  list in `firestore.rules`, which must be kept in step with it by hand.
+  `netlify/functions/_adminAuth.mjs` checks the same list before either admin
+  endpoint — `admin-restore` or `admin-erase-user` — will do anything. Being in
+  the bundle costs nothing — an address there only matters to someone already
+  holding a verified Firebase ID token minted for it. Ad-whitelist writes are
+  gated separately by the `admins()` list in `firestore.rules`, which must be
+  kept in step with it by hand.
+
+  The list is also the one thing `admin-erase-user` **will not erase**. An
+  address on it belongs to somebody who can call the endpoint, and on a
+  one-administrator deployment erasing it would take away the access needed to
+  undo the mistake. Removing an administrator is an edit to the env var first,
+  and only then an erasure — not one typed address away.
 - Server secrets (`STRIPE_*`, `REVENUECAT_WEBHOOK_SECRET`, `FIREBASE_*` service
   account) live in Netlify's environment and are never prefixed `VITE_`.
 - Webhooks verify their caller: Stripe by signature, RevenueCat by a

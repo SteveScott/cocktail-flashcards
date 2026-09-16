@@ -8,6 +8,7 @@ import {
 } from "./firebase";
 import cocktailData from './cocktails.json';
 import { restoreProgress } from "./admin-restore.js";
+import { previewErase, eraseUser } from "./admin-erase.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES } from './platform';
 import { setLauncherIcon } from './launcher-icon';
@@ -582,6 +583,24 @@ export default function App() {
   // is the case that actually comes up — someone writes in having lost theirs.
   const [restoreWho, setRestoreWho] = useState("");
   const [restoreResult, setRestoreResult] = useState(null);
+  // Erasing an account on request — the other half of the same admin panel, and
+  // deliberately its own state rather than sharing `backupBusy`: the two run
+  // opposite ways, and a stray "Restored" line left over beside an erasure
+  // result would be the most alarming possible thing to read.
+  //
+  // There is no "everyone" here, so this field is required rather than
+  // meaningful when blank.
+  const [showErase, setShowErase] = useState(false);
+  const [eraseWho, setEraseWho] = useState("");
+  const [eraseBusy, setEraseBusy] = useState("");
+  const [eraseErr, setEraseErr] = useState("");
+  const [eraseResult, setEraseResult] = useState(null);
+  // The look-up currently on screen — but only while it still describes what is
+  // typed in the box. Editing the field after looking an account up withdraws
+  // the Erase button rather than leaving it aimed at the previous one, which is
+  // the mistake a two-step destructive action exists to prevent.
+  const erasePreview = eraseResult?.dryRun && eraseResult.who === eraseWho.trim() ? eraseResult : null;
+  const eraseReady = Boolean(erasePreview);
   // Ad removal has two independent sources and they must never overwrite each
   // other: `adsRemovedCloud` is the account-wide flag in Firestore (written
   // server-side by the Stripe and RevenueCat webhooks — the cross-platform
@@ -1253,6 +1272,64 @@ export default function App() {
       console.error("Restore failed", e);
       setBackupMsg(""); setBackupErr(e.message || "Restore failed.");
     } finally { setBackupBusy(""); }
+  }
+
+  // Erase one account on request, for somebody who cannot press the button in
+  // their own Account card — they have lost the address they signed up with, or
+  // the provider they used, or they simply wrote in asking. The server does all
+  // of it (netlify/functions/admin-erase-user.mjs), using the same wipe the
+  // self-service path uses, so the two doors cannot remove different things.
+  //
+  // Two steps, and the second is gated on the first. Preview resolves whatever
+  // was typed into a uid and an address and reports what exists; Erase is
+  // enabled only while a preview for *that exact string* is on screen, which is
+  // what the `who` stamp is for — the idiom `adCheck` already uses here. A
+  // restore's confirm is a courtesy because a restore can only add. This one is
+  // load-bearing: it names the address the server resolved rather than the text
+  // that was typed, because those differing is precisely the mistake that must
+  // not go through.
+  async function runErasePreview() {
+    const who = eraseWho.trim();
+    if (!who || eraseBusy) return;
+    setEraseErr(""); setEraseResult(null); setEraseBusy("preview");
+    try {
+      const idToken = await user.getIdToken();
+      const isUid = !who.includes("@");
+      const result = await previewErase(idToken, {
+        uid: isUid ? who : undefined,
+        email: isUid ? undefined : who,
+      });
+      setEraseResult({ who, ...result });
+    } catch (e) {
+      console.error("Erase preview failed", e);
+      setEraseErr(e.message || "Could not look that account up.");
+    } finally { setEraseBusy(""); }
+  }
+
+  async function runErase() {
+    const who = eraseWho.trim();
+    const preview = erasePreview;
+    if (!preview || eraseBusy) return;
+    if (!confirm(
+      `Permanently erase ${preview.email || preview.uid}?\n\n` +
+      `uid ${preview.uid}\n\n` +
+      "This deletes their progress, their high-water mark, their purchase record and their sign-in account. " +
+      "It cannot be undone — the copies a restore would bring everything back from are part of what goes."
+    )) return;
+
+    setEraseErr(""); setEraseBusy("erase");
+    try {
+      const idToken = await user.getIdToken();
+      // By uid, always. The preview already resolved it, and re-resolving an
+      // address here would be a second lookup that could land on a different
+      // account than the one just confirmed.
+      const result = await eraseUser(idToken, { uid: preview.uid });
+      setEraseResult({ who, ...result });
+      setEraseWho("");
+    } catch (e) {
+      console.error("Erase failed", e);
+      setEraseErr(e.message || "Erase failed.");
+    } finally { setEraseBusy(""); }
   }
 
   // Restore this account's OWN progress, to the maximum it has ever reached.
@@ -2072,6 +2149,84 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Erase an account on request. The mirror image of the panel above, and
+          sitting under it on purpose: restoring is what an administrator opening
+          this screen almost always came to do, and the irreversible one should
+          not be the first thing under the thumb of somebody scanning for it.
+
+          Collapsed by default and never pre-filled. Everything destructive here
+          is behind a preview whose result has to match what is currently typed,
+          so the confirm can name the address the SERVER resolved rather than the
+          text in the box. See netlify/functions/admin-erase-user.mjs. */}
+      {isAdmin && (
+        <div style={frame({borderRadius:12,padding:"0.9rem 1rem",marginBottom:"1.25rem"})}>
+          <button onClick={()=>setShowErase(v=>!v)} style={{background:"transparent",border:"none",color:C.error,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",padding:0}}>
+            🧨 Erase a User (admin) {showErase ? "▲" : "▼"}
+          </button>
+          {showErase && (
+            <div style={{marginTop:"0.75rem"}}>
+              <div style={{fontSize:"0.72rem",color:C.textFaint,marginBottom:"0.75rem",lineHeight:1.5}}>
+                For a deletion request from someone who cannot press the button
+                themselves. Deletes their progress, their saved maximum, their
+                purchase record and their sign-in account. There is no undo —
+                the copies a restore reads from are part of what goes.
+              </div>
+
+              <input
+                value={eraseWho}
+                onChange={e=>{ setEraseWho(e.target.value); setEraseErr(""); }}
+                placeholder="Email or uid — required"
+                style={{width:"100%",boxSizing:"border-box",padding:"0.5rem 0.75rem",borderRadius:8,background:C.well,border:`1px solid ${C.border}`,color:C.textStrong,fontSize:"0.8rem",outline:"none",marginBottom:"0.6rem"}}
+              />
+              <div style={{display:"flex",gap:"0.5rem"}}>
+                <button onClick={runErasePreview} disabled={!eraseWho.trim() || Boolean(eraseBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.infoLite,fontWeight:600,fontSize:"0.78rem",border:`1px solid ${C.infoEdge}`,opacity:(!eraseWho.trim()||eraseBusy)?0.5:1,cursor:(!eraseWho.trim()||eraseBusy)?"not-allowed":"pointer"}}>
+                  {eraseBusy === "preview" ? "Looking up…" : "Look Up"}
+                </button>
+                <button onClick={runErase} disabled={!eraseReady || Boolean(eraseBusy)} style={{flex:1,padding:"0.5rem",borderRadius:8,background:"transparent",color:C.error,fontWeight:700,fontSize:"0.78rem",border:`1px solid ${C.dangerTextEdge}`,opacity:(!eraseReady||eraseBusy)?0.5:1,cursor:(!eraseReady||eraseBusy)?"not-allowed":"pointer"}}>
+                  {eraseBusy === "erase" ? "Erasing…" : "Erase"}
+                </button>
+              </div>
+              {!eraseReady && !eraseErr && (
+                <div style={{fontSize:"0.72rem",color:C.textFaint,marginTop:"0.5rem"}}>
+                  Look the account up first — Erase stays out until you can see whose it is.
+                </div>
+              )}
+              {eraseErr && <div role="alert" style={{fontSize:"0.75rem",color:C.error,marginTop:"0.6rem"}}>{eraseErr}</div>}
+
+              {eraseResult && (
+                <div style={{marginTop:"0.75rem",background:C.well,borderRadius:8,padding:"0.6rem 0.75rem"}}>
+                  <div style={{fontSize:"0.78rem",fontWeight:700,color:eraseResult.erased?C.error:C.infoLite,marginBottom:"0.35rem"}}>
+                    {eraseResult.erased ? "Erased" : "Found — nothing has been deleted"}
+                  </div>
+                  <div style={{fontSize:"0.75rem",color:C.textBody,lineHeight:1.6,wordBreak:"break-all"}}>
+                    {eraseResult.email || "No address on the sign-in record"}<br/>
+                    <span style={{color:C.textMuted}}>uid {eraseResult.uid}</span>
+                  </div>
+                  <div style={{fontSize:"0.72rem",color:C.textMuted,lineHeight:1.6,marginTop:"0.4rem"}}>
+                    {eraseResult.erased ? "Deleted: " : "Holds: "}
+                    {[
+                      eraseResult.found?.users && "progress",
+                      eraseResult.found?.highWater && "saved maximum",
+                      eraseResult.found?.purchaseLedger && "purchase record",
+                      eraseResult.found?.adWhitelist?.length && "ad whitelist entry",
+                      eraseResult.authUser && "sign-in account",
+                    ].filter(Boolean).join(", ") || "no stored data"}
+                  </div>
+                  {/* What the wipe does not reach, from the server rather than
+                      written out here, so the answer somebody gives the person
+                      who asked matches what the code actually does. */}
+                  {eraseResult.notReached?.length > 0 && (
+                    <div style={{fontSize:"0.7rem",color:C.textFaint,lineHeight:1.55,marginTop:"0.5rem"}}>
+                      Not covered: {eraseResult.notReached.join("; ")}.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
