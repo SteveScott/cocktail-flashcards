@@ -31,7 +31,10 @@ import { join } from "node:path";
 // another 400 KB, they are fetched by the same online page view that installs
 // the worker, and neither blocks a usable screen — the faces are `font-display:
 // swap` and the photograph sits under a background colour that is already right.
-const SHELL = ["/", "/index.html", "/manifest.json", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
+// Exported so tests/pwa-sw.test.mjs can assert against this list rather than a
+// copy of it: what index.html needs for its first paint has to be in here, or
+// the loading screen is itself a request that hangs when there is no signal.
+export const SHELL = ["/", "/index.html", "/manifest.json", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
 
 // The entry script, its modulepreloads and the stylesheet, as index.html names
 // them. Only root-relative URLs: anything absolute is another origin's problem.

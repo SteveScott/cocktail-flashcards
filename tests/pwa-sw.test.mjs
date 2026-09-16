@@ -10,6 +10,7 @@
 // node, no runner, no dependency, same as the rest of tests/.
 import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
+import { SHELL } from "../scripts/pwa-sw.mjs";
 
 const SRC = readFileSync(new URL("../public/pwa-sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://cocktailflashcards.com";
@@ -250,6 +251,23 @@ const shellOf = async (w) => (await w.stores.get(w.cacheName)?.get("/index.html"
 
   ok("cross-origin is left alone", w.raw("https://firestore.googleapis.com/v1/x") === undefined);
   ok("the same path on this origin is not", w.request("/x") !== undefined);
+}
+
+// ── the first paint cannot depend on the network ───────────────────────────
+// index.html paints a background and a loading mark before the hashed
+// stylesheet exists. Every file it names to do that has to be in the precache,
+// or the loading screen is itself a request that hangs in a tunnel — the exact
+// trap the comment above cacheFirst warns about. /assets/ is exempt because
+// scripts/pwa-sw.mjs harvests those from the built index.html; /src/ is the dev
+// server only and never shipped.
+{
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const needs = [...new Set([...html.matchAll(/(?:src|href)="(\/[^"]+)"|url\((\/[^)]+)\)/g)]
+    .map((m) => m[1] ?? m[2])
+    .filter((u) => !u.startsWith("/assets/") && !u.startsWith("/src/")))];
+
+  ok("index.html names something to precache", needs.length > 0);
+  eq("and every one of them is in the offline shell", needs.filter((u) => !SHELL.includes(u)), []);
 }
 
 console.log(fail ? `\n${fail} failed` : "\nall passed");
