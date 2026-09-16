@@ -45,7 +45,7 @@ and how the app copes with the cocktails that refuse to follow the rules.
                                                           webhooks, account
                                                           deletion — Admin SDK)
    ┌────────────────────────────────────────────────────────────────────┐
-   │  Web (Netlify)   ·   PWA (network-first SW)   ·   Play (Capacitor  │
+   │  Web (Netlify)   ·   PWA (service worker)     ·   Play (Capacitor  │
    │  shell loading https://cocktailflashcards.com/?platform=play)      │
    └────────────────────────────────────────────────────────────────────┘
 ```
@@ -88,6 +88,7 @@ Five ideas explain most of the design:
 | `src/monetization.js` | Play build: AdMob banner, UMP consent, RevenueCat / Play Billing. |
 | `src/consent.js` | Reopening Google's GDPR message; whether GDPR applies to this visitor. |
 | `src/main.jsx` | Mounts the app; registers the PWA service worker. |
+| `scripts/pwa-sw.mjs` | Stamps the service worker with the build hash and its precache list. |
 | `src/index.css`, `src/App.css` | Global styles and self-hosted fonts. Component styling is inline. |
 | `scripts/icons.mjs` | Draws the app mark and rasterizes every favicon, PWA icon, launcher icon, splash and store upload from it. |
 | `src/assets/store/` | The two store-listing icons. Generated — see "Store icons" under Development. |
@@ -150,7 +151,7 @@ The parser reads the string as the data writes it, so the conventions matter:
   the literal `No garnish`, last in the string. It is a value, not a gap — an
   empty garnish used to be indistinguishable from a recipe nobody had finished
   researching. It reads as *"Serve without garnish."* in the steps and is kept
-  out of the page's `recipeIngredient`, which is a shopping list. Twenty-one
+  out of the page's `recipeIngredient`, which is a shopping list. Twenty-two
   drinks take it: the shots and layered shooters, the beer-and-a-shot builds,
   and a few austere classics — a Ramos Gin Fizz, a Kir, a Black Russian.
 - **An ingredient may name another cocktail.** A Miami Vice is `6 oz Piña
@@ -721,13 +722,17 @@ This hides features; it is not a security boundary (see [Security model](#securi
 
 ### PWA
 
-`public/manifest.json` makes the site installable. `public/pwa-sw.js` is a
-**network-first** service worker: it prefers the network on every request and
-falls back to a small cached shell only when offline, so a web deploy reaches
-installed and wrapped clients immediately with no stale precached bundle to
-fight. It lives at `/pwa-sw.js` rather than `/sw.js` for reasons recorded in
-`src/main.jsx`, which also unregisters any surviving old-path worker.
-See [docs/pwa.md](docs/pwa.md).
+`public/manifest.json` makes the site installable. `public/pwa-sw.js` is the
+service worker, and it caches by two rules: **navigations are network-first**
+with a three-second timeout, so a web deploy reaches installed and wrapped
+clients immediately; **every other same-origin GET is cache-first**, so no
+signal means no waiting. The second is safe because the cache is named after the
+build and `activate` drops every other one, so a cache hit can never predate the
+build the client is running. `scripts/pwa-sw.mjs` stamps that build name in at
+build time — a worker whose bytes never change never reinstalls, and never
+refreshes the offline shell. It lives at `/pwa-sw.js` rather than `/sw.js` for
+reasons recorded in `src/main.jsx`, which also unregisters any surviving
+old-path worker. See [docs/pwa.md](docs/pwa.md).
 
 ### Native sign-in
 
@@ -905,7 +910,7 @@ hold handles on fresh files; `emptyOutDir` stays `false`.
 
 ### Version
 
-One string — `version` in `package.json`, currently **1.3.0** — and everything
+One string — `version` in `package.json`, currently **1.3.2** — and everything
 that shows a version reads that one field:
 
 - `vite.config.js` defines `__APP_VERSION__` from it; `src/App.jsx` prints it at
@@ -913,7 +918,7 @@ that shows a version reads that one field:
 - `android/app/build.gradle` parses the same field into `versionName`, which is
   what the Play listing and Android's app info show.
 
-So a release is one edit — `npm version 1.3.1 --no-git-tag-version`, or just
+So a release is one edit — `npm version 1.3.3 --no-git-tag-version`, or just
 type it into `package.json` — and the web, the app and the store move together.
 Nothing else in the repo holds a version to keep in step, which is the point.
 
@@ -922,7 +927,7 @@ Nothing else in the repo holds a version to keep in step, which is the point.
 must increase on *every* upload, including a re-upload of an unchanged
 `versionName`, and it can never go down. Increment it by hand when you upload an
 AAB, and leave it alone otherwise — a bump that never ships just burns a number.
-The pair currently reads `versionCode 8` / `1.3.0`.
+The pair currently reads `versionCode 8` / `1.3.2`.
 
 What the number means depends on which build is showing it, because the Play
 shell loads the deployed site:
@@ -940,8 +945,10 @@ the useful half is the one in the footer: it names the code actually running.
 Two things nearby are deliberately *not* this version. The build stamp beside it
 in the billing diagnostics is an ISO timestamp regenerated on every build: it
 identifies a **deploy**, where the version identifies a **release**. And the
-service worker's `cocktail-cache-v1` tracks neither — it is network-first, so
-that name only has to change if the cache format does.
+service worker's cache name tracks neither: it is `cocktail-cache-<stamp>`,
+where the stamp is a hash of what the build emitted (`scripts/pwa-sw.mjs`). It
+has to move whenever the bundle does — that is what reinstalls the worker and
+refreshes the offline shell — so it is derived, never edited.
 
 ## Security model
 
@@ -1078,7 +1085,7 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 |---|---|
 | [docs/methods.md](docs/methods.md) | Every method, order and serve override with its source; the drinks checked and left alone; known gaps in the rules. |
 | [docs/seo.md](docs/seo.md) | The static recipe pages, why they exist, what to check after deploying. |
-| [docs/pwa.md](docs/pwa.md) | The service worker, its path, and why it is network-first. |
+| [docs/pwa.md](docs/pwa.md) | The service worker: its path, its two caching rules, and the no-signal behaviour they fix. |
 | [docs/consent.md](docs/consent.md) | GDPR consent on web and Android, and what happens when ads do not come. |
 | [docs/mobile-google-signin.md](docs/mobile-google-signin.md) | Native Google sign-in for the Capacitor build, and diagnosing failures. |
 | [docs/mobile-monetization.md](docs/mobile-monetization.md) | AdMob, Play Billing and RevenueCat setup, phase by phase. |
