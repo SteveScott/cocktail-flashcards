@@ -6,11 +6,10 @@
 // "rum, lime" is two ingredients, "lime juice" is one, "gin" is not Ginger
 // Beer. None of that is visible from the code being green, so it is pinned
 // here, against the real corpus. Plain node, no runner, no dependency.
-import { readFileSync } from "node:fs";
 import { buildSearchIndex, searchCards, parseSearchQuery, ingredientLabels, getMethod, norm } from "../src/recipe-meta.js";
+import { ALL_CARDS } from "../src/cocktail-corpus.js";
 
-const { top50, master150 } = JSON.parse(readFileSync(new URL("../src/cocktails.json", import.meta.url), "utf8"));
-const ALL = [...top50, ...master150];
+const ALL = ALL_CARDS;
 const index = buildSearchIndex(ALL);
 
 const find = q => searchCards(index, q).map(c => c.name);

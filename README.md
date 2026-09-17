@@ -111,11 +111,30 @@ Five ideas explain most of the design:
 - **`master150`** — the rest. The name is historical; it holds 284 recipes. This
   is what a Pro purchase adds to study and quizzes.
 
-Together they are 334 recipes, combined in `App.jsx` as `ALL_CARDS`. The two
+Together they are 334 recipes, combined in `src/cocktail-corpus.js` as
+`ALL_CARDS`. The two
 array names are historical and neither number in them is true any more, but they
 are the Firestore-adjacent shape of the data and not worth a migration; the
 combined list was renamed when the split stopped being cosmetic and became the
 line the paywall runs along.
+
+**Counts come from counting.** `src/cocktail-corpus.js` owns `cocktails.json`
+and is the only definition of the list: `FREE_CARDS`, `PRO_CARDS`, `ALL_CARDS`,
+with `countCocktails()` and `quizzableCocktails()` over them. App.jsx,
+`vite.config.js`, the frequency script and the tests all import it rather than
+re-reading the JSON and re-joining the halves, which is what four of them used
+to do. The names matter more than the counting does — `.length` was never wrong,
+but reaching for the pool where the code meant the quizzable pool was.
+
+`index.html` is the one file that cannot count, so it writes
+`{{COCKTAIL_COUNT}}` and the `cocktailCounts()` plugin fills it in, in dev as
+well as in the build and before the service worker hashes the shell. That is not
+cosmetic: the JSON-LD it ships had been telling crawlers about 322 recipes since
+the book passed 322.
+
+`docs/store-listing.md` is the deliberate exception and states floors ("330+"),
+because Play copy is pasted in by hand and cannot recompute itself. That file
+documents its own rule for raising them.
 
 A recipe is one JSON object on one line, and that formatting is load-bearing:
 several maintenance scripts edit the file line by line, and one-line-per-recipe
@@ -408,9 +427,11 @@ would never test whether the earlier ones stuck.
 
 "All Cocktails" is the exception, and takes the whole pool in one shuffle
 regardless of progress. It says so on the button, because the line above it
-promises the opposite. For 86 It that count is one smaller than the pool: the
-Miami Vice's ingredient line is prose describing two other drinks, so it parses
-to no components and cannot make a question.
+promises the opposite. Its count comes from the list the round will actually run
+— `quizzableCocktails(pool)` for 86 It, which drops anything with fewer than two
+ingredients. Nothing is dropped today, and counting rather than assuming is the
+point: the Miami Vice used to fail that test, back when its line was unmeasured
+prose, and the button would have been wrong the day it did.
 
 Since the pool honours the entitlement, a free player is quizzed on the top 50
 in both quizzes, and progress on paid drinks is ignored while the library is off.

@@ -1,14 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { createRequire } from 'node:module'
-import { seoPages } from './scripts/seo-pages.mjs'
+import { seoPages, cocktailCounts } from './scripts/seo-pages.mjs'
 import { pwaServiceWorker } from './scripts/pwa-sw.mjs'
+import { ALL_CARDS } from './src/cocktail-corpus.js'
 
-// The recipe data is read here (not imported as JSON, which would need an
-// assert clause in this context) and handed to the generator, so the static
-// pages and the app bundle are built from the identical source.
-const cocktails = createRequire(import.meta.url)('./src/cocktails.json')
-const ALL = [...cocktails.top50, ...cocktails.master150]
+// The recipe data comes from the same module the app imports, so the static
+// pages and the bundle are built from one list rather than two readings of one
+// file. It is the only definition of "every cocktail in the book" — see
+// src/cocktail-corpus.js.
 
 // The app's version, and there is one of it. package.json holds the string;
 // android/app/build.gradle reads the SAME field and stamps it into the APK as
@@ -36,11 +36,15 @@ export default defineConfig({
     // Emits dist/cocktails/<slug>.html for every recipe (Netlify serves these
     // at /cocktails/<slug>), the browse-all index, and a sitemap covering them.
     // See scripts/seo-pages.mjs and docs/seo.md for why this exists.
-    seoPages(ALL),
+    seoPages(ALL_CARDS),
     // Stamps dist/pwa-sw.js with a hash of this build and the list of files it
     // should precache, so that a deploy reinstalls the worker and refreshes the
     // offline shell. Runs in closeBundle like seoPages, i.e. after public/ has
     // been copied into dist, because the file it rewrites is that copy.
+    // Fills {{COCKTAIL_COUNT}} in index.html from the same list, so the number
+    // a crawler reads is counted rather than remembered. Before pwaServiceWorker
+    // so the worker hashes the finished HTML.
+    cocktailCounts(ALL_CARDS),
     pwaServiceWorker(),
   ],
   build: {

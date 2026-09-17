@@ -20,10 +20,10 @@ Two rules the copy follows deliberately:
   quiz lengths, the price and what Pro carries all come from
   `src/cocktails.json` and `src/App.jsx`. When those change, this file changes
   with them.
-- **The collection sizes are floors, not counts.** "320+" for the whole book and
-  "270+" for what Pro adds, so shipping a new recipe does not silently make the
-  listing wrong. `src/cocktails.json` holds 321 as of this writing (50 free +
-  271 Pro); raise each floor to the next round number once the collection passes
+- **The collection sizes are floors, not counts.** "330+" for the whole book and
+  "280+" for what Pro adds, so shipping a new recipe does not silently make the
+  listing wrong. `src/cocktails.json` holds 334 as of this writing (50 free +
+  284 Pro); raise each floor to the next round number once the collection passes
   it, and never above the real total. The free tier is the top 50 and is a fixed
   list rather than a running total, so that one is stated outright.
 - **No ranking or endorsement claims.** No "best", no "#1", no "as featured in",
@@ -43,7 +43,7 @@ Cocktail Flashcards
 ## Short description — 79 / 80
 
 ```
-Learn 320+ classic cocktail recipes by heart with flashcards and drill quizzes.
+Learn 330+ classic cocktail recipes by heart with flashcards and drill quizzes.
 ```
 
 ## Full description — 2,979 / 4000
@@ -51,7 +51,7 @@ Learn 320+ classic cocktail recipes by heart with flashcards and drill quizzes.
 ```
 Bar guides tell you what is in a drink. Flashcards make you remember it.
 
-Cocktail Flashcards drills the ingredients, ratios, glassware and serve of 320+ classic cocktails — the Drinks International Bestselling Classics list, plus the deeper cuts a back bar eventually gets asked for — until you can call them from memory in the middle of a Friday night rush.
+Cocktail Flashcards drills the ingredients, ratios, glassware and serve of 330+ classic cocktails — the Drinks International Bestselling Classics list, plus the deeper cuts a back bar eventually gets asked for — until you can call them from memory in the middle of a Friday night rush.
 
 FOUR WAYS TO PRACTICE
 
@@ -65,7 +65,7 @@ Pick a length, get a fresh shuffle of the whole book, and mark yourself honestly
 Every ingredient in the drink, plus one to three that have no business being there, all checked. Uncheck the fakes. This one grades itself: right only when every real ingredient survives and every impostor is gone. The impostors are drawn from every ingredient in the collection, so a Margarita can be sabotaged with anything on the shelf.
 
 Index — Search Cocktails
-Search all 320+ recipes by name, accent-insensitive, so "pina" finds the Piña Colada. Read any spec and add drinks straight to your deck.
+Search all 330+ recipes by name, accent-insensitive, so "pina" finds the Piña Colada. Read any spec and add drinks straight to your deck.
 
 KEEP TRACK OF WHAT YOU HAVE TRIED
 
@@ -79,9 +79,9 @@ Sign in with Google and your progress follows you between the app and the websit
 
 FREE, AND PRO
 
-Free: the top 50 bestselling classics in Study Mode and both quizzes, the full index of 320+ recipes to read and search, supported by ads.
+Free: the top 50 bestselling classics in Study Mode and both quizzes, the full index of 330+ recipes to read and search, supported by ads.
 
-Cocktail Flashcards Pro — $7.99, paid once, not a subscription: adds all 270+ cocktails to Study Mode and both quizzes, and removes the ads. Buy it in the app and it works on the website too under the same Google account, and it restores on a new device.
+Cocktail Flashcards Pro — $7.99, paid once, not a subscription: adds all 280+ cocktails to Study Mode and both quizzes, and removes the ads. Buy it in the app and it works on the website too under the same Google account, and it restores on a new device.
 
 Built for bartenders learning a new menu, barbacks working toward the well, home hosts, and anyone tired of looking up the Last Word for the fourth time.
 
