@@ -343,6 +343,28 @@ function shuffled(list) {
   return a;
 }
 
+// Which cocktails a round asks about, for both quizzes. A short round is a
+// random sample of the drinks with any progress — a score above zero, or
+// mastered — and only when there are fewer of those than the round is long is
+// it topped up, from the top of the pool down. It is shuffled once more at the
+// end so the top-up isn't all in a block after the studied ones.
+//
+// The point is that a short round is worth taking early: quizzing someone on
+// 10 drinks at random out of 334 mostly asks about drinks they have never seen.
+// A player who has studied nothing still gets a sensible round — the top 10 by
+// rank — because the top-up is the pool in its own order.
+//
+// n = null is the exception and takes the whole pool in one shuffle, studied or
+// not: "All Cocktails" means all of them.
+function studiedFirst(cards, n, st) {
+  if (!n) return shuffled(cards);
+  const learnedSet = new Set(st.learned || []);
+  const progressed = c => (st.scores?.[c.name] || 0) > 0 || learnedSet.has(c.name);
+  const studied = shuffled(cards.filter(progressed));
+  const topUp = cards.filter(c => !progressed(c));
+  return shuffled([...studied, ...topUp].slice(0, n));
+}
+
 function initState(masterMode) {
   const pool = masterMode ? ALL_CARDS : top50;
   const scores = {};
@@ -1694,14 +1716,12 @@ export default function App() {
 
   function next() { setDi(i => (i+1) % deck.length); setRevealed(false); }
   function prev() { setDi(i => (i-1+deck.length) % deck.length); setRevealed(false); }
-  // Build a fresh, fully-shuffled quiz order every time — Self Quiz always draws
-  // from the whole pool in random sequence (Fisher–Yates), never the fixed pool
-  // order. Shuffling before the slice is what makes a short quiz a random sample
-  // of the pool rather than its first n cocktails. n = null takes everything.
+  // Build a fresh quiz order every time, never the fixed pool order. Which
+  // cocktails it draws is studiedFirst()'s question, and the answer is the same
+  // one 86 It gets: what you have studied, topped up from the top of the pool.
   function startQuiz(n) {
-    const q = shuffled(pool);
     setQuizLen(n ?? null);
-    setQuizPool(n ? q.slice(0, n) : q);
+    setQuizPool(studiedFirst(pool, n, st));
     setQa([]); setQi(0); setQr(false); setMode("quiz");
   }
   function qGrade(k) {
@@ -1711,23 +1731,15 @@ export default function App() {
     else { setQi(i=>i+1); setQr(false); }
   }
 
-  // 86 It. Unlike startQuiz it asks about what you have studied: a short round
-  // is a random sample of the drinks with any progress — a score above zero, or
-  // mastered — and only when there are fewer of those than the round is long is
-  // it topped up, from the top of the pool down. The round is shuffled once more
-  // so the top-up isn't all at the end. Each question also carries the options
-  // it will offer. They are generated up front, once: built during render they
-  // would redraw their impostors on every keystroke.
+  // 86 It draws the same way Self Quiz does — see studiedFirst(). What is its
+  // own is that each question also carries the options it will offer. They are
+  // generated up front, once: built during render they would redraw their
+  // impostors on every keystroke.
   function start86Quiz(n) {
     // `pool` already honours master mode, and is in rank order; eligibility
     // drops the one drink that cannot make a question.
     const eligible = pool.filter(eightySixEligible);
-    const learnedSet = new Set(st.learned || []);
-    const progressed = c => (st.scores[c.name] || 0) > 0 || learnedSet.has(c.name);
-    const studied = shuffled(eligible.filter(progressed));
-    const topUp = eligible.filter(c => !progressed(c));
-    const picked = n ? [...studied, ...topUp].slice(0, n) : eligible;
-    const chosen = shuffled(picked).map(c => buildEightySixQuestion(c, LEXICON));
+    const chosen = studiedFirst(eligible, n, st).map(c => buildEightySixQuestion(c, LEXICON));
     setQuizKind("86");
     setQuizLen(n ?? null);
     setQuizPool(chosen);
@@ -2799,6 +2811,11 @@ export default function App() {
   // duplicate "All" buttons (in the free 50-cocktail pool, "50" IS all of them).
   if (mode === "quizlen") {
     const lengths = [10, 20, 50].filter(n => n < total);
+    // "All Cocktails" is the one round that ignores what you have studied, so it
+    // says so — the line above it promises the opposite. Its count is the pool
+    // for Self Quiz but the eligible pool for 86 It, which is one smaller: the
+    // Miami Vice is all prose and cannot make a question.
+    const allCount = quizKind === "86" ? pool.filter(eightySixEligible).length : total;
     const opt = (label, sub, onClick, bg) => (
       <button key={label} onClick={onClick} style={{...btn(bg),width:"100%",marginBottom:"0.75rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span>{label}</span>
@@ -2814,13 +2831,12 @@ export default function App() {
           <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>{quizKind === "86" ? "🍸" : "🎯"}</div>
           <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
           <p style={{color:C.textMuted,fontSize:"0.85rem",margin:0}}>
-            {quizKind === "86"
-              ? "86 It — drawn from the cocktails you've studied, topped up with the most popular."
-              : "Cocktails are drawn at random from all " + total + "."}
+            {(quizKind === "86" ? "86 It" : "Self Quiz")
+              + " — drawn from the cocktails you've studied, topped up with the most popular."}
           </p>
         </div>
         {lengths.map(n => opt(`${n} Questions`, "", ()=>startPicked(n), quizKind === "86" ? C.danger : C.accentAlt))}
-        {opt("All Cocktails", `${total} questions`, ()=>startPicked(null), quizKind === "86" ? C.dangerDeep : C.accentAltDeep)}
+        {opt("All Cocktails", `${allCount} questions — studied or not`, ()=>startPicked(null), quizKind === "86" ? C.dangerDeep : C.accentAltDeep)}
         {/* Says what a bigger round would cost, at the moment the user is
             picking how much to take on — not as an interruption to the quiz
             itself. Amber whichever quiz this is: it is the Pro colour
