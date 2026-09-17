@@ -211,7 +211,7 @@
     { "name": "Hanky Panky", "glass": "Coupe", "serve": "Up", "ingredients": "1½ oz Gin, 1½ oz Sweet Vermouth, ¼ oz Fernet-Branca, Orange peel (garnish)" },
     { "name": "Jungle Bird", "glass": "Rocks or Tiki", "serve": "Over Crushed Ice", "ingredients": "1½ oz Dark Rum, ¾ oz Campari, ½ oz Fresh Lime Juice, ½ oz Simple Syrup, 1½ oz Pineapple Juice, Pineapple wedge (garnish)" },
     { "name": "Gin-Gin Mule", "glass": "Highball or Copper Mug", "serve": "On the Rocks", "ingredients": "2 oz Gin, ¾ oz Fresh Lime Juice, ¾ oz Simple Syrup, 6 Fresh Mint Leaves, 2 oz Ginger Beer, Mint sprig (garnish)" },
-    { "name": "True Blood", "glass": "Highball", "method": "Built, Not Stirred", "serve": "On the Rocks", "ingredients": "2 oz Vodka, 1 oz Raspberry Liqueur, 1 oz Cranberry Juice, Red Wine (float), Orange slice (garnish)" },
+    { "name": "True Blood", "glass": "Highball", "method": "Built, Not Stirred", "serve": "On the Rocks", "ingredients": "2 oz Vodka, 1 oz Raspberry Liqueur, 1 oz Cranberry Juice, Red Wine (float), No garnish" },
     { "name": "Brooklyn", "glass": "Coupe", "serve": "Up", "ingredients": "2 oz Rye, 1 oz Dry Vermouth, ¼ oz Maraschino Liqueur, ¼ oz Amer Picon (or Amaro Ciociaro), Maraschino cherry (garnish)" },
     { "name": "El Presidente", "glass": "Coupe", "serve": "Up", "ingredients": "2 oz White Rum, ¾ oz Blanc Vermouth, ½ oz Orange Curaçao, 1 tsp Grenadine, Orange peel (garnish)" },
     { "name": "Pimm's Cup", "glass": "Highball", "serve": "On the Rocks", "ingredients": "2 oz Pimm's No. 1, 4 oz Lemonade or Ginger Ale, Cucumber ribbon, Orange slice, Mint sprig (garnish)" },
