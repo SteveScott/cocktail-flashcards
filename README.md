@@ -910,7 +910,7 @@ hold handles on fresh files; `emptyOutDir` stays `false`.
 
 ### Version
 
-One string — `version` in `package.json`, currently **1.3.2** — and everything
+One string — `version` in `package.json`, currently **1.3.3** — and everything
 that shows a version reads that one field:
 
 - `vite.config.js` defines `__APP_VERSION__` from it; `src/App.jsx` prints it at
@@ -918,16 +918,21 @@ that shows a version reads that one field:
 - `android/app/build.gradle` parses the same field into `versionName`, which is
   what the Play listing and Android's app info show.
 
-So a release is one edit — `npm version 1.3.3 --no-git-tag-version`, or just
-type it into `package.json` — and the web, the app and the store move together.
-Nothing else in the repo holds a version to keep in step, which is the point.
+So a release is one command — `npm version 1.3.4 --no-git-tag-version` — and the
+web, the app and the store move together.
+
+Use the command rather than typing the number into `package.json`. The field
+there is the one everything *reads*, but `package-lock.json` carries the same
+version twice in its own header, and only `npm version` moves all three. Editing
+by hand leaves the lock a release behind — which is what happened to 1.3.3, and
+is invisible because `npm ci` does not mind.
 
 **`versionCode` is the exception**, and stays a literal in
 `android/app/build.gradle`. It is not a version but Play's upload counter: it
 must increase on *every* upload, including a re-upload of an unchanged
 `versionName`, and it can never go down. Increment it by hand when you upload an
 AAB, and leave it alone otherwise — a bump that never ships just burns a number.
-The pair currently reads `versionCode 8` / `1.3.2`.
+The pair currently reads `versionCode 8` / `1.3.3`.
 
 What the number means depends on which build is showing it, because the Play
 shell loads the deployed site:
