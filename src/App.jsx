@@ -70,6 +70,13 @@ const MASTERY_SCORE = 6;
 const STORAGE_KEY = "cocktail_state_v4";
 // Facebook Login is fully implemented (src/firebase.js + signInFacebook) but temporarily
 // hidden from the UI until the Facebook app is configured. Flip to true to re-enable.
+//
+// Before flipping it, read the shell guard in signIn(). Facebook never takes the
+// native branch — the plugin is configured for google.com alone — so in the Play
+// app it lands on that guard and is told to update from Play, which would not
+// help, because no version of this app can do Facebook in a WebView. Enabling
+// Facebook in the store build means giving it a native route of its own, or
+// hiding the button there; it does not mean flipping this alone.
 const FACEBOOK_LOGIN_ENABLED = false;
 
 // Emails allowed to manage the ad whitelist from the in-app admin panel. Set via
