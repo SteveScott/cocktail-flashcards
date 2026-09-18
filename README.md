@@ -454,6 +454,24 @@ by sweeping the sampler across [0,1) on a 20M-point grid and measuring the
 interval each tied type actually receives; they come out identical to within the
 one grid point the grid cannot split.
 
+**A wrong answer has to be wrong.** An impostor is never drawn against an
+ingredient it could be argued to *be*, because a quiz that marks a right answer
+wrong is worse than no quiz. Two names collide either when one contains the
+other — "Gin" against a Sloe Gin drink, "Angostura" against "Angostura Bitters" —
+or when `INGREDIENT_FAMILIES` in `src/recipe-meta.js` says so. That table is
+hand-written, because nothing in the strings "Cointreau" and "Triple Sec" says
+they are one bottle. Each entry is a path: equal paths are two names for one
+thing (`Sugar Syrup` / `Simple Syrup`), and a longer path is a kind of the
+shorter one (`whisky/bourbon` under `whisky`, so a Bourbon drink cannot offer
+"Whiskey"). Siblings deliberately do not collide, which is what keeps Islay
+Scotch a fair impostor against Blended Scotch and Prosecco against Champagne.
+The bar for adding a pair is identity: Apricot Brandy and Apricot Liqueur are the
+same line of a recipe, where Egg White and Whole Egg are not — one is part of the
+other, but a drink shaken with a whole egg is not the same drink, so the wrong
+one is still a wrong answer. `tests/eighty-six.test.mjs` pins the table against
+the corpus — including that every name in it is one the book actually uses, so a
+renamed ingredient fails the test rather than quietly switching a rule off.
+
 ### Tried
 
 A drink can be marked tried from the card or from the index. This is a fact
