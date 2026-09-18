@@ -20,19 +20,16 @@
 //   npm run ingredient-frequency -- Port       only rows matching a substring
 //   npm run ingredient-frequency -- --verify   prove tied types are sampled fairly
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { buildLexicon, buildEightySixQuestion, eightySixEligible } from "../src/recipe-meta.js";
+import { buildLexicon, buildEightySixQuestion } from "../src/recipe-meta.js";
+import { ALL_CARDS, quizzableCocktails } from "../src/cocktail-corpus.js";
 
 const ROUNDS = 2000;
 const QUESTIONS = 10;
 
-const here = fileURLToPath(new URL(".", import.meta.url));
-const data = JSON.parse(readFileSync(here + "../src/cocktails.json", "utf8"));
-const recipes = [...data.top50, ...data.master150];
+const recipes = ALL_CARDS;
 
 const lexicon = buildLexicon(recipes);
-const eligible = recipes.filter(eightySixEligible);
+const eligible = quizzableCocktails(recipes);
 
 // ── --verify: are types on equal probability sampled equally often? ────────
 //

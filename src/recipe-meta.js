@@ -165,7 +165,7 @@ const TRAILING_MEASURE_RE = /^(.*?)[\s(]+(float|drizzle|splash|rinse)\)?\s*$/i;
 // Carbonated things rank last whatever their volume: a Moscow Mule's four
 // ounces of ginger beer is still the thing that goes in on top.
 const ORDER_TOPPER = /\b(soda|seltzer|sparkling|tonic|ginger beer|ginger ale|cola|coca-cola|lemon-lime|lemonade|energy drink|champagne|prosecco|cava|topo chico|beer|lager|stout|cider)\b/i;
-const ORDER_LIQUOR = /\b(gin|vodka|rum|rhum|whisk(e)?y|rye|bourbon|scotch|tequila|mezcal|cachaça|cognac|brandy|armagnac|calvados|pisco|applejack|aquavit|absinthe|chartreuse|campari|aperol|suze|cynar|amaro|averna|fernet|bénédictine|drambuie|galliano|amaretto|kahlúa|baileys|curaçao|cointreau|triple sec|maraschino|liqueur|crème de|creme de|vermouth|sherry|port|lillet|dubonnet|punt e mes|pimm's|wine|sake|jägermeister|passoa|midori|chambord|st-germain|st\. germain|falernum|allspice dram|pastis|sambuca|schnapps|licor 43|heering|arrack|grappa|limoncello|advocaat|sloe gin|old tom|genever|overproof|southern comfort|151)\b/i;
+const ORDER_LIQUOR = /\b(gin|vodka|rum|rhum|whisk(e)?y|rye|bourbon|scotch|tequila|mezcal|cachaça|cognac|brandy|armagnac|calvados|pisco|aguardiente|applejack|aquavit|absinthe|chartreuse|campari|aperol|suze|cynar|amaro|averna|fernet|bénédictine|drambuie|galliano|amaretto|kahlúa|baileys|curaçao|cointreau|grand marnier|triple sec|maraschino|liqueur|crème de|creme de|vermouth|sherry|port|lillet|dubonnet|punt e mes|pimm's|wine|sake|jägermeister|passoa|midori|chambord|st-germain|st\. germain|falernum|allspice dram|pastis|sambuca|schnapps|licor 43|heering|arrack|grappa|limoncello|advocaat|sloe gin|old tom|genever|overproof|southern comfort|151)\b/i;
 const ORDER_CITRUS = /\b(lime|lemon|grapefruit|orange)\b[^,]*\bjuice\b/i;
 const ORDER_SYRUP  = /\b(syrup|orgeat|grenadine|honey|agave|sugar|cane|gomme|nectar|cordial)\b/i;
 
@@ -718,13 +718,162 @@ export function buildLexicon(recipes) {
   return table;
 }
 
+// Containment catches most of it, but not all: "Cointreau" and "Triple Sec"
+// share no letters and are the same bottle, and a player who knows that would
+// leave the impostor checked and be marked wrong for knowing it. The same goes
+// for a name that is a kind of another — a recipe calling for Bourbon cannot
+// offer "Whiskey" as a wrong answer.
+//
+// So, a second relation, listed by hand because nothing in the name says it.
+// Every entry is a path, and two names clash when one path is a prefix of the
+// other: equal paths are two names for one thing (Sugar Syrup / Simple Syrup),
+// and a longer path is a kind of the shorter one (Bourbon is a whisky).
+// Siblings deliberately do not clash — Islay Scotch and Blended Scotch are both
+// whisky/scotch/… and stay each other's best wrong answer, while bare "Scotch"
+// sits above both and clashes with either.
+//
+// The bar for an entry is identity: would someone who knows drinks be right to
+// say these two names are the same line of the recipe? That puts Apricot Brandy
+// with Apricot Liqueur, and keeps Egg White away from Whole Egg — one is part of
+// the other, but a drink shaken with a whole egg is not the same drink, so the
+// wrong one is still a wrong answer.
+//
+// Only names the corpus actually uses belong here; tests/eighty-six.test.mjs
+// fails on an entry that matches no ingredient, so a typo or a renamed
+// ingredient shows up as a red test rather than as a rule that quietly stopped
+// applying.
+export const INGREDIENT_FAMILIES = {
+  // The orange liqueurs: interchangeable in all but name. Blue Curaçao is not
+  // one of them and is deliberately absent. It is the same liqueur under the
+  // dye, but the colour is the entire reason a drink asks for it, and no player
+  // looking at a Blue Lagoon would accept Triple Sec as the same line.
+  "orange-liqueur": ["Triple Sec", "Cointreau", "Orange Curaçao", "Grand Marnier", "Orange Liqueur"],
+
+  // Rum divides by colour before it divides by anything else. Gold sits with
+  // the aged rums rather than on a branch of its own: a Mai Tai does call for a
+  // gold and a dark, so the two are not strictly one thing, but "gold" and
+  // "dark" are close enough on the shelf that neither makes an honest wrong
+  // answer where the other is already poured.
+  "rum/light": ["White Rum", "Light Rum", "Overproof White Rum", "Cuban Rum"],
+  "rum/light/agricole": ["Rhum Agricole", "Agricole Rum"],
+  "rum/aged": [
+    "Aged Rum", "Blended Aged Rum", "Dark Rum", "Aged Dark Rum",
+    "Jamaican Rum", "Dark Jamaican Rum", "Overproof Jamaican Rum", "Gold Jamaican Rum",
+    "Demerara Rum", "151 Demerara Rum", "Blackstrap Rum", "Goslings Black Seal Rum",
+    "Gold Puerto Rican Rum",
+  ],
+
+  // Whiskey over its styles. The styles are siblings on purpose: rye in a
+  // bourbon drink is a fair question, "whiskey" in a bourbon drink is not.
+  "whisky": ["Whiskey"],
+  "whisky/blended-american": ["Blended Whiskey"],
+  "whisky/bourbon": ["Bourbon"],
+  "whisky/rye": ["Rye", "Rye Whiskey"],
+  "whisky/scotch": ["Scotch"],
+  "whisky/scotch/blended": ["Blended Scotch"],
+  "whisky/scotch/islay": ["Islay Scotch"],
+  "whisky/scotch/overproof": ["Overproof Scotch"],
+  "whisky/irish": ["Irish Whiskey"],
+  "whisky/tennessee": ["Tennessee Whiskey"],
+  "whisky/canadian": ["Canadian Whisky"],
+
+  // Blanco and Reposado are two words for the same bottle in two orders; what
+  // separates them from each other is the barrel, not the agave.
+  "tequila": ["Tequila", "100% Agave Tequila"],
+  "tequila/blanco": ["Tequila Blanco", "Blanco Tequila"],
+  "tequila/reposado": ["Reposado Tequila"],
+
+  "brandy": ["Brandy"],
+  "brandy/cognac": ["Cognac"],
+  "brandy/apple": ["Calvados", "Applejack"],
+
+  "sparkling-wine": ["Sparkling Wine"],
+  "sparkling-wine/champagne": ["Champagne"],
+  "sparkling-wine/prosecco": ["Prosecco"],
+  "wine/white-dry": ["Dry White Wine"],
+  "wine/white-dry/burgundy": ["White Burgundy"],
+  "sherry/dry": ["Dry Sherry", "Oloroso Sherry"],
+  "sherry/dry/amontillado": ["Amontillado Sherry"],
+  "vermouth/sweet": ["Sweet Vermouth", "Punt e Mes"],
+
+  "beer": ["Beer", "Light Beer"],
+  "beer/lager": ["Lager", "Mexican Lager"],
+  "beer/stout": ["Stout", "Guinness"],
+
+  "liqueur/apricot": ["Apricot Brandy", "Apricot Liqueur"],
+  "liqueur/elderflower": ["St. Germain", "Elderflower Cordial"],
+  "liqueur/blackcurrant": ["Crème de Cassis", "Blackcurrant Cordial"],
+  "liqueur/peach": ["Peach Schnapps", "Peach Liqueur"],
+  "liqueur/raspberry": ["Raspberry Liqueur", "Chambord"],
+  "liqueur/blackberry": ["Blackberry Liqueur", "Crème de Mûre"],
+
+  "syrup/simple": ["Simple Syrup", "Sugar Syrup", "Rich Simple Syrup"],
+
+  "juice/orange": ["Orange Juice", "Fresh Orange Juice", "Freshly Squeezed Orange Juice", "OJ"],
+  "juice/tomato": ["Tomato Juice"],
+  "juice/tomato/clamato": ["Clamato Juice"],
+
+  "hot-sauce": ["Hot Sauce"],
+  "hot-sauce/tabasco": ["Tabasco"],
+  "hot-sauce/valentina": ["Valentina Hot Sauce"],
+
+  // Prep and temperature are not ingredients. Whipped cream is cream, hot milk
+  // is milk, and boiling water is hot water.
+  "cream": ["Heavy Cream", "Cream", "Lightly Whipped Cream", "Half-and-Half"],
+  "coconut-cream": ["Coconut Cream", "Cream of Coconut"],
+  "milk": ["Whole Milk", "Hot Milk"],
+  "water/hot": ["Hot Water", "Boiling Water"],
+  "soda-water": ["Soda Water", "Topo Chico Sparkling Water"],
+  "strawberry": ["Strawberry", "Fresh Strawberries", "Fresh Strawberry Purée"],
+  "pepper": ["Black Pepper", "Celery Salt & Pepper"],
+};
+
+// Name -> family path, normalized so the table can be written the way the
+// recipes are: norm() folds case and strips the accents that "Orange Curaçao"
+// and "Crème de Mûre" would otherwise have to match exactly.
+const FAMILY_OF = new Map(
+  Object.entries(INGREDIENT_FAMILIES).flatMap(([path, labels]) => labels.map(l => [norm(l), path])),
+);
+
+// Usually one family, or none. Two when the ingredient states an alternative:
+// "Bourbon or Rye" is never an impostor itself — the lexicon drops it — but it
+// is a real ingredient of two recipes, and both sides of it have to block the
+// generic "Whiskey" from being drawn against them.
+//
+// Memoized because the answer cannot change — the corpus is a closed vocabulary
+// and this is a pure lookup — while the cost is not nothing: a draw asks it
+// twice per lexicon entry per real ingredient, and norm() is a Unicode
+// normalize and a regex on every one of them. Uncached, the 20,000-question
+// simulation behind `npm run ingredient-frequency` took ten times as long.
+const familyCache = new Map();
+function familiesOf(label) {
+  let found = familyCache.get(label);
+  if (!found) {
+    found = norm(label).split(/\bor\b/).map(part => FAMILY_OF.get(part.trim())).filter(Boolean);
+    familyCache.set(label, found);
+  }
+  return found;
+}
+
+function relatedFamilies(a, b) {
+  return a === b || a.startsWith(b + "/") || b.startsWith(a + "/");
+}
+
 // Two names clash when either contains the other. "Gin" cannot be an impostor
 // in a Sloe Gin drink and "Angostura Bitters" cannot be one where the recipe
 // says "Angostura": both would be defensibly correct answers, and a quiz that
-// marks a right answer wrong is worse than no quiz at all.
-function clashes(a, b) {
+// marks a right answer wrong is worse than no quiz at all. Names that say the
+// same thing without sharing any letters are the other half of the rule, and
+// come from the family table above.
+//
+// Exported for the test, which has to be able to ask the question directly: a
+// name missing from a draw is no proof it was blocked, because each draw also
+// removes whatever clashes with the name it just took.
+export function clashes(a, b) {
   const x = a.toLowerCase(), y = b.toLowerCase();
-  return x.includes(y) || y.includes(x);
+  if (x.includes(y) || y.includes(x)) return true;
+  const fa = familiesOf(a), fb = familiesOf(b);
+  return fa.some(p => fb.some(q => relatedFamilies(p, q)));
 }
 
 // Sample n impostors from the lexicon without replacement. Anything that clashes
@@ -752,9 +901,15 @@ export function drawImpostors(lexicon, realLabels, n, rand = Math.random) {
   return out;
 }
 
-// A drink needs at least two ingredients to be worth asking about. One recipe
-// fails this: the Miami Vice, whose entire ingredient line is prose describing
-// two other drinks, so it parses to no measured components at all.
+// A drink needs at least two ingredients to be worth asking about. Today every
+// recipe in the book clears that bar — the Miami Vice used to be the exception,
+// back when its line was unmeasured prose, and now reads `6 oz Piña Colada
+// (Frozen), 6 oz Strawberry Daiquiri (Frozen)`, which parses to two. The guard
+// stays because the next recipe written that way would otherwise reach the quiz
+// as a question with nothing to ask.
+//
+// So do not state a count derived from this as if it differed from the book's:
+// count the list. See countCocktails() in src/cocktail-corpus.js.
 export function eightySixEligible(c) {
   return ingredientLabels(c).length >= 2;
 }
@@ -762,9 +917,40 @@ export function eightySixEligible(c) {
 // One question: the drink's real ingredients plus one, two or three impostors
 // (equally likely), shuffled together. The cocktail is spread in so callers can
 // keep treating a question as a recipe — `name` and `rank` still read.
+// Everything the garnish line names, so the quiz cannot offer it as the wrong
+// answer. "1 dash Angostura Bitters (garnish)" says where the bitters go, not
+// whether the drink has them, and a strawberry on a Frosé is a strawberry the
+// player can see.
+//
+// That is the whole bug class. ingredientLabels() reads the components bucket,
+// drawImpostors() excludes what clashes with it, and anything the parser files
+// as a garnish falls through both. It cost five sours: the Scotch, the Mezcal
+// and the Pisco offered their own Angostura on roughly a tenth of their
+// questions, and the Whiskey and New York Sours joined them the moment their
+// bitters moved to the foam.
+//
+// The measured ones were the ones worth fixing and an earlier pass blocked only
+// those, on the reasoning that an orange slice should leave Orange Liqueur a
+// fair wrong answer. That precision is not worth buying. Over-blocking costs a
+// draw from a pool of 256; under-blocking marks a player wrong for reading the
+// card in front of them, and the two are not the same size of mistake. Block
+// the line.
+export function garnishLabels(c) {
+  const out = [];
+  for (const g of parseIngredients(c.ingredients).garnishes) {
+    const m = g.match(MEASURE_RE);
+    const label = ingredientLabel((m ? m[2] : g).trim());
+    if (label && !out.includes(label)) out.push(label);
+  }
+  return out;
+}
+
 export function buildEightySixQuestion(c, lexicon, rand = Math.random) {
   const real = ingredientLabels(c);
-  const impostors = drawImpostors(lexicon, real, 1 + Math.floor(rand() * 3), rand);
+  // The options are the components — a garnish is not a checkbox, because the
+  // card shows it on its own line. It only has to be un-drawable.
+  const blocked = [...real, ...garnishLabels(c)];
+  const impostors = drawImpostors(lexicon, blocked, 1 + Math.floor(rand() * 3), rand);
   const options = [
     ...real.map(label => ({ label, real: true })),
     ...impostors.map(label => ({ label, real: false })),
