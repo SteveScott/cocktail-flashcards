@@ -111,11 +111,30 @@ Five ideas explain most of the design:
 - **`master150`** — the rest. The name is historical; it holds 284 recipes. This
   is what a Pro purchase adds to study and quizzes.
 
-Together they are 334 recipes, combined in `App.jsx` as `ALL_CARDS`. The two
+Together they are 334 recipes, combined in `src/cocktail-corpus.js` as
+`ALL_CARDS`. The two
 array names are historical and neither number in them is true any more, but they
 are the Firestore-adjacent shape of the data and not worth a migration; the
 combined list was renamed when the split stopped being cosmetic and became the
 line the paywall runs along.
+
+**Counts come from counting.** `src/cocktail-corpus.js` owns `cocktails.json`
+and is the only definition of the list: `FREE_CARDS`, `PRO_CARDS`, `ALL_CARDS`,
+with `countCocktails()` and `quizzableCocktails()` over them. App.jsx,
+`vite.config.js`, the frequency script and the tests all import it rather than
+re-reading the JSON and re-joining the halves, which is what four of them used
+to do. The names matter more than the counting does — `.length` was never wrong,
+but reaching for the pool where the code meant the quizzable pool was.
+
+`index.html` is the one file that cannot count, so it writes
+`{{COCKTAIL_COUNT}}` and the `cocktailCounts()` plugin fills it in, in dev as
+well as in the build and before the service worker hashes the shell. That is not
+cosmetic: the JSON-LD it ships had been telling crawlers about 322 recipes since
+the book passed 322.
+
+`docs/store-listing.md` is the deliberate exception and states floors ("330+"),
+because Play copy is pasted in by hand and cannot recompute itself. That file
+documents its own rule for raising them.
 
 A recipe is one JSON object on one line, and that formatting is load-bearing:
 several maintenance scripts edit the file line by line, and one-line-per-recipe
@@ -364,7 +383,7 @@ values:
 | `index` | Search across all 334 by name, ingredient or method (accent-insensitive: "pina" finds Piña Colada; "rum, lime" finds the drinks with both; "swizzled" finds the swizzles), add/remove from the study deck, mark tried, filter by tried. Every recipe is readable; only pool ones can be added. |
 | `study` | The flashcard deck. Reveal, grade, prev/next, shuffle, deck-size picker. |
 | `quizlen` | Choose a quiz length. Shared by both quizzes — `quizKind` says which one it was opened for. |
-| `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Self Quiz draws from the whole pool; 86 It from the drinks you've studied, topped up from the top of the pool. |
+| `quiz` | Two quizzes on one mode. **Self Quiz**: reveal the recipe and grade yourself. **86 It**: every real ingredient plus one to three impostors, all checked; uncheck what doesn't belong. Both draw from the drinks you've studied, topped up from the top of the pool. |
 | `results` | Score, missed list, fireworks at 100%. Retry repeats the same quiz and length. |
 
 ### Study
@@ -394,17 +413,25 @@ values:
 
 ### Quiz
 
-**Self Quiz** is a fresh Fisher–Yates shuffle of the **whole pool**, not the
-deck, sliced to the chosen length — shuffle before slice is what makes a short
-quiz a random sample.
+**Both quizzes ask about what you have studied**, via `studiedFirst()`. A short
+round is a random sample of the pool's drinks with any progress — a score above
+zero, or in `learned` (`tried` doesn't count: drinking one isn't studying it).
+Only when there are fewer of those than the round is long is it topped up, in
+rank order from the top of the pool, so a player who has studied nothing gets the
+top 10 on every 10-question round. The round is shuffled again so the top-up
+isn't all at the end.
 
-**86 It** asks about what you have studied. A short round is a random sample of
-the pool's drinks with any progress — a score above zero, or in `learned`
-(`tried` doesn't count: drinking one isn't studying it). Only when there are
-fewer of those than the round is long is it topped up, in rank order from the
-top of the pool, so a player who has studied nothing gets the top 10 on every
-10-question round. The round is shuffled again so the top-up isn't all at the
-end. "All Cocktails" is still the whole pool.
+Neither quiz draws from the **deck**: the deck is what you are studying now, and
+a quiz that only ever asked about the twenty cards currently in front of you
+would never test whether the earlier ones stuck.
+
+"All Cocktails" is the exception, and takes the whole pool in one shuffle
+regardless of progress. It says so on the button, because the line above it
+promises the opposite. Its count comes from the list the round will actually run
+— `quizzableCocktails(pool)` for 86 It, which drops anything with fewer than two
+ingredients. Nothing is dropped today, and counting rather than assuming is the
+point: the Miami Vice used to fail that test, back when its line was unmeasured
+prose, and the button would have been wrong the day it did.
 
 Since the pool honours the entitlement, a free player is quizzed on the top 50
 in both quizzes, and progress on paid drinks is ignored while the library is off.

@@ -3,7 +3,7 @@
 `getMethod()` in [`src/recipe-meta.js`](../src/recipe-meta.js) infers a method from
 the ingredient list. The inference is a bar rule of thumb — shake for citrus,
 egg, dairy, purée or espresso; stir anything spirit-and-sugar; build anything
-tall with a mixer in it — and it is right for most of the 322 recipes.
+tall with a mixer in it — and it is right for most of the 334 recipes.
 
 ## The vocabulary
 

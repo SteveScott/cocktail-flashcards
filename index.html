@@ -16,10 +16,10 @@
          Keep the description under ~160 characters; past that Google truncates
          it in the result. Mobile cuts nearer 120, which is why the number and
          the differentiators come first and the audience note comes last. -->
-    <title>Cocktail Flashcards — Learn 300+ Classic Drink Recipes</title>
+    <title>Cocktail Flashcards — Learn {{COCKTAIL_COUNT}} Classic Drink Recipes</title>
     <meta
       name="description"
-      content="Memorize 300+ classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices. Built for bartenders."
+      content="Memorize {{COCKTAIL_COUNT}} classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices. Built for bartenders."
     />
     <!-- The Play app loads this same site at /?platform=play (see
          capacitor.config.json). Without this, that URL is a duplicate of the
@@ -32,8 +32,8 @@
          a shared link renders as a bare URL with no title or image. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Cocktail Flashcards" />
-    <meta property="og:title" content="Cocktail Flashcards — Learn 300+ Classic Drink Recipes" />
-    <meta property="og:description" content="Memorize 300+ classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices." />
+    <meta property="og:title" content="Cocktail Flashcards — Learn {{COCKTAIL_COUNT}} Classic Drink Recipes" />
+    <meta property="og:description" content="Memorize {{COCKTAIL_COUNT}} classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices." />
     <meta property="og:url" content="https://cocktailflashcards.com/" />
     <meta property="og:image" content="https://cocktailflashcards.com/og-image.jpg" />
     <meta property="og:image:width" content="2400" />
@@ -41,8 +41,8 @@
     <meta property="og:image:alt" content="Classic cocktails on a dark bar top" />
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Cocktail Flashcards — Learn 300+ Classic Drink Recipes" />
-    <meta name="twitter:description" content="Memorize 300+ classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices." />
+    <meta name="twitter:title" content="Cocktail Flashcards — Learn {{COCKTAIL_COUNT}} Classic Drink Recipes" />
+    <meta name="twitter:description" content="Memorize {{COCKTAIL_COUNT}} classic cocktail recipes with spaced-repetition flashcards and quizzes. Free, works offline, and syncs across devices." />
     <meta name="twitter:image" content="https://cocktailflashcards.com/og-image.jpg" />
 
     <!-- Structured data. Deliberately carries NO aggregateRating: there are no
@@ -55,14 +55,14 @@
       "@type": "WebApplication",
       "name": "Cocktail Flashcards",
       "url": "https://cocktailflashcards.com/",
-      "description": "Spaced-repetition flashcards and quizzes for memorizing 300+ classic cocktail recipes, including ingredients, ratios and glassware.",
+      "description": "Spaced-repetition flashcards and quizzes for memorizing {{COCKTAIL_COUNT}} classic cocktail recipes, including ingredients, ratios and glassware.",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "Web browser, Android",
       "inLanguage": "en",
       "isAccessibleForFree": true,
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
       "featureList": [
-        "322 classic cocktail recipes",
+        "{{COCKTAIL_COUNT}} classic cocktail recipes",
         "Spaced-repetition flashcards",
         "Quiz mode with scoring",
         "Progress syncing across devices",

@@ -6,7 +6,7 @@ import {
   auth, db, googleProvider, facebookProvider, firebaseEnabled,
   isEmailAdWhitelisted, addEmailToAdWhitelist, removeEmailFromAdWhitelist, listAdWhitelist,
 } from "./firebase";
-import cocktailData from './cocktails.json';
+import { ALL_CARDS, FREE_CARDS, PRO_CARDS, countCocktails, quizzableCocktails } from './cocktail-corpus.js';
 import { restoreProgress } from "./admin-restore.js";
 import { previewErase, eraseUser } from "./admin-erase.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
@@ -33,8 +33,6 @@ import {
 // an unbuilt tree would be a lie rather than a default.
 const VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
-const { top50, master150 } = cocktailData;
-
 // Whether RevenueCat actually has an SDK key behind it. Deliberately NOT the
 // same question as FEATURES.nativePurchase: that only says we're in the Play
 // shell, while the key is inlined from the env of the build that reaches users
@@ -52,10 +50,6 @@ const billingReady = isBillingAvailable();
 // The Play build never reads this — RevenueCat's paywall shows Google's own
 // localised price, which is why only the web needs a hardcoded string at all.
 const PRO_PRICE = "$7.99";
-
-// Every cocktail in the book. The free tier studies and quizzes the top 50 of
-// them; the rest is what a Pro purchase adds — see poolFor() below.
-const ALL_CARDS = [...top50, ...master150];
 
 // The vocabulary of the corpus and the distribution the 86 It quiz samples wrong
 // answers from. Built once — the lexicon never changes at runtime. Deliberately
@@ -329,7 +323,7 @@ const GLASS_ICONS = [
 // entitlement that hasn't loaded yet, falls back to the free top 50 rather than
 // handing out paid cocktails.
 function poolFor(st, pro) {
-  return pro && st?.masterMode ? ALL_CARDS : top50;
+  return pro && st?.masterMode ? ALL_CARDS : FREE_CARDS;
 }
 
 // Fisher–Yates on a copy. Shared by both quizzes, which each need a fresh
@@ -343,8 +337,31 @@ function shuffled(list) {
   return a;
 }
 
+// Which cocktails a round asks about, for both quizzes. A short round is a
+// random sample of the drinks with any progress — a score above zero, or
+// mastered — and only when there are fewer of those than the round is long is
+// it topped up, from the top of the pool down. It is shuffled once more at the
+// end so the top-up isn't all in a block after the studied ones.
+//
+// The point is that a short round is worth taking early: quizzing someone on
+// 10 drinks at random out of the whole book mostly asks about drinks they have
+// never seen.
+// A player who has studied nothing still gets a sensible round — the top 10 by
+// rank — because the top-up is the pool in its own order.
+//
+// n = null is the exception and takes the whole pool in one shuffle, studied or
+// not: "All Cocktails" means all of them.
+function studiedFirst(cards, n, st) {
+  if (!n) return shuffled(cards);
+  const learnedSet = new Set(st.learned || []);
+  const progressed = c => (st.scores?.[c.name] || 0) > 0 || learnedSet.has(c.name);
+  const studied = shuffled(cards.filter(progressed));
+  const topUp = cards.filter(c => !progressed(c));
+  return shuffled([...studied, ...topUp].slice(0, n));
+}
+
 function initState(masterMode) {
-  const pool = masterMode ? ALL_CARDS : top50;
+  const pool = masterMode ? ALL_CARDS : FREE_CARDS;
   const scores = {};
   pool.forEach(c => { scores[c.name] = 0; });
   return { scores, active: pool.slice(0, Math.min(DECK_SIZE, pool.length)).map(c => c.name), masterMode, learned: [], tried: [], deckSize: DECK_SIZE };
@@ -776,7 +793,7 @@ export default function App() {
   // use means the free tier never studies a paid cocktail in the meantime, and
   // nothing is deleted to achieve it.
   const deck = st.active.filter(n => poolNames.has(n));
-  const total = pool.length;
+  const total = countCocktails(pool);
   const deckSize = st.deckSize || DECK_SIZE;
 
   // localStorage is the external system being synchronised here; the "✓" is only
@@ -1694,14 +1711,12 @@ export default function App() {
 
   function next() { setDi(i => (i+1) % deck.length); setRevealed(false); }
   function prev() { setDi(i => (i-1+deck.length) % deck.length); setRevealed(false); }
-  // Build a fresh, fully-shuffled quiz order every time — Self Quiz always draws
-  // from the whole pool in random sequence (Fisher–Yates), never the fixed pool
-  // order. Shuffling before the slice is what makes a short quiz a random sample
-  // of the pool rather than its first n cocktails. n = null takes everything.
+  // Build a fresh quiz order every time, never the fixed pool order. Which
+  // cocktails it draws is studiedFirst()'s question, and the answer is the same
+  // one 86 It gets: what you have studied, topped up from the top of the pool.
   function startQuiz(n) {
-    const q = shuffled(pool);
     setQuizLen(n ?? null);
-    setQuizPool(n ? q.slice(0, n) : q);
+    setQuizPool(studiedFirst(pool, n, st));
     setQa([]); setQi(0); setQr(false); setMode("quiz");
   }
   function qGrade(k) {
@@ -1711,23 +1726,15 @@ export default function App() {
     else { setQi(i=>i+1); setQr(false); }
   }
 
-  // 86 It. Unlike startQuiz it asks about what you have studied: a short round
-  // is a random sample of the drinks with any progress — a score above zero, or
-  // mastered — and only when there are fewer of those than the round is long is
-  // it topped up, from the top of the pool down. The round is shuffled once more
-  // so the top-up isn't all at the end. Each question also carries the options
-  // it will offer. They are generated up front, once: built during render they
-  // would redraw their impostors on every keystroke.
+  // 86 It draws the same way Self Quiz does — see studiedFirst(). What is its
+  // own is that each question also carries the options it will offer. They are
+  // generated up front, once: built during render they would redraw their
+  // impostors on every keystroke.
   function start86Quiz(n) {
     // `pool` already honours master mode, and is in rank order; eligibility
     // drops the one drink that cannot make a question.
     const eligible = pool.filter(eightySixEligible);
-    const learnedSet = new Set(st.learned || []);
-    const progressed = c => (st.scores[c.name] || 0) > 0 || learnedSet.has(c.name);
-    const studied = shuffled(eligible.filter(progressed));
-    const topUp = eligible.filter(c => !progressed(c));
-    const picked = n ? [...studied, ...topUp].slice(0, n) : eligible;
-    const chosen = shuffled(picked).map(c => buildEightySixQuestion(c, LEXICON));
+    const chosen = studiedFirst(eligible, n, st).map(c => buildEightySixQuestion(c, LEXICON));
     setQuizKind("86");
     setQuizLen(n ?? null);
     setQuizPool(chosen);
@@ -2286,8 +2293,8 @@ export default function App() {
         <div style={frame({borderRadius:12,padding:"0.9rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",gap:"0.75rem"})}>
           <div style={{fontSize:"0.8rem",color:C.textMuted}}>
             {webAdsServed
-              ? `Go Pro — all ${ALL_CARDS.length} cocktails, and no ads`
-              : `Go Pro — study and quiz all ${ALL_CARDS.length} cocktails`}
+              ? `Go Pro — all ${countCocktails(ALL_CARDS)} cocktails, and no ads`
+              : `Go Pro — study and quiz all ${countCocktails(ALL_CARDS)} cocktails`}
           </div>
           <button onClick={startCheckout} disabled={purchasing || !user} style={{background:user?C.success:C.surfaceDisabled,color:user?C.well:C.textFaint,border:"none",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.8rem",fontWeight:700,cursor:user?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
             {purchasing ? "Redirecting…" : `✨ Get Pro — ${PRO_PRICE}`}
@@ -2301,7 +2308,7 @@ export default function App() {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"0.75rem"}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:"0.8rem",color:C.textMuted}}>
-              {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : `Cocktail Flashcards Pro — all ${ALL_CARDS.length} cocktails, no ads`}
+              {firebaseEnabled && !user ? "Sign in, then go Pro — it carries over to the web" : `Cocktail Flashcards Pro — all ${countCocktails(ALL_CARDS)} cocktails, no ads`}
             </div>
             <button onClick={restoreAdsNative} style={{background:"transparent",border:"none",color:C.textFaint,fontSize:"0.72rem",cursor:"pointer",padding:"0.2rem 0",textDecoration:"underline"}}>Restore Purchase</button>
           </div>
@@ -2423,15 +2430,15 @@ export default function App() {
           switch that refuses to move — it's the way in to the purchase. */}
       <div style={frame({borderRadius:12,padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.75rem",gap:"0.75rem"})}>
         <div style={{minWidth:0}}>
-          <div style={{fontWeight:700,color:C.textStrong}}>{isPro ? "" : "🔒 "}Add All {ALL_CARDS.length} Cards</div>
+          <div style={{fontWeight:700,color:C.textStrong}}>{isPro ? "" : "🔒 "}Add All {countCocktails(ALL_CARDS)} Cards</div>
           <div style={{fontSize:"0.75rem",color:C.textMuted}}>
             {isPro
-              ? `Study and quiz the whole book, not just the top ${top50.length}`
-              : `Free covers the top ${top50.length} — Pro adds the other ${master150.length}`}
+              ? `Study and quiz the whole book, not just the top ${countCocktails(FREE_CARDS)}`
+              : `Free covers the top ${countCocktails(FREE_CARDS)} — Pro adds the other ${countCocktails(PRO_CARDS)}`}
           </div>
         </div>
         {isPro ? (
-          <button onClick={toggleMaster} aria-pressed={masterOn} aria-label={`Add all ${ALL_CARDS.length} cards`} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",flexShrink:0,background:masterOn?C.accent:C.surfaceDisabled,transition:"background 0.3s"}}>
+          <button onClick={toggleMaster} aria-pressed={masterOn} aria-label={`Add all ${countCocktails(ALL_CARDS)} cards`} style={{width:52,height:28,borderRadius:99,border:"none",cursor:"pointer",position:"relative",flexShrink:0,background:masterOn?C.accent:C.surfaceDisabled,transition:"background 0.3s"}}>
             <div style={{position:"absolute",top:3,left:masterOn?27:3,width:22,height:22,borderRadius:"50%",background:C.textOnFill,transition:"left 0.3s"}} />
           </button>
         ) : (
@@ -2594,7 +2601,7 @@ export default function App() {
     // One tally per active dimension, so a stacked filter explains both numbers.
     const tallies = [
       ...(triedFilter !== "all" ? [`${triedSet.size} tried`] : []),
-      ...(studiedOnly ? [`${ALL_CARDS.filter(studied).length} studied`] : []),
+      ...(studiedOnly ? [`${countCocktails(ALL_CARDS.filter(studied))} studied`] : []),
     ];
     return (
       <div style={page}><div style={wrap}>
@@ -2603,7 +2610,7 @@ export default function App() {
             <button onClick={()=>{setReturnTo(null);setMode("menu");}} style={{background:"transparent",border:"none",color:C.textMuted,cursor:"pointer"}}>← Menu</button>
             {returnTo && <button onClick={()=>{setReturnTo(null);setMode(returnTo);}} style={{background:"transparent",border:"none",color:C.infoLite,cursor:"pointer",fontWeight:600}}>↩ Resume {returnTo === "quiz" ? "quiz" : "study"}</button>}
           </div>
-          <span style={{color:C.textMuted,fontSize:"0.85rem"}}>{results.length} of {ALL_CARDS.length}{tallies.length ? ` · ${tallies.join(" · ")}` : ""}</span>
+          <span style={{color:C.textMuted,fontSize:"0.85rem"}}>{results.length} of {countCocktails(ALL_CARDS)}{tallies.length ? ` · ${tallies.join(" · ")}` : ""}</span>
         </div>
         <input
           autoFocus
@@ -2641,7 +2648,7 @@ export default function App() {
             rather than as a bug. */}
         {!isPro && (
           <div style={{fontSize:"0.72rem",color:C.textFaint,marginBottom:"1.25rem"}}>
-            Every recipe is here to read. Study and quizzes cover the top {top50.length} — 🔒 marks the rest.
+            Every recipe is here to read. Study and quizzes cover the top {countCocktails(FREE_CARDS)} — 🔒 marks the rest.
           </div>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"0.75rem",maxHeight:"60vh",overflowY:"auto"}}>
@@ -2660,7 +2667,7 @@ export default function App() {
                 <h3 style={{fontSize:"1.1rem",fontWeight:800,color:C.textStrong,margin:0}}>{c.name}</h3>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"0.35rem"}}>
                   {c.rank && <span style={{fontSize:"0.7rem",color:C.accent,fontWeight:600,whiteSpace:"nowrap"}}>#{c.rank}</span>}
-                  <button onClick={()=>toggleStudy(c.name)} title={locked ? `Pro adds all ${ALL_CARDS.length} cocktails to study and quizzes` : undefined} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:inDeck?"none":`1px solid ${locked?C.accentEdge:C.infoEdge}`,background:inDeck?C.successDeep:"transparent",color:inDeck?C.textOnFill:locked?C.accent:C.infoLite}}>
+                  <button onClick={()=>toggleStudy(c.name)} title={locked ? `Pro adds all ${countCocktails(ALL_CARDS)} cocktails to study and quizzes` : undefined} style={{whiteSpace:"nowrap",borderRadius:8,padding:"0.3rem 0.6rem",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",border:inDeck?"none":`1px solid ${locked?C.accentEdge:C.infoEdge}`,background:inDeck?C.successDeep:"transparent",color:inDeck?C.textOnFill:locked?C.accent:C.infoLite}}>
                     {locked ? "🔒 Pro" : inDeck ? "✓ In Study" : "＋ Study"}
                   </button>
                   {triedChip(c.name, false)}
@@ -2707,7 +2714,7 @@ export default function App() {
               menu. */}
           {allMastered && !isPro && (
             <button onClick={unlockPro} style={{marginTop:"1rem",padding:"0.7rem 1.2rem",borderRadius:12,background:"transparent",color:C.accent,fontWeight:700,fontSize:"0.85rem",border:`1px solid ${C.accentSoft}`,cursor:"pointer"}}>
-              🔒 Add the other {master150.length} with Pro
+              🔒 Add the other {countCocktails(PRO_CARDS)} with Pro
             </button>
           )}
         </div>
@@ -2799,6 +2806,12 @@ export default function App() {
   // duplicate "All" buttons (in the free 50-cocktail pool, "50" IS all of them).
   if (mode === "quizlen") {
     const lengths = [10, 20, 50].filter(n => n < total);
+    // "All Cocktails" is the one round that ignores what you have studied, so it
+    // says so — the line above it promises the opposite. It counts the list the
+    // round will actually run, which for 86 It is the quizzable pool. Those are
+    // the same number today, and counting rather than assuming it is the point:
+    // the day a recipe's ingredients are written as prose, this follows.
+    const allCount = quizKind === "86" ? countCocktails(quizzableCocktails(pool)) : total;
     const opt = (label, sub, onClick, bg) => (
       <button key={label} onClick={onClick} style={{...btn(bg),width:"100%",marginBottom:"0.75rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span>{label}</span>
@@ -2814,20 +2827,19 @@ export default function App() {
           <div style={{fontSize:"2.5rem",marginBottom:"0.5rem"}}>{quizKind === "86" ? "🍸" : "🎯"}</div>
           <h2 style={{fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.35rem"}}>How Long?</h2>
           <p style={{color:C.textMuted,fontSize:"0.85rem",margin:0}}>
-            {quizKind === "86"
-              ? "86 It — drawn from the cocktails you've studied, topped up with the most popular."
-              : "Cocktails are drawn at random from all " + total + "."}
+            {(quizKind === "86" ? "86 It" : "Self Quiz")
+              + " — drawn from the cocktails you've studied, topped up with the most popular."}
           </p>
         </div>
         {lengths.map(n => opt(`${n} Questions`, "", ()=>startPicked(n), quizKind === "86" ? C.danger : C.accentAlt))}
-        {opt("All Cocktails", `${total} questions`, ()=>startPicked(null), quizKind === "86" ? C.dangerDeep : C.accentAltDeep)}
+        {opt("All Cocktails", `${allCount} questions — studied or not`, ()=>startPicked(null), quizKind === "86" ? C.dangerDeep : C.accentAltDeep)}
         {/* Says what a bigger round would cost, at the moment the user is
             picking how much to take on — not as an interruption to the quiz
             itself. Amber whichever quiz this is: it is the Pro colour
             everywhere else in the app. */}
         {!isPro && (
           <button onClick={unlockPro} style={{width:"100%",marginTop:"0.5rem",padding:"0.7rem",borderRadius:12,background:"transparent",color:C.accent,fontWeight:700,fontSize:"0.85rem",border:`1px solid ${C.accentSoft}`,cursor:"pointer"}}>
-            🔒 {quizKind === "86" ? "86" : "Quiz"} all {ALL_CARDS.length} cocktails with Pro
+            🔒 {quizKind === "86" ? "86" : "Quiz"} all {countCocktails(ALL_CARDS)} cocktails with Pro
           </button>
         )}
       </div></div>

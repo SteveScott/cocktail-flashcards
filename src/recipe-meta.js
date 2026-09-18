@@ -901,9 +901,15 @@ export function drawImpostors(lexicon, realLabels, n, rand = Math.random) {
   return out;
 }
 
-// A drink needs at least two ingredients to be worth asking about. One recipe
-// fails this: the Miami Vice, whose entire ingredient line is prose describing
-// two other drinks, so it parses to no measured components at all.
+// A drink needs at least two ingredients to be worth asking about. Today every
+// recipe in the book clears that bar — the Miami Vice used to be the exception,
+// back when its line was unmeasured prose, and now reads `6 oz Piña Colada
+// (Frozen), 6 oz Strawberry Daiquiri (Frozen)`, which parses to two. The guard
+// stays because the next recipe written that way would otherwise reach the quiz
+// as a question with nothing to ask.
+//
+// So do not state a count derived from this as if it differed from the book's:
+// count the list. See countCocktails() in src/cocktail-corpus.js.
 export function eightySixEligible(c) {
   return ingredientLabels(c).length >= 2;
 }

@@ -3,7 +3,7 @@
 // WHY THIS EXISTS
 // ---------------
 // The app is one client-rendered route. To a crawler that is a single page
-// containing no recipe text at all — every one of the 322 recipes is locked
+// containing no recipe text at all — every recipe in the book is locked
 // inside an 840 KB JS bundle. That is almost certainly why AdSense looked at the
 // site and saw a thin shell.
 //
@@ -15,7 +15,7 @@
 // -----------------
 // Auto-generated pages are a policy risk in their own right — "scraped or
 // auto-generated content with little added value" is its own rejection reason,
-// so 322 pages of nothing but a name and an ingredient line would make the
+// so a page per drink with nothing but a name and an ingredient line would make the
 // problem worse, not better. Every page here therefore carries something the
 // raw data does not: worked step-by-step instructions derived from the method,
 // glassware and garnish, plus genuine cross-links. The recipe data is the
@@ -26,6 +26,7 @@
 
 import { writeFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { countCocktails } from "../src/cocktail-corpus.js";
 import {
   slugify, getMethod, baseSpirit, parseIngredients, buildSteps, summarize,
   isNoGarnish,
@@ -160,7 +161,7 @@ ${related.map(r => `  <li><a href="/cocktails/${slugify(r.name)}/">${esc(r.name)
 
 <a class="cta" href="/">
   <strong>Learn this one by heart</strong>
-  Study the ${esc(c.name)} and 300+ other classics as spaced-repetition flashcards — free, works offline.
+  Study the ${esc(c.name)} and ${countCocktails(all) - 1} other classics as spaced-repetition flashcards — free, works offline.
 </a>`;
 
   const recipeLd = {
@@ -343,6 +344,29 @@ export function seoPages(cocktails) {
         const w = `duplicate recipe names skipped: ${collisions.join("; ")}`;
         if (this.warn) this.warn(w); else console.warn(w);
       }
+    },
+  };
+}
+
+// The counts in index.html's own <head>: the title, the meta descriptions and
+// the JSON-LD that tells a crawler what this site is.
+//
+// A static HTML file cannot count anything, so those numbers were typed by hand,
+// and they were wrong — the structured data offered "322 classic cocktail
+// recipes" from a book of 334, and the descriptions hedged at "300+". The file
+// writes {{COCKTAIL_COUNT}} now and this fills it in from the same list the
+// recipe pages are generated from, so the number a crawler reads and the number
+// of pages in the sitemap cannot disagree.
+//
+// Separate from seoPages() because that plugin is `apply: "build"` — it clears
+// dist in buildStart, which has no business running in dev — while this has to
+// run in both, or the dev server serves a page with a literal {{...}} in it.
+export function cocktailCounts(cocktails) {
+  const count = String(countCocktails(cocktails));
+  return {
+    name: "cocktail-counts",
+    transformIndexHtml(html) {
+      return html.replaceAll("{{COCKTAIL_COUNT}}", count);
     },
   };
 }
