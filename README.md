@@ -151,7 +151,7 @@ The parser reads the string as the data writes it, so the conventions matter:
   the literal `No garnish`, last in the string. It is a value, not a gap — an
   empty garnish used to be indistinguishable from a recipe nobody had finished
   researching. It reads as *"Serve without garnish."* in the steps and is kept
-  out of the page's `recipeIngredient`, which is a shopping list. Twenty-two
+  out of the page's `recipeIngredient`, which is a shopping list. Twenty-four
   drinks take it: the shots and layered shooters, the beer-and-a-shot builds,
   and a few austere classics — a Ramos Gin Fizz, a Kir, a Black Russian.
 - **An ingredient may name another cocktail.** A Miami Vice is `6 oz Piña
