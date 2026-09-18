@@ -11,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import {
   buildLexicon, buildEightySixQuestion, eightySixEligible, drawImpostors,
-  ingredientLabels, clashes, INGREDIENT_FAMILIES, parseIngredients, dosedGarnishLabels,
+  ingredientLabels, clashes, INGREDIENT_FAMILIES, parseIngredients, garnishLabels,
 } from "../src/recipe-meta.js";
 
 const { top50, master150 } = JSON.parse(readFileSync(new URL("../src/cocktails.json", import.meta.url), "utf8"));
@@ -159,14 +159,12 @@ eq("no recipe can be offered its own ingredient under another name", offences.sl
 // with the measure stripped the long way round. A name on the card is a name
 // the quiz may not call wrong.
 const MEASURE = /^(?:[\d½¼¾⅓⅔⅛⅜⅝⅞]+(?:[-–][\d½¼¾⅓⅔⅛⅜⅝⅞]+)?\s*(?:oz|dash(?:es)?|drops?|tsp|tbsp|cups?|scoops?|shots?|barspoons?)?|(?:pinch|splash|dash|shot|handful)(?: of)?)\s+/i;
-// Components, plus the garnishes carrying a measure — a dose on the foam is an
-// ingredient of the drink. An unmeasured garnish is not: an orange slice on the
-// rim leaves Orange Liqueur a fair wrong answer, and blocking it would narrow
-// the pool to protect a claim the card never makes.
+// Every name the card puts in front of the player, from either bucket. Not just
+// the dosed garnishes: a strawberry on the rim is a strawberry, and the quiz
+// calling it a wrong answer is the same failure as the bitters were.
 const onTheCard = (c) => {
   const p = parseIngredients(c.ingredients);
-  const dosed = p.garnishes.filter(g => MEASURE.test(g));
-  return [...p.components.map(x => x.item), ...dosed]
+  return [...p.components.map(x => x.item), ...p.garnishes]
     .map(n => n.replace(MEASURE, "").replace(/\s*\([^)]*\)\s*$/, "").trim())
     .filter(n => vocabulary.has(n));
 };
