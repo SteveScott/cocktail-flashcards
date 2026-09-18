@@ -151,6 +151,11 @@ the one thing that would ruin the drink.
 | Prairie Fire | Built in the shot glass; the hot sauce disperses on its own |
 | Tequila Sunrise | Built over ice, grenadine added last and left to settle. Inference called it `Shaken` — orange juice and grenadine trip the sour rule — which put the grenadine in the tin and destroyed the gradient the drink is named for |
 
+**Nico's Bloody Mary is a house recipe and has no external source.** Like the
+True Blood below, it is not a variant of anything published: the Old Bay, the
+olive brine and the Guinness float are the author's build, and the internet has
+no copy of it to check against. Do not reconcile it against a search result.
+
 **The True Blood is a house cocktail from QXT's, and has no external source.**
 Searching for it turns up an unrelated drink of the same name — vodka, rum,
 peach schnapps, orange juice and grenadine — which is not this recipe. Do not
@@ -368,11 +373,17 @@ the sequence is either sourced or structural and the default would break it:
 | Michelada, Chelada | Built on the beer, which the default would rank as a topper and send to the end |
 | Trinidad Sour | Angostura is the base spirit here, not a dash |
 | Blue Blazer | Scotch and boiling water go into the mug before the sugar |
+| Nico's Bloody Mary | A house recipe, so the written sequence is the author's; the Guinness goes in last, and the default would rank it above the dashes |
+| IBA Tiki | The [IBA's](https://iba-world.com/iba-cocktail/tiki/) own sequence, which leads with the rums and closes on the lime and ginger |
 
 Layered drinks are never reordered — the sequence *is* the recipe. The test is
 the word, not the whole method, so a compound like the Miami Vice's
 `Blended, Layered` is covered: its two halves are listed bottom-first, the order
 they go into the glass, exactly as a B-52's three liqueurs are.
+
+The IBA Tiki is pinned on that reasoning and the Don-the-Beachcomber drinks are
+not, which is the distinction the rule turns on rather than a split over tiki:
+one has a published sequence to preserve and the others do not.
 
 Two candidates were checked and **not** pinned. Difford's orders the
 Don-the-Beachcomber tiki drinks in the default order — Three Dots and a Dash as
