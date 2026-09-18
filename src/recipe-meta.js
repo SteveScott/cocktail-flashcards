@@ -917,9 +917,40 @@ export function eightySixEligible(c) {
 // One question: the drink's real ingredients plus one, two or three impostors
 // (equally likely), shuffled together. The cocktail is spread in so callers can
 // keep treating a question as a recipe — `name` and `rank` still read.
+// Everything the garnish line names, so the quiz cannot offer it as the wrong
+// answer. "1 dash Angostura Bitters (garnish)" says where the bitters go, not
+// whether the drink has them, and a strawberry on a Frosé is a strawberry the
+// player can see.
+//
+// That is the whole bug class. ingredientLabels() reads the components bucket,
+// drawImpostors() excludes what clashes with it, and anything the parser files
+// as a garnish falls through both. It cost five sours: the Scotch, the Mezcal
+// and the Pisco offered their own Angostura on roughly a tenth of their
+// questions, and the Whiskey and New York Sours joined them the moment their
+// bitters moved to the foam.
+//
+// The measured ones were the ones worth fixing and an earlier pass blocked only
+// those, on the reasoning that an orange slice should leave Orange Liqueur a
+// fair wrong answer. That precision is not worth buying. Over-blocking costs a
+// draw from a pool of 256; under-blocking marks a player wrong for reading the
+// card in front of them, and the two are not the same size of mistake. Block
+// the line.
+export function garnishLabels(c) {
+  const out = [];
+  for (const g of parseIngredients(c.ingredients).garnishes) {
+    const m = g.match(MEASURE_RE);
+    const label = ingredientLabel((m ? m[2] : g).trim());
+    if (label && !out.includes(label)) out.push(label);
+  }
+  return out;
+}
+
 export function buildEightySixQuestion(c, lexicon, rand = Math.random) {
   const real = ingredientLabels(c);
-  const impostors = drawImpostors(lexicon, real, 1 + Math.floor(rand() * 3), rand);
+  // The options are the components — a garnish is not a checkbox, because the
+  // card shows it on its own line. It only has to be un-drawable.
+  const blocked = [...real, ...garnishLabels(c)];
+  const impostors = drawImpostors(lexicon, blocked, 1 + Math.floor(rand() * 3), rand);
   const options = [
     ...real.map(label => ({ label, real: true })),
     ...impostors.map(label => ({ label, real: false })),

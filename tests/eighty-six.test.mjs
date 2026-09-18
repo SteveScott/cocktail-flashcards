@@ -11,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import {
   buildLexicon, buildEightySixQuestion, eightySixEligible, drawImpostors,
-  ingredientLabels, clashes, INGREDIENT_FAMILIES,
+  ingredientLabels, clashes, INGREDIENT_FAMILIES, parseIngredients, garnishLabels,
 } from "../src/recipe-meta.js";
 
 const { top50, master150 } = JSON.parse(readFileSync(new URL("../src/cocktails.json", import.meta.url), "utf8"));
@@ -143,6 +143,57 @@ for (const c of eligible) {
   }
 }
 eq("no recipe can be offered its own ingredient under another name", offences.slice(0, 10), []);
+
+// ── read the card, not the function under test ─────────────────────────────
+// The sweep above asks ingredientLabels() what a recipe contains, which is the
+// same function drawImpostors() excludes on. That makes it blind by
+// construction: anything the parser files somewhere ingredientLabels() does not
+// read is invisible to both at once, so the bug and the test agree and the
+// suite stays green. It did, through the release that put unmeasured bitters on
+// two sours and through every release that shipped the Scotch, Mezcal and Pisco
+// Sours with theirs on the foam — five drinks offering their own Angostura as
+// the wrong answer, roughly a tenth of the time each.
+//
+// So this one reads the ingredient string itself and trusts nothing derived
+// from it: every name the card puts in front of the player, from either bucket,
+// with the measure stripped the long way round. A name on the card is a name
+// the quiz may not call wrong.
+const MEASURE = /^(?:[\d½¼¾⅓⅔⅛⅜⅝⅞]+(?:[-–][\d½¼¾⅓⅔⅛⅜⅝⅞]+)?\s*(?:oz|dash(?:es)?|drops?|tsp|tbsp|cups?|scoops?|shots?|barspoons?)?|(?:pinch|splash|dash|shot|handful)(?: of)?)\s+/i;
+// Every name the card puts in front of the player, from either bucket. Not just
+// the dosed garnishes: a strawberry on the rim is a strawberry, and the quiz
+// calling it a wrong answer is the same failure as the bitters were.
+const onTheCard = (c) => {
+  const p = parseIngredients(c.ingredients);
+  return [...p.components.map(x => x.item), ...p.garnishes]
+    .map(n => n.replace(MEASURE, "").replace(/\s*\([^)]*\)\s*$/, "").trim())
+    .filter(n => vocabulary.has(n));
+};
+// Sampled through buildEightySixQuestion itself, not through drawImpostors with
+// a list this file built. That distinction is the entire point: a test that
+// assembles its own blocked set and asks the sampler about it proves the
+// sampler obeys the set, while the bug was that the question never put the
+// right things in it. Only the real entry point can catch that, so the draw
+// here is the draw a player gets.
+//
+// Seeded, so a failure reproduces. 240 rounds a recipe against rates that ran
+// near a tenth each makes a miss vanishingly unlikely, and the whole sweep is
+// about 80,000 questions — a second or two.
+let seed = 20260918;
+const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+const visible = [];
+for (const c of eligible) {
+  const shown = onTheCard(c);
+  if (!shown.length) continue;
+  for (let i = 0; i < 240 && visible.length < 10; i++) {
+    for (const o of buildEightySixQuestion(c, lexicon, rand).options) {
+      if (o.real) continue;
+      for (const name of shown) {
+        if (o.label === name || sameThing(o.label, name)) visible.push(`${c.name}: offered ${o.label}, which is on the card as ${name}`);
+      }
+    }
+  }
+}
+eq("nothing the card shows can be offered as the wrong answer", [...new Set(visible)].slice(0, 10), []);
 
 // And the quiz still has questions to ask.
 eq("every eligible recipe still has impostors to draw",
