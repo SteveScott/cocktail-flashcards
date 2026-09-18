@@ -98,7 +98,7 @@
     { "name": "Fitzgerald", "glass": "Rocks", "serve": "On the Rocks", "ingredients": "2 oz Gin, 1 oz Fresh Lemon Juice, ¾ oz Simple Syrup, 2 dashes Angostura Bitters, Lemon wheel (garnish)" },
     { "name": "Jasmine", "glass": "Coupe", "serve": "Up", "ingredients": "1½ oz Gin, ¾ oz Cointreau, ¼ oz Campari, ¾ oz Fresh Lemon Juice, Lemon twist (garnish)" },
     { "name": "Ramos Gin Fizz", "glass": "Highball (Collins)", "serve": "On the Rocks", "ingredients": "2 oz Gin, ½ oz Fresh Lime Juice, ½ oz Fresh Lemon Juice, ¾ oz Simple Syrup, 1 oz Heavy Cream, 1 Egg White, 3 drops Orange Flower Water, 2 oz Soda Water, No garnish" },
-    { "name": "Satan's Whiskers", "glass": "Coupe", "serve": "Up", "ingredients": "¾ oz Gin, ¾ oz Dry Vermouth, ¾ oz Sweet Vermouth, ¾ oz OJ, ½ oz Grand Marnier, 1 dash Orange Bitters, Orange peel (garnish)" },
+    { "name": "Satan's Whiskers", "glass": "Coupe", "serve": "Up", "ingredients": "¾ oz Gin, ¾ oz Dry Vermouth, ¾ oz Sweet Vermouth, ½ oz Grand Marnier, ¾ oz OJ, 1 dash Orange Bitters, Orange peel (garnish)" },
     { "name": "Trident", "glass": "Coupe or Nick & Nora", "serve": "Up", "ingredients": "1 oz Aquavit, 1 oz Cynar, 1 oz Dry Sherry, 2 dashes Peach Bitters, Lemon twist (garnish)" },
     { "name": "Sherry Cobbler", "glass": "Rocks or Wine", "serve": "Over Crushed Ice", "ingredients": "3 oz Amontillado Sherry, 1 oz Simple Syrup, 3 Orange Slices, Crushed ice, Berries, Orange wheel & Lemon wheel (garnish)" },
     { "name": "Planter's Punch", "glass": "Highball", "serve": "Over Crushed Ice", "ingredients": "2 oz Dark Rum, 1 oz Fresh Lime Juice, 1 oz Simple Syrup, 2 dashes Angostura, Soda Water (top), Mint sprig" },
@@ -133,7 +133,7 @@
     { "name": "Caipiroska", "glass": "Rocks", "order": "as-written", "serve": "Over Crushed Ice", "ingredients": "2 oz Vodka, 1 Lime (cut into wedges), 2 tsp Sugar, Lime wheel (garnish)" },
     { "name": "Gimlet (Classic)", "glass": "Coupe", "serve": "Up", "ingredients": "2 oz Gin, 1 oz Rose's Lime Cordial, Lime wheel (garnish)" },
     { "name": "Bloody Caesar", "glass": "Highball", "serve": "On the Rocks", "ingredients": "2 oz Vodka, 4 oz Clamato Juice, 2 dashes Worcestershire, 2 dashes Tabasco, Celery salt rim" },
-    { "name": "Nico's Bloody Mary", "glass": "Highball (Collins)", "serve": "On the Rocks", "ingredients": "2 oz Vodka, 3 oz Tomato Juice, ½ oz Olive Brine, 1 tsp Prepared Horseradish, ¼ tsp Old Bay Seasoning, Pinch Celery Salt, Pinch Black Pepper, 2 dashes Worcestershire, 3 dashes Tabasco, 3 dashes Valentina Hot Sauce, 2 oz Guinness, Old Bay rim, Olive skewer & Celery stalk (garnish)" },
+    { "name": "Nico's Bloody Mary", "glass": "Highball (Collins)", "order": "as-written", "serve": "On the Rocks", "ingredients": "2 oz Vodka, 3 oz Tomato Juice, ½ oz Olive Brine, 1 tsp Prepared Horseradish, ¼ tsp Old Bay Seasoning, Pinch Celery Salt, Pinch Black Pepper, 2 dashes Worcestershire, 3 dashes Tabasco, 3 dashes Valentina Hot Sauce, 2 oz Guinness, Old Bay rim, Olive skewer & Celery stalk (garnish)" },
     { "name": "Grasshopper", "glass": "Coupe", "serve": "Up", "ingredients": "1 oz Green Crème de Menthe, 1 oz White Crème de Cacao, 1 oz Heavy Cream, Mint sprig (garnish)" },
     { "name": "B-52", "glass": "Shot", "method": "Layered", "serve": "Neat", "ingredients": "⅓ oz Coffee Liqueur, ⅓ oz Irish Cream, ⅓ oz Grand Marnier, No garnish" },
     { "name": "Sloe Gin Fizz", "glass": "Highball", "serve": "On the Rocks", "ingredients": "1½ oz Sloe Gin, 1 oz Fresh Lemon Juice, ½ oz Simple Syrup, 2 oz Soda Water, Lemon wheel & Maraschino cherry (garnish)" },
@@ -330,11 +330,11 @@
     { "name": "Cardinale", "glass": "Coupe", "serve": "Up", "ingredients": "1⅓ oz Gin, ⅔ oz Dry Vermouth, ⅓ oz Campari, Lemon zest (garnish)" },
     { "name": "French Connection", "glass": "Rocks", "method": "Built, Stirred", "serve": "On the Rocks", "ingredients": "1¼ oz Cognac, 1¼ oz Amaretto, No garnish" },
     { "name": "Rabo de Galo", "glass": "Rocks", "serve": "On the Rocks", "ingredients": "2 oz Cachaça, ⅔ oz Sweet Vermouth, ½ oz Cynar, 2 drops Angostura Bitters (optional), Orange twist (garnish)" },
-    { "name": "Don's Special Daiquiri", "glass": "Coupe", "serve": "Frozen", "ingredients": "1 oz Gold Jamaican Rum, ½ oz Cuban Rum, ½ oz Passion Fruit Syrup, ½ oz Fresh Lime Juice, ½ oz Honey Syrup, Passion fruit half (garnish)" },
-    { "name": "IBA Tiki", "glass": "Tiki", "serve": "Over Crushed Ice", "ingredients": "1 oz Dark Rum, 1 oz Smoky Rum, ½ oz Amaretto, 1 tsp Frangelico, 5 drops Maraschino Liqueur, 1 oz Passion Fruit Purée, 3 oz Fresh Pineapple Juice, 1 oz Fresh Lime Juice, 1 slice Fresh Ginger (muddled), Citrus wheel & Dehydrated pineapple slice (garnish)" },
+    { "name": "Don's Special Daiquiri", "glass": "Coupe", "serve": "Frozen", "ingredients": "1 oz Gold Jamaican Rum, ½ oz Cuban Rum, ½ oz Fresh Lime Juice, ½ oz Passion Fruit Syrup, ½ oz Honey Syrup, Passion fruit half (garnish)" },
+    { "name": "IBA Tiki", "glass": "Tiki", "order": "as-written", "serve": "Over Crushed Ice", "ingredients": "1 oz Dark Rum, 1 oz Smoky Rum, ½ oz Amaretto, 1 tsp Frangelico, 5 drops Maraschino Liqueur, 1 oz Passion Fruit Purée, 3 oz Fresh Pineapple Juice, 1 oz Fresh Lime Juice, 1 slice Fresh Ginger (muddled), Citrus wheel & Dehydrated pineapple slice (garnish)" },
     { "name": "Illegal", "glass": "Coupe", "serve": "Up", "ingredients": "1 oz Mezcal, ½ oz Overproof White Rum, ½ oz Falernum, 1 Barspoon Maraschino Liqueur, ¾ oz Fresh Lime Juice, ½ oz Simple Syrup, Few Drops Egg White (optional), No garnish" },
-    { "name": "Russian Spring Punch", "glass": "Highball", "serve": "On the Rocks", "ingredients": "¾ oz Vodka, ¾ oz Fresh Lemon Juice, ½ oz Crème de Cassis, ⅓ oz Sugar Syrup, Sparkling Wine (top), Blackberries & Lemon slice (garnish)" },
-    { "name": "Spicy Fifty", "glass": "Coupe", "serve": "Up", "ingredients": "1⅔ oz Vanilla Vodka, ½ oz Elderflower Cordial, ½ oz Fresh Lime Juice, ⅓ oz Honey Syrup, 2 Thin Slices Red Chili Pepper, Red chili pepper (garnish)" },
+    { "name": "Russian Spring Punch", "glass": "Highball", "serve": "On the Rocks", "ingredients": "¾ oz Vodka, ½ oz Crème de Cassis, ¾ oz Fresh Lemon Juice, ⅓ oz Sugar Syrup, Sparkling Wine (top), Blackberries & Lemon slice (garnish)" },
+    { "name": "Spicy Fifty", "glass": "Coupe", "serve": "Up", "ingredients": "1⅔ oz Vanilla Vodka, ½ oz Fresh Lime Juice, ½ oz Elderflower Cordial, ⅓ oz Honey Syrup, 2 Thin Slices Red Chili Pepper, Red chili pepper (garnish)" },
     { "name": "Ve.N.To", "glass": "Rocks", "serve": "On the Rocks", "ingredients": "1½ oz White Grappa, ¾ oz Fresh Lemon Juice, ½ oz Honey Syrup, ½ oz Chamomile Cordial, Few Drops Egg White (optional), Lemon zest & White grapes (garnish)" }
   ]
 }

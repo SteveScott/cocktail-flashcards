@@ -148,7 +148,7 @@ keeps diffs readable. Keep it that way.
 | `serve` | all | How it reaches the drinker: `Up`, `Neat`, `On the Rocks`, `Over Crushed Ice`, `Hot`, `Frozen`. |
 | `rank` | top50 | Position in the DI list. |
 | `method` | 36 | Explicit preparation method, when inference would be wrong. See [overrides](#irregular-cocktails-overrides-and-exceptions). |
-| `order` | 7 | `"as-written"` — this recipe's ingredient sequence is sourced or structural and must not be reordered. |
+| `order` | 9 | `"as-written"` — this recipe's ingredient sequence is sourced or structural and must not be reordered. |
 
 ### Ingredient string conventions
 
@@ -341,7 +341,7 @@ Equally important is the list of drinks that were **checked and deliberately
 left alone** — Sazerac, Stinger, Seelbach, Harvard — because inference already
 matched the published method. They are recorded so nobody re-litigates them.
 
-### `order: "as-written"` — 7 recipes
+### `order: "as-written"` — 9 recipes
 
 The build-order default is for "where not specified". These recipes specify:
 
@@ -350,9 +350,12 @@ The build-order default is for "where not specified". These recipes specify:
 - **Michelada, Chelada** — built on the beer, which the default would send to the end as a topper.
 - **Trinidad Sour** — Angostura is the base spirit, not a dash.
 - **Blue Blazer** — scotch and boiling water go into the mug before the sugar.
+- **Nico's Bloody Mary** — a house recipe, so the sequence is the author's; the Guinness goes in last.
+- **IBA Tiki** — the IBA's own sequence, rums first and lime and ginger last.
 
-Layered drinks are never reordered; the sequence is the recipe. The tiki drinks
-were checked and *not* pinned: Difford's orders Three Dots and a Dash, Test
+Layered drinks are never reordered; the sequence is the recipe, and they need no
+`order` field to say so — `buildSteps` reads `method` for that. The
+Don-the-Beachcomber tiki drinks were checked and *not* pinned: Difford's orders Three Dots and a Dash, Test
 Pilot and Nui Nui in the default order, so the deck's old sequence was
 inconsistent data rather than preserved sourcing.
 
@@ -366,7 +369,9 @@ tradition, and in Martinique comfortably above 80°F).
 
 ### House recipes
 
-Some drinks have no external source at all. The **True Blood** is a house
+Some drinks have no external source at all. **Nico's Bloody Mary** is one: the
+Old Bay, the olive brine and the Guinness float are the author's build, and no
+search will return it. The **True Blood** is a house
 cocktail from QXT's; searching the name returns an unrelated drink built on
 peach schnapps and orange juice. The recipe's owner is the authority on it, and
 it must never be "corrected" against the internet. Recipes like this should say
