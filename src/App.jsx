@@ -10,9 +10,9 @@ import { ALL_CARDS, FREE_CARDS, PRO_CARDS, countCocktails, quizzableCocktails } 
 import { restoreProgress } from "./admin-restore.js";
 import { previewErase, eraseUser } from "./admin-erase.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
-import { FEATURES } from './platform';
+import { FEATURES, isCapacitorApp } from './platform';
 import { setLauncherIcon } from './launcher-icon';
-import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation } from './native-auth';
+import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation, isPluginLoadTimeout } from './native-auth';
 import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
 import { loadAds, isAdNetworkConfigured, areAdsServing, onAdsServing } from './ads';
@@ -665,6 +665,11 @@ export default function App() {
   const [emailErr, setEmailErr] = useState("");
   const [googleErr, setGoogleErr] = useState("");
   const [googleErrDetail, setGoogleErrDetail] = useState("");
+  // Whether a sign-in is in flight. The native picker is an Android activity and
+  // the plugin behind it is a fetch, so there is real time between the tap and
+  // anything appearing — time in which the button, without this, looks exactly
+  // like a button that did nothing. Same job as emailBusy on the password form.
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
   // Account deletion — required by Play for any app that offers account creation.
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -1179,23 +1184,32 @@ export default function App() {
     return /nocredential|no credentials|cannot find a matching credential/i.test(t);
   }
 
-  // Google sign-in takes one of two routes.
+  // Google sign-in takes one of two routes, and the store app takes exactly one
+  // of them.
   //
-  // In the store app the popup and redirect below are both dead ends — see
-  // src/native-auth.js — so hand off to Android's account picker. Everywhere
-  // else, and on store installs too old to carry the plugin, keep the popup
-  // with the redirect behind it.
+  // In the shell the popup and redirect below are both dead ends — see
+  // src/native-auth.js — so hand off to Android's account picker. On the web,
+  // keep the popup with the redirect behind it.
+  //
+  // A store install too old to carry the plugin used to fall back to the web
+  // flow here. That was never a fallback: it is the white screen this all
+  // exists to remove, and taking it silently is what made such an install
+  // indistinguishable from a broken one. It now says what it needs instead.
   function signIn(provider = googleProvider) {
     if (!firebaseEnabled) { alert("Cloud sync isn't configured for this app yet."); return; }
+    if (googleBusy) return;
     setGoogleErr("");
     setGoogleErrDetail("");
     if (provider === googleProvider && nativeGoogleSignInAvailable()) {
+      setGoogleBusy(true);
       signInWithGoogleNative().catch(e => {
         console.error("Native Google sign-in failed:", e.code, e.message, e);
         // Dismissing the picker is a decision, not a fault — don't nag about it.
         if (isSignInCancellation(e)) return;
         setGoogleErr(
-          isNoAccountOnDevice(e)
+          isPluginLoadTimeout(e)
+            ? "Couldn't load Google sign-in — the network didn't answer. Check your connection and try again."
+            : isNoAccountOnDevice(e)
             ? "No Google account on this device. Add one in Android settings, then try again."
             : isSigningCertMismatch(e)
             ? "This build isn't registered for Google sign-in. Its signing certificate needs adding to the Firebase project."
@@ -1206,7 +1220,23 @@ export default function App() {
         // is "it didn't work" — which is what sent the last round of debugging
         // down the wrong path.
         setGoogleErrDetail(signInFailureText(e));
-      });
+      }).finally(() => setGoogleBusy(false));
+      return;
+    }
+    // Everything below is the web flow, and inside the store shell it is not a
+    // fallback — it is the white screen, reached deliberately. signInWithPopup
+    // waits on a postMessage that a WebView never delivers, and the redirect
+    // behind it parks on an accounts.google.com that refuses embedded user
+    // agents, inside the app, because allowNavigation keeps it there. Neither
+    // can ever succeed and neither says so, which is why "hangs, then goes
+    // blank" was the report rather than an error anyone could act on.
+    //
+    // So in the shell, don't take it. An install without the native plugin is
+    // an install from before it shipped (versionCode 6), and the only thing
+    // that fixes it is a newer binary — which no web deploy can deliver.
+    if (isCapacitorApp) {
+      setGoogleErr("This version of the app can't complete sign-in. Update Cocktail Flashcards in Google Play, then try again.");
+      setGoogleErrDetail("The native sign-in plugin isn't present in this build.");
       return;
     }
     signInWithPopup(auth, provider).catch(e => {
@@ -2269,7 +2299,8 @@ export default function App() {
             <>
               <div style={{fontSize:"0.8rem",color:C.textMuted}}>{firebaseEnabled ? "Sign in to sync progress" : "Cloud sync not configured"}</div>
               <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
-                <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled} style={{background:firebaseEnabled?"#ffffff":C.surfaceDisabled,color:firebaseEnabled?C.well:C.textFaint,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:firebaseEnabled?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
+                <button onClick={() => signIn(googleProvider)} disabled={!firebaseEnabled || googleBusy} style={{background:(firebaseEnabled&&!googleBusy)?"#ffffff":C.surfaceDisabled,color:(firebaseEnabled&&!googleBusy)?C.well:C.textFaint,border:"none",borderRadius:8,padding:"0.4rem 0.75rem",fontSize:"0.8rem",fontWeight:600,cursor:(firebaseEnabled&&!googleBusy)?"pointer":"not-allowed"}}>🔐 Sign in with Google</button>
+                {googleBusy && <div style={{color:C.textMuted,fontSize:"0.7rem"}}>Opening Google sign-in…</div>}
                 {googleErr && (
                   <div role="alert" style={{color:C.error,fontSize:"0.7rem"}}>
                     {googleErr}

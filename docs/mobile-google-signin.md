@@ -53,9 +53,16 @@ the native branch is new.
 The store app loads the **live site**, so web deploys and Play releases ship on
 independent schedules — this JS reaches installs that predate the plugin
 (versionCode 4 and earlier). `nativeGoogleSignInAvailable()` asks the Capacitor
-bridge whether the native half is actually present and falls back to the old web
-flow when it isn't. So the Netlify deploy is safe to ship before, during and
-after the Play rollout; it just doesn't fix anything until the new binary lands.
+bridge whether the native half is actually present. So the Netlify deploy is
+safe to ship before, during and after the Play rollout; it just doesn't fix
+anything until the new binary lands.
+
+It no longer *falls back* on such an install, though. It used to drop through to
+the popup and the redirect — which in the shell is not a fallback at all. It is
+this bug, entered deliberately and entered silently, which is what made an old
+install indistinguishable from a broken one. Such an install now gets a sentence
+asking the person to update from Play, because a newer binary is the only thing
+that can fix it and no web deploy can stand in for one.
 
 ### Sign-out clears both sides
 
@@ -215,7 +222,8 @@ you the WebView console, and `adb logcat` the Android-side exception.
 
 | What you see | What it means |
 |---|---|
-| White screen, no error | The native branch wasn't taken — old JS on the live site, or an install predating the plugin. Check the deployed bundle contains `FirebaseAuthentication`. |
+| White screen, no error | The native branch wasn't taken — old JS on the live site, or an install predating the plugin. Check the deployed bundle contains `FirebaseAuthentication`. Reachable from the web only now: in the shell this case says "update the app" instead. |
+| A dead button — no picker, no error, no end | The plugin chunk never arrived. It is precached (`scripts/pwa-sw.mjs` → `LAZY`) and the import is bounded (`PLUGIN_LOAD_TIMEOUT_MS`), so this should now surface the "network didn't answer" message within 15s rather than waiting forever. |
 | No picker, `NoClassDefFoundError` | `rgcfaIncludeGoogle` didn't take; the Google libraries are `compileOnly` without it. |
 | `10` / `Developer console is not set up correctly` | The running app's certificate matches no registered OAuth client. See the fingerprints above. |
 | `account reauth failed` (status 16) | **Also the certificate.** See below. |
