@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "create-pro-product": "node scripts/create-pro-product.mjs",
     "icons": "node scripts/icons.mjs",
-    "test": "node tests/backup.test.mjs && node tests/restore.e2e.test.mjs && node tests/erase.test.mjs && node tests/search.test.mjs && node tests/eighty-six.test.mjs && node tests/pwa-sw.test.mjs && node tests/app-shortcuts.test.mjs",
+    "test": "node tests/backup.test.mjs && node tests/restore.e2e.test.mjs && node tests/erase.test.mjs && node tests/search.test.mjs && node tests/eighty-six.test.mjs && node tests/pwa-sw.test.mjs && node tests/app-shortcuts.test.mjs && node tests/app-release.test.mjs",
     "ingredient-frequency": "node scripts/ingredient-frequency.mjs",
     "backfill-purchase-ledger": "node scripts/backfill-purchase-ledger.mjs"
   },

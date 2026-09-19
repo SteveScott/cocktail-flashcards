@@ -30,6 +30,7 @@ public class CocktailActivity extends BridgeActivity {
         // capacitor.plugins.json; one living in this project has to say so here.
         registerPlugin(LauncherIconPlugin.class);
         registerPlugin(AppShortcutPlugin.class);
+        registerPlugin(AppReleasePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

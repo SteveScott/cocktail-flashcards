@@ -844,6 +844,7 @@ select or no way to select it. Everything that is *not* a launcher entry — the
 favicon, the splash screen, the icon Settings and the share sheet show, both
 store uploads — stays Retro.
 
+
 ### Shortcuts on the home screen
 
 Long-pressing the icon on Android offers the three things the app is for —
@@ -1046,20 +1047,29 @@ is invisible because `npm ci` does not mind.
 must increase on *every* upload, including a re-upload of an unchanged
 `versionName`, and it can never go down. Increment it by hand when you upload an
 AAB, and leave it alone otherwise — a bump that never ships just burns a number.
-The pair currently reads `versionCode 8` / `1.3.5`.
+The pair currently reads `versionCode 9` / `1.3.5`.
 
 What the number means depends on which build is showing it, because the Play
 shell loads the deployed site:
 
-- On the **web**, the footer is the version of the bundle in front of you.
-- In the **Play app**, the footer is the version of the *site* the shell has
-  loaded, not of the APK around it. They are the same string on the day of a
-  release, and the site runs ahead whenever a deploy lands before a store
-  upload. The APK's own `versionName` is what the store listing shows.
+- On the **web**, the footer is the version of the bundle in front of you, and
+  the only thing there is to say.
+- In the **Play app**, the footer says both — `v1.3.5 · Android build 9 (1.3.5)`.
+  The first is the version of the *site* the shell has loaded; the second is the
+  shell itself, `versionCode` with the `versionName` it was built at in
+  brackets. They agree on the day of a release, and the site runs ahead whenever
+  a deploy lands before a store upload.
 
 That gap is the architecture rather than an oversight — a web deploy reaches
-every installed client at once, and only a store upload changes the shell — and
-the useful half is the one in the footer: it names the code actually running.
+every installed client at once, and only a store upload changes the shell.
+
+The APK half arrives through `AppReleasePlugin.java` (`src/app-release.js` asks
+it; the same string goes into the sign-in diagnostics). Being native, it ships
+in the AAB rather than the deploy, so only builds carrying it can answer:
+anything older shows `Android build unknown`, which is itself worth knowing —
+it dates the install to before this shipped. Without it there was no number on
+the device that named the binary, and a tester on an APK three releases stale
+read the site's `1.3.5` back as the app's.
 
 Two things nearby are deliberately *not* this version. The build stamp beside it
 in the billing diagnostics is an ISO timestamp regenerated on every build: it
