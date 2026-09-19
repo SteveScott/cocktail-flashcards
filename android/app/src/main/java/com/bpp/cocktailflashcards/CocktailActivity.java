@@ -22,6 +22,7 @@ public class CocktailActivity extends BridgeActivity {
         // Plugins from npm packages register themselves through the generated
         // capacitor.plugins.json; one living in this project has to say so here.
         registerPlugin(LauncherIconPlugin.class);
+        registerPlugin(AppReleasePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

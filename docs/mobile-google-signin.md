@@ -87,9 +87,24 @@ stranger who hand-typed the flag one puzzling sentence.
 
 A tester's report cannot tell the two causes apart, so the detail line under the
 message carries what does: whether the bridge is present, which plugins the
-bridge lists, and the app version (`signInDiagnostics` in `src/App.jsx`). An old
-binary shows a present bridge and no `FirebaseAuthentication` in its plugin
-list; a missing bridge shows `native bridge absent` and `plugins: none`.
+bridge lists, the version of the site, and the release number of the binary
+(`signInDiagnostics` in `src/App.jsx`). An old binary shows a present bridge and
+no `FirebaseAuthentication` in its plugin list; a missing bridge shows `native
+bridge absent` and `plugins: none`.
+
+The site version alone was not enough, and the gap cost a fortnight. The shell
+loads the deployed site, so the line read `app 1.3.5` on a phone whose APK was
+three releases older than that — the tester was told to update, said they were
+waiting for Play, and nothing either of them could see said whether the update
+had arrived. `AppReleasePlugin.java` now answers that from PackageManager, the
+footer carries it too (`src/app-release.js`), and the line reads `site 1.3.5;
+Android build 9 (1.3.5)`.
+
+That plugin ships in the AAB, not in the deploy, so it can only speak from the
+first upload that carries it. Every binary before that — including every install
+this was written for — answers `Android build unknown`, and on those installs
+the phrase *is* the diagnosis: a shell too old to name itself is a shell too old
+to have the sign-in plugin in it either.
 
 ### Sign-out clears both sides
 

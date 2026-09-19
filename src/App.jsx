@@ -12,6 +12,7 @@ import { previewErase, eraseUser } from "./admin-erase.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES, isPlayApp } from './platform';
 import { setLauncherIcon } from './launcher-icon';
+import { getAndroidRelease } from './app-release';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation, isPluginLoadTimeout } from './native-auth';
 import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
@@ -1191,6 +1192,44 @@ export default function App() {
     return /nocredential|no credentials|cannot find a matching credential/i.test(t);
   }
 
+
+  // The release number of the BINARY, which is the one fact about itself the
+  // site cannot work out. VERSION above is the site's, in the app as much as in
+  // a browser, because the shell loads the deployed site — so a phone can be
+  // running today's JavaScript inside an APK from months ago and every number
+  // on the screen agrees with the ones on the web. See src/app-release.js.
+  //
+  // Three states, and they are not two: `undefined` is "the bridge has not
+  // answered yet", null is "there is no answer" — an APK from before the plugin
+  // shipped, or a bridge that never arrived. The footer shows nothing at all
+  // while it is undefined. Rendering "unknown" for the moment before a current
+  // binary replies would invite exactly the report this exists to prevent.
+  const [androidRelease, setAndroidRelease] = useState(undefined);
+  useEffect(() => {
+    // Gated on isPlayApp, so a shell whose bridge is missing still resolves to
+    // null and says "unknown" rather than passing silently for the web.
+    if (!isPlayApp) return;
+    let live = true;
+    getAndroidRelease().then(r => { if (live) setAndroidRelease(r); });
+    return () => { live = false; };
+  }, []);
+
+  // "9 (1.3.5)" — versionCode leads, because it is the number Play counts
+  // uploads in and the only one that moves on every single upload; versionName
+  // follows in brackets and is the site version the APK was built at, which on
+  // an old install is not the site version it is running.
+  //
+  // The number without its noun, because the three places that show it label it
+  // differently: the footer, the sign-in diagnostics and the billing panel.
+  // Null here still means "not answered yet" and prints nowhere; the callers
+  // are the ones that turn no answer into the word "unknown".
+  const androidReleaseText =
+    androidRelease === undefined || androidRelease === null ? null
+    : `${androidRelease.versionCode}${androidRelease.versionName ? ` (${androidRelease.versionName})` : ""}`;
+  // Settled on "there is no answer", which is a fact worth printing: a shell
+  // that cannot name itself is one built before this plugin existed.
+  const androidReleaseUnknown = androidRelease === null;
+
   // The facts that separate the two ways sign-in reaches the guard below: a
   // binary that predates the plugin, or a bridge that never arrived. Same job
   // as getBillingDiagnostics in src/monetization.js, and there for the same
@@ -1199,7 +1238,11 @@ export default function App() {
   function signInDiagnostics() {
     const cap = typeof window !== "undefined" ? window.Capacitor : null;
     const plugins = cap && cap.Plugins ? Object.keys(cap.Plugins).sort().join(", ") : "none";
-    return `native bridge ${cap ? "present" : "absent"}; plugins: ${plugins}; app ${VERSION}`;
+    // "site", not "app": this is the version of what the shell LOADED, and
+    // saying "app 1.3.5" under a sign-in error on a binary three releases old is
+    // what sent the last round of this down the wrong path. The binary now names
+    // itself alongside it.
+    return `native bridge ${cap ? "present" : "absent"}; plugins: ${plugins}; site ${VERSION}; Android build ${androidReleaseText || "unknown"}`;
   }
 
   // Google sign-in takes one of two routes, and the store app takes exactly one
@@ -2399,6 +2442,11 @@ export default function App() {
             ["purchases plugin", d.purchasesPlugin ? "in this build" : "MISSING from this build"],
             ["plugins present", d.pluginList],
             ["version", VERSION],
+            // Which binary the row above it is talking about. "purchases plugin
+            // MISSING from this build" and "version 1.3.5" side by side read as
+            // a contradiction until you know the first describes the APK and the
+            // second the site it loaded.
+            ["android build", androidReleaseText || "unknown"],
             ["build", typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown"],
           ];
           return (
@@ -2617,12 +2665,14 @@ export default function App() {
       )}
 
       {/* Last line on the screen, and the quietest thing on it. It is here for
-          the one exchange that starts "which version are you on?" — the web and
-          the Play build show the same string, so the answer means the same
-          thing whichever one the person is holding. Selectable, because the
-          point of it is to be read back. */}
+          the one exchange that starts "which version are you on?", and in the
+          Play app that question has two answers: the version of the site the
+          shell has loaded, which is what v1.3.5 is on the web as well, and the
+          release number of the shell itself, which nothing else on the device
+          reports. A tester reading this line back now names both. Selectable,
+          because the point of it is to be read back. */}
       <div style={{textAlign:"center",marginTop:"1.25rem",fontSize:"0.7rem",color:C.textGhost,userSelect:"text"}}>
-        v{VERSION}
+        v{VERSION}{androidReleaseText ? ` · Android build ${androidReleaseText}` : androidReleaseUnknown ? " · Android build unknown" : ""}
       </div>
     </div></div>
   );
