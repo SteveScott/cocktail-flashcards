@@ -12,6 +12,7 @@ import { previewErase, eraseUser } from "./admin-erase.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
 import { FEATURES, isPlayApp } from './platform';
 import { setLauncherIcon } from './launcher-icon';
+import { onShortcut } from './app-shortcuts';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation, isPluginLoadTimeout } from './native-auth';
 import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows } from './recipe-meta';
 import { openPrivacySettings, onGdprApplicable } from './consent';
@@ -1720,6 +1721,36 @@ export default function App() {
     setLauncherIcon(theme);
     try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
   }, [theme]);
+
+  // The Android launcher's long-press menu lands here: a tap on Study, Self Quiz
+  // or 86 It opens the app already on its way somewhere. Each branch does
+  // exactly what the matching menu button at the bottom of this file does — the
+  // shortcut is the button, reached from outside the app, so it must not arrive
+  // somewhere the button would never have left you.
+  //
+  // Quizzes go to "quizlen" rather than straight to "quiz", which is the same
+  // thing the buttons do: the length picker is where a quiz is chosen, and
+  // skipping it would start a full-length quiz nobody asked for.
+  //
+  // returnTo is cleared on every branch. It means "the index was a detour from a
+  // card, offer the way back", and a shortcut is not a detour from anything —
+  // leaving a stale value there would put a "Resume study" button on a screen
+  // the user arrived at from their home screen.
+  //
+  // Empty deps, and that is deliberate: this subscribes once for the life of the
+  // app. Every setter React gives back is stable, so there is nothing here that
+  // goes stale. See src/app-shortcuts.js — a no-op off the Play build.
+  useEffect(() => onShortcut((id) => {
+    setReturnTo(null);
+    if (id === "study") {
+      setDi(0);
+      setRevealed(false);
+      setMode("study");
+      return;
+    }
+    setQuizKind(id === "86-it" ? "86" : "self");
+    setMode("quizlen");
+  }), []);
 
   // The tried marker reads the same on a card and on an index row, so both use
   // this. Unchecked it asks the question, checked it states the answer.

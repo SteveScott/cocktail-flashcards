@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The long-press menu on the home screen icon: the three things the app is for,
+  one tap deeper than the icon gets you.
+
+  Two constraints are written into every entry below and neither is obvious from
+  the file.
+
+  targetClass is CocktailActivity, never .MainActivity or .FutureLauncher. Those
+  two are the launcher aliases and exactly one of them is enabled at a time —
+  LauncherIconPlugin flips them when the colour scheme changes. A shortcut whose
+  intent named the alias that is currently off would simply fail to launch, and a
+  copy pinned to the home screen would keep failing. The activity behind both
+  aliases is enabled always.
+
+  targetPackage is spelled out rather than written ${applicationId}. Manifest
+  placeholders are substituted in AndroidManifest.xml; this is a resource file
+  and the build does not touch it, so a placeholder here would ship as those
+  literal characters and resolve to nothing.
+
+  The data URI is what carries the id, and ShortcutRoutes.uriFor() builds the
+  same string in Java — one is written out by hand here, the other computed
+  there, and nothing in either build compares them. Change one and change both;
+  tests/app-shortcuts.test.mjs is what actually holds the two together, and it
+  runs in npm test.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="study"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_study"
+        android:shortcutShortLabel="@string/shortcut_study_short"
+        android:shortcutLongLabel="@string/shortcut_study_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.bpp.cocktailflashcards"
+            android:targetClass="com.bpp.cocktailflashcards.CocktailActivity"
+            android:data="cocktailflashcards://shortcut/study" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="self-quiz"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_quiz"
+        android:shortcutShortLabel="@string/shortcut_self_quiz_short"
+        android:shortcutLongLabel="@string/shortcut_self_quiz_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.bpp.cocktailflashcards"
+            android:targetClass="com.bpp.cocktailflashcards.CocktailActivity"
+            android:data="cocktailflashcards://shortcut/self-quiz" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="86-it"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_eighty_six"
+        android:shortcutShortLabel="@string/shortcut_eighty_six_short"
+        android:shortcutLongLabel="@string/shortcut_eighty_six_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.bpp.cocktailflashcards"
+            android:targetClass="com.bpp.cocktailflashcards.CocktailActivity"
+            android:data="cocktailflashcards://shortcut/86-it" />
+    </shortcut>
+
+</shortcuts>

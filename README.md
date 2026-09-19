@@ -844,6 +844,70 @@ select or no way to select it. Everything that is *not* a launcher entry — the
 favicon, the splash screen, the icon Settings and the share sheet show, both
 store uploads — stays Retro.
 
+### Shortcuts on the home screen
+
+Long-pressing the icon on Android offers the three things the app is for —
+**Study**, **Self Quiz**, **86 It** — each landing exactly where the matching
+menu button would. They are static shortcuts, declared in the manifest rather
+than published at runtime, so they are there from the moment the app is
+installed and cost nothing to keep.
+
+The mechanism is small but it is spread over five files, and no compiler reads
+more than one of them:
+
+- `android/app/src/main/res/xml/shortcuts.xml` — the shortcuts, each an explicit
+  intent at `CocktailActivity` carrying `cocktailflashcards://shortcut/<id>`.
+- `ShortcutRoutes.java` — the ids, and the parse. Deliberately free of
+  `android.net.Uri` and every other framework type, which is what lets the edge
+  cases be covered by a plain JVM unit test rather than a device.
+- `AppShortcutPlugin.java` — reads the launch intent once and holds the id until
+  JavaScript asks, and pushes an event for a tap that arrives while the app is
+  already open.
+- `src/app-shortcuts.js` — asks, and forwards ids it recognises.
+- `src/App.jsx` — the effect that moves the app to the mode, doing exactly what
+  the matching menu button does.
+
+Four things about it are not obvious and every one of them fails silently.
+
+**The shortcuts point at `CocktailActivity`, never at an alias.** The two
+launcher aliases are switched on and off as the colour scheme changes (above),
+and an intent aimed at a disabled component resolves to nothing — the shortcut
+would work until the user picked the other scheme and then stop, including for a
+copy already pinned to a home screen. The activity behind both aliases is
+enabled always.
+
+**The list is declared on both aliases.** Android reads `android.app.shortcuts`
+from the component holding the `MAIN`/`LAUNCHER` filter, and here that is
+whichever alias the scheme has enabled. Declare it on Retro alone and a Future
+user's icon has no long-press menu at all.
+
+**The cold start is a pull, not a push.** The shell loads the *deployed* site, so
+nothing bounds how long the page takes to register a listener; an event fired at
+activity creation would have nobody listening. The launch id is stored instead
+and handed over whenever the ask comes — once, so that a later reload or remount
+cannot throw the user back into a quiz they have since left.
+
+**The two halves ship separately, and the site goes first.** The native side is
+in the AAB; the routing — `src/app-shortcuts.js` and the effect in `App.jsx` — is
+on the deployed site, because that is what the shell loads. Install a build with
+the shortcuts before the site carries the code to route them and the menu
+appears, the taps launch the app, and every one of them lands on the menu: the
+plugin call rejects against a site that has never heard of it, which is the same
+path an older shell takes and is deliberately silent. Deploy, then upload.
+
+`res/xml` is not processed for manifest placeholders, so `targetPackage` is the
+applicationId written out; a `${applicationId}` there would ship as those literal
+characters. And the shortcut scheme is not `custom_url_scheme` — that one is the
+OAuth redirect, and if the two were ever the same string a return from sign-in
+would parse as a shortcut.
+
+Adding a fourth shortcut is three edits that nothing links together: an entry in
+`shortcuts.xml`, an id in `ShortcutRoutes`, the same id in `src/app-shortcuts.js`
+— plus the labels and an icon. `tests/app-shortcuts.test.mjs` is what stops the
+three drifting; it reads all five files as text and compares them, and it runs in
+`npm test`. See [docs/android-testing.md](docs/android-testing.md) for what to
+check on a device.
+
 ## Monetization, entitlements and consent
 
 One purchase, **Cocktail Flashcards Pro** ($7.99, one-time), carrying two things:
@@ -1145,4 +1209,5 @@ npm run ingredient-frequency   # print the ingredient lexicon (--verify to check
 | [docs/mobile-google-signin.md](docs/mobile-google-signin.md) | Native Google sign-in for the Capacitor build, and diagnosing failures. |
 | [docs/mobile-monetization.md](docs/mobile-monetization.md) | AdMob, Play Billing and RevenueCat setup, phase by phase. |
 | [docs/store-listing.md](docs/store-listing.md) | The Play listing copy — app name, short and full description — and the claims it is allowed to make. |
+| [docs/android-testing.md](docs/android-testing.md) | What to run and what to check by hand before an Android upload, and the device test log. |
 | [docs/backup-restore.md](docs/backup-restore.md) | The high-water mark and purchase ledger behind every account, and how a restore merges them back — no file, no download, progress by union, purchases never revoked. |
