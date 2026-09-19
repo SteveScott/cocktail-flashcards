@@ -43,20 +43,45 @@ const assetsIn = (html) =>
     .map((m) => m[1])
     .filter((u) => u.startsWith("/assets/"));
 
+// Modules that only a dynamic import() ever reaches, and whose chunk therefore
+// has to be found in the bundle rather than read out of index.html.
+//
+// assetsIn() above harvests what the shell names — the entry script, the
+// modulepreloads beside it, the stylesheet — and a lazily imported module is by
+// definition not among them. src/native-auth.js imports the Capacitor sign-in
+// plugin that way on purpose, so the web build never carries it; the cost was
+// that the one chunk sign-in depends on became the only file in that path
+// fetched cache-first with nothing behind it. That is the trap the comment
+// above cacheFirst in public/pwa-sw.js warns about, arrived at from the other
+// side: something that blocks the app, not in PRECACHE, stalling with no
+// timeout on a connection whose sockets open and then say nothing.
+const LAZY = ["@capacitor-firebase/authentication"];
+
 export function pwaServiceWorker() {
   let out = "dist";
+  let lazy = [];
   return {
     name: "pwa-service-worker",
     apply: "build",
     configResolved(config) {
       out = config.build.outDir;
     },
+    // Rollup knows which chunk each module landed in; nothing downstream does.
+    generateBundle(_options, bundle) {
+      lazy = Object.values(bundle)
+        .filter((c) => c.type === "chunk" && LAZY.some((id) => c.moduleIds?.some((m) => m.includes(id))))
+        .map((c) => `/${c.fileName}`);
+      // Fatal for the same reason the @stamp misses below are: a silent miss
+      // ships a precache one file short, and the stall this exists to remove
+      // comes back looking exactly like a build that worked.
+      if (lazy.length === 0) throw new Error(`pwa-service-worker: no chunk contains ${LAZY.join(", ")}`);
+    },
     async closeBundle() {
       const swPath = join(out, "pwa-sw.js");
       const html = await readFile(join(out, "index.html"), "utf8");
       const sw = await readFile(swPath, "utf8");
 
-      const precache = [...new Set([...SHELL, ...assetsIn(html)])];
+      const precache = [...new Set([...SHELL, ...assetsIn(html), ...lazy])];
 
       // Hashed over the shell's contents and the worker's own source, so the
       // stamp moves when — and only when — something a client caches has moved.
