@@ -26,6 +26,44 @@ function loadPlugin() {
   return import("@capacitor-firebase/authentication");
 }
 
+// How long that import may take before sign-in gives up on it.
+//
+// The chunk it fetches is same-origin, so pwa-sw.js answers it from cacheFirst
+// — which has no timeout, deliberately, because everything that blocks a usable
+// screen is precached and a miss there is only a font. This chunk blocks
+// sign-in, which is why scripts/pwa-sw.mjs precaches it too. The bound here is
+// for the request that reaches the network anyway, on the connection that
+// worker's comment describes: radio up, socket open, nothing coming back. Such
+// a fetch neither resolves nor rejects, so without a bound the await below
+// never returns — and the button is simply dead. No spinner, no error, no end,
+// and nothing the person holding it can report back except "it didn't work".
+//
+// Generous rather than tight. This is the floor under a failure, not a
+// performance budget, and a slow connection that is genuinely working must
+// reach the picker rather than trip over this.
+const PLUGIN_LOAD_TIMEOUT_MS = 15000;
+
+// Our own failure, so it carries a code rather than being matched on its text.
+// The phrasings in isSignInCancellation below are Android's and can only be
+// recognised by reading them; this one doesn't have to be.
+export const PLUGIN_LOAD_TIMEOUT = "plugin-load-timeout";
+
+export function isPluginLoadTimeout(e) {
+  return e?.code === PLUGIN_LOAD_TIMEOUT;
+}
+
+function loadPluginWithin(ms) {
+  let timer;
+  return Promise.race([
+    loadPlugin(),
+    new Promise((_, reject) => {
+      const e = new Error(`Timed out after ${ms / 1000}s fetching the sign-in plugin.`);
+      e.code = PLUGIN_LOAD_TIMEOUT;
+      timer = setTimeout(reject, ms, e);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 // Is the NATIVE half of the plugin present in the binary we're running in?
 //
 // This has to be asked at runtime, not assumed. The store app loads the live
@@ -68,7 +106,7 @@ export function isSignInCancellation(e) {
 // Throws on failure so the caller can decide between showing an error and
 // falling back to the web flow.
 export async function signInWithGoogleNative() {
-  const { FirebaseAuthentication } = await loadPlugin();
+  const { FirebaseAuthentication } = await loadPluginWithin(PLUGIN_LOAD_TIMEOUT_MS);
 
   // Two native routes, tried in order.
   //
@@ -123,7 +161,7 @@ export async function signInWithGoogleNative() {
 export async function signOutGoogleNative() {
   if (!nativeGoogleSignInAvailable()) return;
   try {
-    const { FirebaseAuthentication } = await loadPlugin();
+    const { FirebaseAuthentication } = await loadPluginWithin(PLUGIN_LOAD_TIMEOUT_MS);
     await FirebaseAuthentication.signOut();
   } catch (e) {
     console.error("Native sign-out failed", e);
