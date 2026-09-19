@@ -10,7 +10,7 @@ import { ALL_CARDS, FREE_CARDS, PRO_CARDS, countCocktails, quizzableCocktails } 
 import { restoreProgress } from "./admin-restore.js";
 import { previewErase, eraseUser } from "./admin-erase.js";
 import { mergeProgress, growsFrom, sameProgress } from "./progress-merge.js";
-import { FEATURES, isCapacitorApp } from './platform';
+import { FEATURES, isPlayApp } from './platform';
 import { setLauncherIcon } from './launcher-icon';
 import { nativeGoogleSignInAvailable, signInWithGoogleNative, signOutGoogleNative, signInFailureText, isSignInCancellation, isPluginLoadTimeout } from './native-auth';
 import { getMethod, buildLexicon, buildEightySixQuestion, eightySixEligible, buildSearchIndex, searchCards, parseSearchQuery, ingredientRows } from './recipe-meta';
@@ -1191,6 +1191,17 @@ export default function App() {
     return /nocredential|no credentials|cannot find a matching credential/i.test(t);
   }
 
+  // The facts that separate the two ways sign-in reaches the guard below: a
+  // binary that predates the plugin, or a bridge that never arrived. Same job
+  // as getBillingDiagnostics in src/monetization.js, and there for the same
+  // reason — a Play install has no console anyone can reach, so a line the
+  // tester can read back off the screen is the whole diagnosis.
+  function signInDiagnostics() {
+    const cap = typeof window !== "undefined" ? window.Capacitor : null;
+    const plugins = cap && cap.Plugins ? Object.keys(cap.Plugins).sort().join(", ") : "none";
+    return `native bridge ${cap ? "present" : "absent"}; plugins: ${plugins}; app ${VERSION}`;
+  }
+
   // Google sign-in takes one of two routes, and the store app takes exactly one
   // of them.
   //
@@ -1233,17 +1244,33 @@ export default function App() {
     // Everything below is the web flow, and inside the store shell it is not a
     // fallback — it is the white screen, reached deliberately. signInWithPopup
     // waits on a postMessage that a WebView never delivers, and the redirect
-    // behind it parks on an accounts.google.com that refuses embedded user
-    // agents, inside the app, because allowNavigation keeps it there. Neither
-    // can ever succeed and neither says so, which is why "hangs, then goes
-    // blank" was the report rather than an error anyone could act on.
+    // behind it reaches Google, which hands back to
+    // cocktail-flashcards.firebaseapp.com/__/auth/handler — 462 bytes of
+    // unstyled HTML, shown inside the app because allowNavigation keeps it
+    // there, with no address bar to leave by and no way out but killing the
+    // app. Neither route can ever succeed and neither says so, which is why
+    // "hangs, then goes blank" was the report rather than an error anyone
+    // could act on.
     //
     // So in the shell, don't take it. An install without the native plugin is
     // an install from before it shipped (versionCode 6), and the only thing
     // that fixes it is a newer binary — which no web deploy can deliver.
-    if (isCapacitorApp) {
+    //
+    // Gated on isPlayApp, NOT isCapacitorApp, and that choice is the guard.
+    // isCapacitorApp needs window.Capacitor, which Capacitor injects into the
+    // HTML response itself (WebViewLocalServer.handleProxyRequest), and
+    // platform.js reads it once at module load and never again — so a shell
+    // whose bridge is missing, or arrives a moment late, reads as plain web for
+    // the rest of that session. That is one of the two ways anyone reaches this
+    // line at all, and gating on the bridge would wave precisely that case
+    // through to the white screen this guard exists to remove. isPlayApp also
+    // answers true on the ?platform=play flag in server.url, which survives a
+    // missing bridge, and nothing here calls a plugin — it only declines a
+    // path, so the flag is enough. Someone hand-typing that flag on the web
+    // gets a puzzling sentence; that is much the cheaper way to be wrong.
+    if (isPlayApp) {
       setGoogleErr("This version of the app can't complete sign-in. Update Cocktail Flashcards in Google Play, then try again.");
-      setGoogleErrDetail("The native sign-in plugin isn't present in this build.");
+      setGoogleErrDetail(signInDiagnostics());
       return;
     }
     signInWithPopup(auth, provider).catch(e => {

@@ -64,6 +64,33 @@ install indistinguishable from a broken one. Such an install now gets a sentence
 asking the person to update from Play, because a newer binary is the only thing
 that can fix it and no web deploy can stand in for one.
 
+### The guard asks the URL, not the bridge
+
+That guard is gated on `isPlayApp`, and swapping it for the apparently more
+precise `isCapacitorApp` would quietly reopen the bug it closes.
+
+`isCapacitorApp` requires `window.Capacitor`, which the shell does not fetch —
+Capacitor **injects** it into the HTML response as it passes through
+(`WebViewLocalServer.handleProxyRequest`, and through `ServiceWorkerClient` for
+the worker's own fetches). `src/platform.js` reads that global once, at module
+load, and exports the answer as a constant. So a shell whose bridge is missing,
+or simply arrives after `platform.js` evaluates, is indistinguishable from the
+web for the rest of that session — the native branch is off, and the guard, if
+it asked the bridge, would be off with it. The person is handed straight to the
+white screen both were meant to prevent.
+
+`isPlayApp` answers true on the `?platform=play` flag in `server.url` as well as
+on the bridge, so it survives a bridge that never came. It is the looser flag,
+and `src/platform.js` warns against using it "for anything that calls a plugin"
+— this calls none. It declines a path, and declining wrongly on the web costs a
+stranger who hand-typed the flag one puzzling sentence.
+
+A tester's report cannot tell the two causes apart, so the detail line under the
+message carries what does: whether the bridge is present, which plugins the
+bridge lists, and the app version (`signInDiagnostics` in `src/App.jsx`). An old
+binary shows a present bridge and no `FirebaseAuthentication` in its plugin
+list; a missing bridge shows `native bridge absent` and `plugins: none`.
+
 ### Sign-out clears both sides
 
 `skipNativeAuth` leaves the Google account selection cached natively even after
@@ -222,7 +249,8 @@ you the WebView console, and `adb logcat` the Android-side exception.
 
 | What you see | What it means |
 |---|---|
-| White screen, no error | The native branch wasn't taken — old JS on the live site, or an install predating the plugin. Check the deployed bundle contains `FirebaseAuthentication`. Reachable from the web only now: in the shell this case says "update the app" instead. |
+| White screen, no error | The native branch wasn't taken — old JS on the live site, or an install predating the plugin. Check the deployed bundle contains `FirebaseAuthentication`. Reachable from the web only now: in the shell this case says "update the app" instead. The white page itself is `<project>.firebaseapp.com/__/auth/handler`, 462 bytes of unstyled HTML; the app's own blank screen would be `#1b1209`, never white. |
+| "Update Cocktail Flashcards in Google Play", `native bridge absent` | The binary may be current. The bridge was never injected into the page, so every native path — sign-in, AdMob, billing, the launcher icon — is off for that session. |
 | A dead button — no picker, no error, no end | The plugin chunk never arrived. It is precached (`scripts/pwa-sw.mjs` → `LAZY`) and the import is bounded (`PLUGIN_LOAD_TIMEOUT_MS`), so this should now surface the "network didn't answer" message within 15s rather than waiting forever. |
 | No picker, `NoClassDefFoundError` | `rgcfaIncludeGoogle` didn't take; the Google libraries are `compileOnly` without it. |
 | `10` / `Developer console is not set up correctly` | The running app's certificate matches no registered OAuth client. See the fingerprints above. |
