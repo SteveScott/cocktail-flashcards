@@ -56,6 +56,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- The long-press menu hangs off the LAUNCHER entry, which is why
+                 this is declared on both aliases rather than once on the
+                 activity. Android reads android.app.shortcuts from the component
+                 holding the MAIN/LAUNCHER filter, and here that is whichever
+                 alias the colour scheme has enabled — put it only on Retro and a
+                 Future user's icon has no menu at all. The resource is the same
+                 both times: the shortcuts do not vary by scheme, only which
+                 entry declares them. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <!-- Future. Disabled in the manifest, which makes Retro what a fresh
@@ -76,6 +87,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- The long-press menu hangs off the LAUNCHER entry, which is why
+                 this is declared on both aliases rather than once on the
+                 activity. Android reads android.app.shortcuts from the component
+                 holding the MAIN/LAUNCHER filter, and here that is whichever
+                 alias the colour scheme has enabled — put it only on Retro and a
+                 Future user's icon has no menu at all. The resource is the same
+                 both times: the shortcuts do not vary by scheme, only which
+                 entry declares them. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <provider

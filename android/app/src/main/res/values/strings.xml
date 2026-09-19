@@ -4,4 +4,22 @@
     <string name="title_activity_main">Cocktail Flashcards</string>
     <string name="package_name">com.bpp.cocktailflashcards</string>
     <string name="custom_url_scheme">com.bpp.cocktailflashcards</string>
+
+    <!-- The launcher's long-press menu (res/xml/shortcuts.xml).
+
+         Two labels each, and they are not the same string shortened. The short
+         one is what a launcher shows in the menu and must survive a narrow
+         column — Android's guidance is about 10 characters, and it truncates
+         rather than wraps. The long one is what a pinned shortcut wears on the
+         home screen, where there is room for what it actually does.
+
+         Title Case: these are controls, and they are the same three controls as
+         the menu buttons in src/App.jsx. Keeping the words identical is the
+         point — a shortcut should land you somewhere you recognise. -->
+    <string name="shortcut_study_short">Study</string>
+    <string name="shortcut_study_long">Study Mode</string>
+    <string name="shortcut_self_quiz_short">Self Quiz</string>
+    <string name="shortcut_self_quiz_long">Self Quiz — Test Yourself</string>
+    <string name="shortcut_eighty_six_short">86 It</string>
+    <string name="shortcut_eighty_six_long">86 It — Spot the Impostors</string>
 </resources>

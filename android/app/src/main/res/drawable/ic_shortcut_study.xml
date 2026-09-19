@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Study Mode. A closed book with a marker in it — the deck you come back to.
+
+  The three shortcut icons carry a literal colour and no android:tint, and both
+  halves of that are deliberate.
+
+  No tint, because a theme attribute would not resolve here. A shortcut icon is
+  drawn by the launcher's process out of this app's resources but under the
+  LAUNCHER's theme, so ?attr/colorControlNormal is a reference to something that
+  is not there — it resolves to nothing or throws, and either way the menu entry
+  comes up blank on a device nobody tested.
+
+  The colour is #865c28, which is navStudy in the Retro scheme (THEMES in
+  src/App.jsx) — the exact amber of the Study Mode button the shortcut lands on.
+  Retro rather than Future because a resource cannot follow the colour scheme the
+  way the launcher icon does (that needs a whole alias per scheme, see
+  LauncherIconPlugin, and shortcuts get no such mechanism), and Retro is what the
+  manifest makes the default. These three stops are also mid-tone by
+  construction, which is what lets one file read on both a light and a dark
+  launcher background.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#865c28"
+        android:pathData="M18,2H6C4.9,2 4,2.9 4,4v16c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C20,2.9 19.1,2 18,2zM18,20H6V4h2v8l2.5,-1.5L13,12V4h5V20z" />
+</vector>
